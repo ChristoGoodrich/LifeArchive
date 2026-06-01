@@ -2,6 +2,9 @@
 node_modules/
 dist/
 
+# local-only release helper (uses your machine's gh login; not for the public repo)
+发布新版本.bat
+
 # OS / editor junk
 Thumbs.db
 .DS_Store
