@@ -1,4 +1,4 @@
-/* RealityGit — UI, routing, and feature wiring. Vanilla JS, no build step. */
+/* Life Archive — UI, routing, and feature wiring. Vanilla JS, no build step. */
 (function () {
   'use strict';
 
@@ -721,7 +721,7 @@
 
   function exportData() {
     var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
-    var a = el('a', { href: URL.createObjectURL(blob), download: 'realitygit-export.json' });
+    var a = el('a', { href: URL.createObjectURL(blob), download: 'lifearchive-export.json' });
     document.body.appendChild(a); a.click(); a.remove();
   }
   function clearAll() {

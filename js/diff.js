@@ -1,4 +1,4 @@
-/* RealityGit — the "Reality Diff" engine.
+/* Life Archive — the "Reality Diff" engine.
    Two independent comparisons that complement each other:
      1. imageDiff()  -> a visual heatmap of what physically moved/changed.
      2. itemDiff()   -> the semantic "什么少了 / 什么多了" list comparison.

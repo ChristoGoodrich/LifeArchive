@@ -6,8 +6,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChristoGoodrich/RealityGit/releases/latest"><img alt="下载最新版" src="https://img.shields.io/github/v/release/ChristoGoodrich/RealityGit?label=%E4%B8%8B%E8%BD%BD%20Download&style=for-the-badge"></a>
+  <a href="https://github.com/ChristoGoodrich/LifeArchive/releases/latest"><img alt="下载最新版" src="https://img.shields.io/github/v/release/ChristoGoodrich/LifeArchive?label=%E4%B8%8B%E8%BD%BD%20Download&style=for-the-badge"></a>
   &nbsp;<img alt="platform" src="https://img.shields.io/badge/Windows-10%2F11-0b0f1a?style=for-the-badge&logo=windows">
+  &nbsp;<img alt="android" src="https://img.shields.io/badge/Android-APK-3ddc84?style=for-the-badge&logo=android&logoColor=white">
 </p>
 
 <p align="center"><img src="docs/screenshots/1-timeline.png" width="80%"></p>
@@ -28,14 +29,15 @@
 
 ## 下载
 
-👉 **[前往 Releases 页面下载最新版](https://github.com/ChristoGoodrich/RealityGit/releases/latest)**
+👉 **[前往 Releases 页面下载最新版](https://github.com/ChristoGoodrich/LifeArchive/releases/latest)**
 
-| 文件 | 说明 |
-|------|------|
-| `LifeArchive-Setup-x.x.x.exe` | **安装版（推荐）**——双击安装，进开始菜单，**支持自动更新** |
-| `LifeArchive-portable.exe` | **免安装单文件**——直接双击运行，适合拷给别人 |
+| 文件 | 平台 | 说明 |
+|------|------|------|
+| `LifeArchive-Setup-x.x.x.exe` | Windows | **安装版（推荐）**——进开始菜单，**支持自动更新** |
+| `LifeArchive-portable.exe` | Windows | **免安装单文件**——直接双击运行 |
+| `LifeArchive-debug.apk` | Android | 手机浏览器打开下载页直接装（需允许"未知来源"） |
 
-> 首次运行 Windows 可能提示「未知发布者」，点 **更多信息 → 仍要运行** 即可（应用未做代码签名，属正常现象）。
+> Windows 首次运行可能提示「未知发布者」，点 **更多信息 → 仍要运行** 即可（应用未做代码签名，属正常）。
 > 数据全部保存在本地，离线即可使用，无需注册、无需联网。
 
 ---
@@ -69,6 +71,7 @@
 
 - **核心是一个纯前端、零依赖、可离线的网页 App**（`index.html` + `css/` + `js/`），直接双击就能跑。
 - 桌面版用 **Electron** 套壳打包成 Windows 安装包；**electron-updater + GitHub Releases** 实现云端自动更新。
+- 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK。
 - **为什么 Diff 不需要 AI 视觉？** 它是两条互补的对比：图像 diff（`js/diff.js` 逐像素求差 + 3×3 网格定位）告诉你**哪里**变了；清单 diff（结构化集合比较）告诉你**什么**变了，稳定可靠、不依赖识别。
 
 ```
@@ -90,13 +93,15 @@ main.js           Electron 桌面外壳 + 自动更新
 
 # 桌面版（需要 Node.js）
 npm install
-npm start                 # 以 Electron 桌面应用启动
+npm start                   # 以 Electron 桌面应用启动
 npx electron-builder --win  # 构建 Windows 安装包到 dist/
+
+# 安卓 APK：GitHub 仓库 → Actions → "Build Android APK" → Run workflow
 ```
 
-发布新版本 = 双击项目里的 **`发布新版本.bat`**（改版本号 → 自动构建 → 上传 GitHub Release）。
+Windows 发布新版本 = 双击项目里的 **`发布新版本.bat`**（改版本号 → 自动构建 → 上传 GitHub Release）。
 详细步骤见 [RELEASING.md](RELEASING.md)。
 
 ---
 
-<p align="center"><sub>仓库代号 <code>RealityGit</code> · MIT License</sub></p>
+<p align="center"><sub>Life Archive · MIT License</sub></p>

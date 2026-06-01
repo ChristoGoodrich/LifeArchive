@@ -1,4 +1,4 @@
-/* RealityGit desktop shell — loads the existing static app inside Electron.
+/* Life Archive desktop shell — loads the existing static app inside Electron.
    No app logic lives here; the web files (index.html / css / js) are untouched. */
 const { app, BrowserWindow, Menu, dialog } = require('electron');
 const path = require('path');
@@ -16,7 +16,7 @@ function setupAutoUpdate() {
       type: 'info',
       buttons: ['立即重启更新', '稍后'],
       defaultId: 0,
-      title: 'RealityGit 有新版本',
+      title: 'Life Archive 有新版本',
       message: '已下载新版本 ' + info.version + '，重启后即可使用。',
       detail: '你也可以稍后手动重启应用来完成更新。'
     }).then(function (res) {

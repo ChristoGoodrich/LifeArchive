@@ -1,9 +1,9 @@
 {
-  "name": "realitygit",
+  "name": "life-archive",
   "version": "1.0.1",
-  "description": "RealityGit — version control for everyday life",
+  "description": "Life Archive — version control for everyday life",
   "main": "main.js",
-  "author": "RealityGit",
+  "author": "Life Archive",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -19,7 +19,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "com.realitygit.app",
+    "appId": "com.lifearchive.app",
     "productName": "Life Archive",
     "directories": {
       "output": "dist"
@@ -36,7 +36,7 @@
       {
         "provider": "github",
         "owner": "ChristoGoodrich",
-        "repo": "RealityGit",
+        "repo": "LifeArchive",
         "releaseType": "release"
       }
     ],

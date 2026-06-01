@@ -1,12 +1,12 @@
-/* RealityGit — local "repository" layer.
+/* Life Archive — local "repository" layer.
    Everything lives in localStorage so the app runs from file:// with no server.
    Two collections: commits (life snapshots) and branches (decision forks). */
 (function (global) {
   'use strict';
 
-  var KEY_COMMITS = 'realitygit.commits.v1';
-  var KEY_BRANCHES = 'realitygit.branches.v1';
-  var KEY_META = 'realitygit.meta.v1';
+  var KEY_COMMITS = 'lifearchive.commits.v1';
+  var KEY_BRANCHES = 'lifearchive.branches.v1';
+  var KEY_META = 'lifearchive.meta.v1';
 
   function read(key, fallback) {
     try {
