@@ -32,7 +32,8 @@
       {
         "provider": "github",
         "owner": "ChristoGoodrich",
-        "repo": "RealityGit"
+        "repo": "RealityGit",
+        "releaseType": "release"
       }
     ],
     "win": {
