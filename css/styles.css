@@ -229,11 +229,48 @@ select.field{cursor:pointer}
   border-radius:12px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.25s;z-index:50;font-weight:600}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* ---- responsive ---- */
+/* ---- responsive: phone / narrow -> mobile-first interaction model ---- */
 @media (max-width:720px){
   .diff-controls{grid-template-columns:1fr}
   .diff-photos,.branch-cols{grid-template-columns:1fr}
   .fu-row{grid-template-columns:1fr}
   .commit-card{flex-direction:column}
   .commit-thumb{width:100%;height:160px}
+
+  /* compact top bar — reclaim vertical space */
+  .topbar{padding:10px 16px}
+  .brand-tag{display:none}
+  .brand-name{font-size:16px}
+
+  /* navigation becomes a thumb-friendly fixed bottom tab bar (all 5 tabs fit) */
+  .nav{
+    position:fixed;top:auto;bottom:0;left:0;right:0;z-index:30;
+    border-top:1px solid var(--line);border-bottom:none;
+    background:rgba(11,15,26,.93);backdrop-filter:blur(12px);
+    gap:0;overflow:visible;justify-content:space-around;
+    padding:6px 4px;padding-bottom:calc(6px + env(safe-area-inset-bottom));
+  }
+  .nav-btn{
+    flex:1;flex-direction:column;gap:2px;justify-content:center;align-items:center;
+    padding:7px 2px;border-radius:12px;font-size:11px;line-height:1.15;
+    text-align:center;white-space:normal;min-width:0;
+  }
+  .nav-ic{font-size:22px}
+  .nav-btn.active{background:transparent;border-color:transparent;box-shadow:none;color:var(--accent)}
+  .nav-btn.active .nav-ic{filter:drop-shadow(0 0 7px rgba(110,168,254,.55))}
+
+  /* content clears the fixed bottom bar */
+  .view{padding:18px 16px calc(92px + env(safe-area-inset-bottom))}
+  .view-head h1{font-size:20px}
+
+  /* touch sizing + avoid iOS input-focus zoom (16px) */
+  .field{font-size:16px}
+  .btn.tiny{padding:8px 12px;font-size:13px}
+  .commit-actions{gap:8px}
+  .commit-actions .btn{flex:1 1 auto}
+  .form-actions .btn{flex:1}
+  .photo-drop{height:180px}
+
+  /* toast above the bottom bar */
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom))}
 }
