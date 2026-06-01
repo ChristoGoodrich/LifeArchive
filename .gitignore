@@ -1,0 +1,11 @@
+# dependencies & build output (regenerated, never commit)
+node_modules/
+dist/
+
+# OS / editor junk
+Thumbs.db
+.DS_Store
+
+# local Claude session data
+.claude/
+memory/
