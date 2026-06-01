@@ -168,21 +168,38 @@
     if (routes.indexOf(r) >= 0 && r !== current) { current = r; renderNav(); render(); }
   });
 
+  /* flat line icons (inherit currentColor, tint to accent when active) */
+  var NAV_ICONS = (function () {
+    function s(inner) {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        + 'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    }
+    return {
+      timeline: s('<circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/><path d="M12 6.7v3.6M12 13.7v3.6"/>'),
+      commit: s('<circle cx="12" cy="12" r="8"/><path d="M12 8.5v7M8.5 12h7"/>'),
+      diff: s('<circle cx="11" cy="11" r="6"/><path d="m20 20-3.6-3.6"/>'),
+      rollback: s('<path d="M3.5 12a8.5 8.5 0 1 0 2.8-6.3L3.2 8"/><path d="M3 3.7V8h4.3"/>'),
+      branch: s('<circle cx="6.5" cy="6" r="2"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 8v8"/><path d="M17.5 9.5c0 3.6-2.7 4.5-5.6 5"/>')
+    };
+  })();
+
   function renderNav() {
     var nav = $('#nav');
     nav.innerHTML = '';
     var items = [
-      ['timeline', '🌳', t('nav_timeline')],
-      ['commit', '➕', t('nav_commit')],
-      ['diff', '🔍', t('nav_diff')],
-      ['rollback', '⏮️', t('nav_rollback')],
-      ['branch', '🔀', t('nav_branch')]
+      ['timeline', t('nav_timeline')],
+      ['commit', t('nav_commit')],
+      ['diff', t('nav_diff')],
+      ['rollback', t('nav_rollback')],
+      ['branch', t('nav_branch')]
     ];
     items.forEach(function (it) {
+      var icon = el('span', { class: 'nav-ic' });
+      icon.innerHTML = NAV_ICONS[it[0]];
       nav.appendChild(el('button', {
         class: 'nav-btn' + (current === it[0] ? ' active' : ''),
         onclick: function () { go(it[0]); }
-      }, [el('span', { class: 'nav-ic', text: it[1] }), el('span', { text: it[2] })]));
+      }, [icon, el('span', { text: it[1] })]));
     });
   }
 
