@@ -11,6 +11,21 @@ Life Archive 桌面版用 **electron-updater + GitHub Releases** 做云端自动
 3. 在 GitHub 生成一个有 `repo` 权限的 Personal Access Token
    （Settings → Developer settings → Tokens）。
 
+## ⭐ 铁律：每次发版都必须写「更新说明」
+
+每发一个版本，**都要写一段详细的更新说明**（这次改了什么、修了什么、注意事项），并且：
+1. 在 [CHANGELOG.md](CHANGELOG.md) 顶部新增一节（版本号 + 日期 + 条目）；
+2. 把同样的内容写到该版本的 GitHub Release 说明里。
+
+设置 Release 说明的命令（把内容写进一个文件再传）：
+
+```powershell
+gh release edit v1.0.2 --repo ChristoGoodrich/LifeArchive `
+  --title "v1.0.2 · 一句话标题" --notes-file 你的说明.md
+```
+
+> 双击 `发布新版本.bat` 发版时，它会**自动弹出记事本让你写本次更新说明**，写完保存关闭即可，脚本会把它设到 Release 上。
+
 ## 每次发版（重复这几步）
 
 1. 改完代码后，把 `package.json` 里的 `version` 往上加一位
