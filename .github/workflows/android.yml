@@ -35,6 +35,9 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Sync Android version from package.json
+        run: node scripts/set-android-version.mjs
+
       - name: Generate adaptive app icons from assets/
         run: npx @capacitor/assets generate --android
 

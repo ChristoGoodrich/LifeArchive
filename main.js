@@ -1,6 +1,6 @@
 /* Life Archive desktop shell — loads the existing static app inside Electron.
    No app logic lives here; the web files (index.html / css / js) are untouched. */
-const { app, BrowserWindow, Menu, dialog } = require('electron');
+const { app, BrowserWindow, Menu, dialog, nativeTheme } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -36,7 +36,7 @@ function createWindow() {
     height: 820,
     minWidth: 720,
     minHeight: 560,
-    backgroundColor: '#0b0e16',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0b0d' : '#f2f3f5',
     autoHideMenuBar: true,
     title: 'Life Archive · 生活存档',
     webPreferences: {
