@@ -38,7 +38,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#0b0e16',
     autoHideMenuBar: true,
-    title: 'RealityGit',
+    title: 'Life Archive · 生活存档',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false

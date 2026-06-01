@@ -16,7 +16,7 @@
   },
   "build": {
     "appId": "com.realitygit.app",
-    "productName": "RealityGit",
+    "productName": "Life Archive",
     "directories": {
       "output": "dist"
     },
@@ -54,13 +54,13 @@
       ]
     },
     "portable": {
-      "artifactName": "RealityGit-portable.exe"
+      "artifactName": "LifeArchive-portable.exe"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "RealityGit-Setup-${version}.exe"
+      "artifactName": "LifeArchive-Setup-${version}.exe"
     }
   },
   "dependencies": {

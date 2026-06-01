@@ -8,6 +8,7 @@
   /* ---------------- i18n ---------------- */
   var I18N = {
     zh: {
+      brand: '生活存档',
       tagline: '给现实生活装一个 Git',
       nav_timeline: '时间线', nav_commit: '新建存档', nav_diff: '现实对比',
       nav_rollback: '回滚', nav_branch: '分支决策',
@@ -45,6 +46,7 @@
       parent: '基于', root: '初始存档', commits_in: '个存档'
     },
     en: {
+      brand: 'Life Archive',
       tagline: 'Version control for real life',
       nav_timeline: 'Timeline', nav_commit: 'New commit', nav_diff: 'Reality diff',
       nav_rollback: 'Rollback', nav_branch: 'Branches',
@@ -829,12 +831,14 @@
     Store.setMeta({ lang: lang });
     $('#lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
     $('#tagline').textContent = t('tagline');
+    var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     renderNav(); render();
   }
 
   /* ---------------- boot ---------------- */
   document.addEventListener('DOMContentLoaded', function () {
     $('#tagline').textContent = t('tagline');
+    var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     $('#lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
     $('#lang-btn').addEventListener('click', toggleLang);
     var r = location.hash.slice(1);
