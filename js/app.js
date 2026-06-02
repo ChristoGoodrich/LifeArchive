@@ -302,7 +302,7 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings', 'detail'];
   var current = 'timeline';
 
   function go(route) {
@@ -365,6 +365,7 @@
     else if (current === 'rollback') renderRollback(v);
     else if (current === 'branch') renderBranch(v);
     else if (current === 'settings') renderSettings(v);
+    else if (current === 'detail') renderDetail(v);
   }
 
   /* ---------------- Timeline ---------------- */
@@ -385,38 +386,50 @@
       return;
     }
 
-    // group by scene -> show each scene as a "repo branch"
-    var byScene = {};
-    commits.forEach(function (c) { (byScene[c.scene] = byScene[c.scene] || []).push(c); });
+    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_timeline') })]));
 
-    var head = el('div', { class: 'view-head' }, [
-      el('h1', { text: t('nav_timeline') }),
-      el('div', { class: 'head-actions' }, [
-        el('button', { class: 'btn tiny ghost', text: t('export'), onclick: exportData }),
-        el('button', { class: 'btn tiny danger-ghost', text: t('clear'), onclick: clearAll })
-      ])
-    ]);
-    v.appendChild(head);
+    // group by day, newest first (commits already sorted desc)
+    var groups = [], map = {};
+    commits.forEach(function (c) {
+      var k = dayKey(c.createdAt);
+      if (!map[k]) { map[k] = { label: dayLabel(c.createdAt), items: [] }; groups.push(map[k]); }
+      map[k].items.push(c);
+    });
 
-    Store.SCENES.forEach(function (scene) {
-      var list = byScene[scene.id];
-      if (!list || !list.length) return;
-      var group = el('section', { class: 'scene-group' });
-      group.appendChild(el('div', { class: 'scene-head' }, [
-        el('span', { class: 'scene-title', text: sceneLabel(scene) }),
-        el('span', { class: 'scene-count', text: list.length + ' ' + t('commits_in') })
+    groups.forEach(function (g) {
+      var sec = el('section', { class: 'date-group' });
+      sec.appendChild(el('div', { class: 'date-head' }, [
+        el('span', { class: 'date-label', text: g.label }),
+        el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })
       ]));
-
-      var rail = el('div', { class: 'commit-rail' });
-      list.forEach(function (c, i) {
-        rail.appendChild(commitCard(c, i === list.length - 1));
-      });
-      group.appendChild(rail);
-      v.appendChild(group);
+      g.items.forEach(function (c) { sec.appendChild(commitCard(c)); });
+      v.appendChild(sec);
     });
   }
 
-  function commitCard(c, isRoot) {
+  function dayKey(ts) {
+    var d = new Date(ts);
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function dayLabel(ts) {
+    var d = new Date(ts), now = new Date();
+    function midnight(x) { var y = new Date(x); y.setHours(0, 0, 0, 0); return y.getTime(); }
+    var diff = Math.round((midnight(now) - midnight(d)) / 86400000);
+    if (diff === 0) return lang === 'zh' ? '今天' : 'Today';
+    if (diff === 1) return lang === 'zh' ? '昨天' : 'Yesterday';
+    if (diff === 2) return lang === 'zh' ? '前天' : '2 days ago';
+    var sameYear = d.getFullYear() === now.getFullYear();
+    if (lang === 'zh') return (sameYear ? '' : d.getFullYear() + '年') + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    var mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+    return mon + ' ' + d.getDate() + (sameYear ? '' : ', ' + d.getFullYear());
+  }
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+
+  function commitCard(c) {
+    var isRoot = !c.parentId;
     var thumb = c.photo
       ? el('div', { class: 'commit-thumb', style: 'background-image:url(' + c.photo + ')' })
       : el('div', { class: 'commit-thumb noimg', text: t('no_photo') });
@@ -424,9 +437,9 @@
     var meta = el('div', { class: 'commit-meta' }, [
       el('div', { class: 'commit-msg', text: c.message || '(no message)' }),
       el('div', { class: 'commit-sub' }, [
-        el('span', { class: 'commit-hash', text: shortId(c.id) }),
+        el('span', { class: 'commit-scene', text: sceneLabel(Store.sceneById(c.scene)) }),
         el('span', { class: 'commit-dot', text: '·' }),
-        el('span', { text: fmtDate(c.createdAt) }),
+        el('span', { text: fmtTime(c.createdAt) }),
         el('span', { class: 'commit-dot', text: '·' }),
         el('span', { text: (c.items ? c.items.length : 0) + ' ' + t('items_count') })
       ])
@@ -442,22 +455,62 @@
       chips.appendChild(el('span', { class: 'chip more', text: '+' + (c.items.length - 6) }));
     }
 
-    var actions = el('div', { class: 'commit-actions' }, [
-      el('button', { class: 'btn tiny', text: '🔍 ' + t('nav_diff'),
-        onclick: function () { go('diff'); } }),
-      el('button', { class: 'btn tiny', text: '⏮️ ' + t('nav_rollback'),
-        onclick: function () { pendingRollback = c.id; go('rollback'); } }),
-      el('button', { class: 'btn tiny', text: '✏️ ' + (lang === 'zh' ? '编辑' : 'Edit'),
-        onclick: function () { pendingEdit = c.id; go('commit'); } }),
-      el('button', { class: 'btn tiny danger-ghost', text: t('delete'),
-        onclick: function () {
-          if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); render(); }
-        } })
-    ]);
-
     var body = el('div', { class: 'commit-body' }, [meta, chips,
-      c.notes ? el('div', { class: 'commit-notes', text: c.notes }) : null, actions]);
-    return el('div', { class: 'commit-card' }, [thumb, body]);
+      c.notes ? el('div', { class: 'commit-notes', text: c.notes }) : null]);
+    var card = el('div', { class: 'commit-card tappable' }, [thumb, body,
+      el('span', { class: 'commit-chevron', text: '›' })]);
+    card.addEventListener('click', function () { pendingDetail = c.id; go('detail'); });
+    return card;
+  }
+
+  /* ---------------- Commit detail ---------------- */
+  var pendingDetail = null;
+  function renderDetail(v) {
+    var c = pendingDetail ? Store.getCommit(pendingDetail) : null;
+    if (!c) { go('timeline'); return; }
+    var L = lang === 'zh';
+
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
+    back.addEventListener('click', function () { go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head' }, [back]));
+
+    var card = el('div', { class: 'detail-card' });
+    if (c.photo) card.appendChild(el('div', { class: 'detail-photo', style: 'background-image:url(' + c.photo + ')' }));
+    card.appendChild(el('div', { class: 'detail-title', text: c.message || '(no message)' }));
+    card.appendChild(el('div', { class: 'detail-sub' }, [
+      el('span', { class: 'commit-scene', text: sceneLabel(Store.sceneById(c.scene)) }),
+      el('span', { class: 'commit-dot', text: '·' }),
+      el('span', { text: fmtDate(c.createdAt) }),
+      el('span', { class: 'commit-dot', text: '·' }),
+      el('span', { class: 'commit-hash', text: shortId(c.id) })
+    ]));
+    if (c.items && c.items.length) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '物品清单' : 'Items' }));
+      var list = el('div', { class: 'detail-items' });
+      c.items.forEach(function (it) {
+        list.appendChild(el('div', { class: 'detail-item' }, [
+          el('span', { text: it.name }),
+          el('span', { class: 'detail-qty', text: '×' + (it.qty || 1) })
+        ]));
+      });
+      card.appendChild(list);
+    }
+    if (c.notes) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '备注' : 'Notes' }));
+      card.appendChild(el('div', { class: 'commit-notes', text: c.notes }));
+    }
+    v.appendChild(card);
+
+    v.appendChild(el('div', { class: 'detail-actions' }, [
+      el('button', { class: 'btn primary', text: '✏️ ' + (L ? '编辑' : 'Edit'),
+        onclick: function () { pendingEdit = c.id; go('commit'); } }),
+      el('button', { class: 'btn', text: '🔍 ' + t('nav_diff'),
+        onclick: function () { go('diff'); } }),
+      el('button', { class: 'btn', text: '⏮️ ' + t('nav_rollback'),
+        onclick: function () { pendingRollback = c.id; go('rollback'); } }),
+      el('button', { class: 'btn danger-ghost', text: '🗑 ' + t('delete'),
+        onclick: function () { if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); go('timeline'); } } })
+    ]));
   }
 
   /* ---------------- New / edit commit form ---------------- */
@@ -565,7 +618,11 @@
     if (editing && editing.items && editing.items.length) moreDetails.open = true;
 
     var form = el('div', { class: 'form-card' }, [
-      labeled('📷 ' + t('photo'), el('div', {}, [preview, fileInput, aiBtn])),
+      // NOT a <label> (a file input inside a label fires twice -> re-opens picker)
+      el('div', { class: 'labeled' }, [
+        el('span', { class: 'label-text', text: '📷 ' + t('photo') }),
+        el('div', {}, [preview, fileInput, aiBtn])
+      ]),
       labeled(t('message'), msgInput),
       labeled(t('scene'), sceneSel),
       moreDetails,
@@ -1290,18 +1347,6 @@
     var _set = document.getElementById('settings-btn');
     if (_set) _set.addEventListener('click', function () { go('settings'); });
     initNative();
-
-    // hide the fixed bottom tab bar while typing (soft keyboard open)
-    document.addEventListener('focusin', function (e) {
-      var tag = e.target && e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') document.body.classList.add('kb-open');
-    });
-    document.addEventListener('focusout', function () {
-      setTimeout(function () {
-        var a = document.activeElement, tag = a && a.tagName;
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA') document.body.classList.remove('kb-open');
-      }, 80);
-    });
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
