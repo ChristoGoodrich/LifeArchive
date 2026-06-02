@@ -351,14 +351,21 @@
     }
     addItemRow();
 
-    var form = el('div', { class: 'form-card' }, [
-      labeled(t('scene'), sceneSel),
-      labeled(t('message'), msgInput),
-      labeled(t('photo'), el('div', {}, [preview, fileInput])),
+    // keep the fast path simple: photo + one line. Items/notes are optional & collapsed.
+    var moreDetails = el('details', { class: 'more-details' }, [
+      el('summary', { class: 'more-summary',
+        text: (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)') }),
       labeled(t('items'), el('div', {}, [itemsWrap,
         el('button', { class: 'btn tiny ghost', text: t('add_item'),
           onclick: function () { addItemRow(); } })])),
-      labeled(t('notes'), notesInput),
+      labeled(t('notes'), notesInput)
+    ]);
+
+    var form = el('div', { class: 'form-card' }, [
+      labeled('📷 ' + t('photo'), el('div', {}, [preview, fileInput])),
+      labeled(t('message'), msgInput),
+      labeled(t('scene'), sceneSel),
+      moreDetails,
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
           onclick: function () { go('timeline'); } }),
