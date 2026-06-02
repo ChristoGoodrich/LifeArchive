@@ -56,7 +56,7 @@ body{
 /* ---- topbar ---- */
 .topbar{display:flex;align-items:center;justify-content:space-between;
   padding:calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 22px 16px;position:sticky;top:0;z-index:20;
-  background:transparent}
+  background:transparent;transform:translateZ(0)}
 /* frosted layer behind the bar that fades out at the bottom (HyperOS gallery
    style, no hard divider line); content stays sharp above this ::before */
 .topbar::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
@@ -159,9 +159,13 @@ body{
 
 /* ---- timeline date sections ---- */
 .date-group{margin-bottom:22px}
-.date-head{display:flex;align-items:baseline;gap:10px;margin:2px 4px 12px}
+.date-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:2px 4px 12px}
 .date-label{font-size:17px;font-weight:800;letter-spacing:-.2px}
+.date-head-right{display:inline-flex;align-items:baseline;gap:8px}
 .date-count{font-size:12.5px;color:var(--dim);font-family:var(--mono)}
+.date-meals{font-size:12px;font-weight:700;color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);
+  padding:3px 9px;border-radius:999px}
 .commit-card.tappable{cursor:pointer;align-items:center}
 .commit-card.tappable:active{transform:scale(.99)}
 .commit-scene{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:600}
@@ -230,6 +234,12 @@ select.field{cursor:pointer}
   background:color-mix(in srgb,var(--accent) 10%,var(--card))}
 .scene-opt:active{transform:scale(.96)}
 .scene-opt-label{line-height:1.1;text-align:center}
+/* grouped scene picker (饮食 / 物品场景) */
+.scene-picker{display:flex;flex-direction:column;gap:8px}
+.scene-group-label{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.4px;
+  margin:6px 2px 2px}
+.scene-picker .scene-group-label:first-child{margin-top:0}
+.scene-picker .scene-grid{margin-bottom:4px}
 
 /* ---- notice ---- */
 .notice-card{background:var(--card);border:1px dashed var(--line-strong);border-radius:var(--radius-sm);
@@ -382,7 +392,12 @@ select.field{cursor:pointer}
     backdrop-filter:saturate(1.5) blur(18px);-webkit-backdrop-filter:saturate(1.5) blur(18px);
     box-shadow:none;gap:0;justify-content:space-around;overflow:visible;z-index:40;
     padding:8px 6px;padding-bottom:calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    transition:transform .2s ease;
   }
+  /* keyboard open (Android): hide the bottom bar while typing + pad scroll area
+     so the focused field isn't trapped behind the keyboard. See initKeyboard(). */
+  body.kb-open .nav{transform:translateY(120%)}
+  body.kb-open .view{padding-bottom:calc(var(--kb-height,0px) + 24px)}
   .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
     padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;font-weight:600}
   .nav-ic{font-size:23px;transition:.18s}

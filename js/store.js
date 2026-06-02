@@ -34,22 +34,35 @@
       Math.random().toString(36).slice(2, 7);
   }
 
-  /* ---- Scenes: the preset "repos" a commit can belong to ---- */
+  /* ---- Scenes: the preset "repos" a commit can belong to ----
+     group 'meal' = 饭迹/饮食 records, 'item' = the original物品场景.
+     IMPORTANT: keep 'other' as the LAST element — sceneById() falls back to it. */
   var SCENES = [
-    { id: 'bag',     emoji: '🎒', zh: '出门包',   en: 'Go-bag' },
-    { id: 'desk',    emoji: '🖥️', zh: '书桌',     en: 'Desk' },
-    { id: 'room',    emoji: '🛏️', zh: '房间',     en: 'Room' },
-    { id: 'kitchen', emoji: '🍳', zh: '厨房',     en: 'Kitchen' },
-    { id: 'fridge',  emoji: '🧊', zh: '冰箱',     en: 'Fridge' },
-    { id: 'closet',  emoji: '👕', zh: '衣柜',     en: 'Closet' },
-    { id: 'luggage', emoji: '🧳', zh: '行李箱',   en: 'Luggage' },
-    { id: 'homework',emoji: '📚', zh: '作业资料', en: 'Coursework' },
-    { id: 'group',   emoji: '👥', zh: '小组分工', en: 'Group task' },
-    { id: 'car',     emoji: '🚗', zh: '车',       en: 'Car' },
-    { id: 'wallet',  emoji: '💳', zh: '钱包预算', en: 'Wallet' },
-    { id: 'drawer',  emoji: '🗄️', zh: '抽屉',     en: 'Drawer' },
-    { id: 'other',   emoji: '📦', zh: '其他',     en: 'Other' }
+    { id: 'bag',     emoji: '🎒', zh: '出门包',   en: 'Go-bag',     group: 'item' },
+    { id: 'desk',    emoji: '🖥️', zh: '书桌',     en: 'Desk',       group: 'item' },
+    { id: 'room',    emoji: '🛏️', zh: '房间',     en: 'Room',       group: 'item' },
+    { id: 'kitchen', emoji: '🍳', zh: '厨房',     en: 'Kitchen',    group: 'item' },
+    { id: 'fridge',  emoji: '🧊', zh: '冰箱',     en: 'Fridge',     group: 'item' },
+    { id: 'closet',  emoji: '👕', zh: '衣柜',     en: 'Closet',     group: 'item' },
+    { id: 'luggage', emoji: '🧳', zh: '行李箱',   en: 'Luggage',    group: 'item' },
+    { id: 'homework',emoji: '📚', zh: '作业资料', en: 'Coursework', group: 'item' },
+    { id: 'group',   emoji: '👥', zh: '小组分工', en: 'Group task', group: 'item' },
+    { id: 'car',     emoji: '🚗', zh: '车',       en: 'Car',        group: 'item' },
+    { id: 'wallet',  emoji: '💳', zh: '钱包预算', en: 'Wallet',     group: 'item' },
+    { id: 'drawer',  emoji: '🗄️', zh: '抽屉',     en: 'Drawer',     group: 'item' },
+    /* 饭迹 / 饮食 */
+    { id: 'breakfast', emoji: '🥣', zh: '早餐',     en: 'Breakfast',       group: 'meal' },
+    { id: 'lunch',     emoji: '🍚', zh: '午餐',     en: 'Lunch',           group: 'meal' },
+    { id: 'dinner',    emoji: '🍽️', zh: '晚餐',     en: 'Dinner',          group: 'meal' },
+    { id: 'latenight', emoji: '🌙', zh: '夜宵',     en: 'Late-night',      group: 'meal' },
+    { id: 'snack',     emoji: '🧋', zh: '零食饮品', en: 'Snacks & drinks', group: 'meal' },
+    { id: 'other',   emoji: '📦', zh: '其他',     en: 'Other',      group: 'item' }
   ];
+
+  function isMealScene(id) {
+    var s = sceneById(id);
+    return !!(s && s.group === 'meal');
+  }
 
   function sceneById(id) {
     for (var i = 0; i < SCENES.length; i++) {
@@ -61,6 +74,7 @@
   var Store = {
     SCENES: SCENES,
     sceneById: sceneById,
+    isMealScene: isMealScene,
     uid: uid,
 
     /* ---------- Commits ---------- */

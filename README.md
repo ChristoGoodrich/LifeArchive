@@ -50,7 +50,7 @@
 <p align="center"><img src="docs/screenshots/2-diff.png" width="85%"></p>
 
 ### 🌳 时间线
-按场景（出门包 / 桌面 / 房间 / 作业…）分组的 git 式提交图，每条 commit 都有 hash、时间、物品清单和一句 commit message。
+按日期整理的 git 式生活存档，每条 commit 都有场景、时间、清单和一句 commit message。当天有饮食记录时，还会显示「🍽 N 餐」徽标。
 
 ### ⏮️ 回滚
 选一个旧存档当目标，自动生成「恢复到这个状态」的分步清单（拿走 X、放回 Y），可逐项打勾。
@@ -63,7 +63,7 @@
 <p align="center"><img src="docs/screenshots/4-branch.png" width="85%"></p>
 
 ### ➕ 新建存档
-拍照 / 上传文件 + 写一句 commit message + 列出物品清单，生成一个生活存档点。
+拍照 / 上传照片 + 写一句 commit message，生成一个生活存档点；清单和备注按需展开。场景选择器内置「🍽 饮食」分组，可快速记录早餐、午餐、晚餐、夜宵和零食饮品。
 
 ---
 

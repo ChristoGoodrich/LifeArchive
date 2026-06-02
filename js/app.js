@@ -43,7 +43,10 @@
       need_two: '该场景至少需要两个存档才能对比。',
       branch_pending: '等待复盘', branch_reviewed: '已复盘',
       would_repeat_yes: '👍 下次还这么选', would_repeat_no: '👎 下次换个选择',
-      parent: '基于', root: '初始存档', commits_in: '个存档'
+      parent: '基于', root: '初始存档', commits_in: '个存档',
+      group_meal: '饮食', group_item: '物品场景', meals_count: '餐',
+      meal_placeholder: '例如：午饭 黄焖鸡 + 一杯奶茶',
+      ate_what: '吃了什么', add_meal: '＋ 添加食物 / 备注（可选）'
     },
     en: {
       brand: 'Life Archive',
@@ -81,7 +84,10 @@
       need_two: 'This scene needs at least two commits to diff.',
       branch_pending: 'Awaiting review', branch_reviewed: 'Reviewed',
       would_repeat_yes: '👍 Would repeat', would_repeat_no: '👎 Would change',
-      parent: 'based on', root: 'initial commit', commits_in: 'commits'
+      parent: 'based on', root: 'initial commit', commits_in: 'commits',
+      group_meal: 'Meals', group_item: 'Things', meals_count: 'meals',
+      meal_placeholder: 'e.g. Lunch — braised chicken rice + milk tea',
+      ate_what: 'What you ate', add_meal: '＋ Add food / notes (optional)'
     }
   };
 
@@ -187,7 +193,7 @@
         temperature: 0.2,
         messages: [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: b64 } },
-          { type: 'text', text: '识别这张照片。严格只返回 JSON，不要解释、不要 markdown。格式：{"summary":"一句话中文描述，15字内","scene":"从以下场景里挑最贴切的一个的英文id（' + Store.SCENES.map(function (x) { return x.id + '=' + x.zh; }).join('，') + '）","items":[{"name":"物品名","qty":数量整数}]}' }
+          { type: 'text', text: '识别这张照片。严格只返回 JSON，不要解释、不要 markdown。格式：{"summary":"一句话中文描述，15字内","scene":"从以下场景里挑最贴切的一个的英文id（' + Store.SCENES.map(function (x) { return x.id + '=' + x.zh; }).join('，') + '）","items":[{"name":"物品名","qty":数量整数}]}。若是食物/饮品照片，scene 选对应餐次，items 填每样食物名。' }
         ] }]
       };
       return apiPost(this.ENDPOINT, { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body).then(function (j) {
@@ -351,7 +357,13 @@
       car: s('<path d="M5 11l1.6-4.1A2 2 0 0 1 8.5 6h7a2 2 0 0 1 1.9 1.3L19 11"/><path d="M3 16v-3a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3h-3M7 16H3"/><path d="M9 16h6"/><circle cx="7" cy="16.5" r="1.6"/><circle cx="17" cy="16.5" r="1.6"/>'),
       wallet: s('<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14" r="1.3"/>'),
       drawer: s('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M10 8h4M10 16h4"/>'),
-      other: s('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>')
+      other: s('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>'),
+      /* 饭迹 / 饮食 */
+      breakfast: s('<path d="M4 8h13a4 4 0 0 1 0 8h-1"/><path d="M4 8v6a4 4 0 0 0 4 4h5a4 4 0 0 0 4-4V8z"/><path d="M8 3c-.6.8-.6 1.7 0 2.5M12 3c-.6.8-.6 1.7 0 2.5"/>'),
+      lunch: s('<path d="M3.5 11a8.5 8.5 0 0 0 17 0z"/><path d="M3 11h18"/><path d="M9 4c-.7.7-.7 1.8 0 2.5M13 4c-.7.7-.7 1.8 0 2.5"/>'),
+      dinner: s('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/>'),
+      latenight: s('<path d="M19 14.8A7.5 7.5 0 1 1 9.2 5a6 6 0 0 0 9.8 9.8z"/>'),
+      snack: s('<path d="M7 8h10l-1 11a2 2 0 0 1-2 1.8H10A2 2 0 0 1 8 19z"/><path d="M6 8h12"/><path d="M14 8 16 3"/>')
     };
   })();
   function sceneIconSVG(id) { return SCENE_ICONS[id] || SCENE_ICONS.other; }
@@ -427,9 +439,14 @@
 
     groups.forEach(function (g) {
       var sec = el('section', { class: 'date-group' });
+      var mealCount = g.items.filter(function (c) { return Store.isMealScene(c.scene); }).length;
+      var headRight = [el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })];
+      if (mealCount > 0) {
+        headRight.unshift(el('span', { class: 'date-meals', text: '🍽 ' + mealCount + ' ' + t('meals_count') }));
+      }
       sec.appendChild(el('div', { class: 'date-head' }, [
         el('span', { class: 'date-label', text: g.label }),
-        el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })
+        el('span', { class: 'date-head-right' }, headRight)
       ]));
       var rail = el('div', { class: 'commit-rail' });
       g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
@@ -516,7 +533,8 @@
       el('span', { class: 'commit-hash', text: shortId(c.id) })
     ]));
     if (c.items && c.items.length) {
-      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '物品清单' : 'Items' }));
+      card.appendChild(el('div', { class: 'detail-section-title',
+        text: Store.isMealScene(c.scene) ? t('ate_what') : (L ? '物品清单' : 'Items') }));
       var list = el('div', { class: 'detail-items' });
       c.items.forEach(function (it) {
         list.appendChild(el('div', { class: 'detail-item' }, [
@@ -555,19 +573,39 @@
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
 
     var selectedScene = (editing && editing.scene) || Store.SCENES[0].id;
-    var sceneGrid = el('div', { class: 'scene-grid' });
-    function renderScenePicker() {
-      sceneGrid.innerHTML = '';
-      Store.SCENES.forEach(function (sc) {
+    var scenePicker = el('div', { class: 'scene-picker' });
+    function buildSceneGrid(group) {
+      var grid = el('div', { class: 'scene-grid' });
+      Store.SCENES.filter(function (sc) { return sc.group === group; }).forEach(function (sc) {
         var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(sc.id);
         var opt = el('button', { type: 'button',
           class: 'scene-opt' + (sc.id === selectedScene ? ' active' : '') },
           [ic, el('span', { class: 'scene-opt-label', text: sceneName(sc) })]);
-        opt.addEventListener('click', function () { selectedScene = sc.id; renderScenePicker(); });
-        sceneGrid.appendChild(opt);
+        opt.addEventListener('click', function () {
+          selectedScene = sc.id; renderScenePicker(); syncMealUI();
+        });
+        grid.appendChild(opt);
       });
+      return grid;
+    }
+    function renderScenePicker() {
+      scenePicker.innerHTML = '';
+      // 饮食 group first (this release's headline), then 物品场景
+      scenePicker.appendChild(el('div', { class: 'scene-group-label', text: '🍽 ' + t('group_meal') }));
+      scenePicker.appendChild(buildSceneGrid('meal'));
+      scenePicker.appendChild(el('div', { class: 'scene-group-label', text: '📦 ' + t('group_item') }));
+      scenePicker.appendChild(buildSceneGrid('item'));
     }
     renderScenePicker();
+
+    // food-aware wording: when a meal scene is selected, the form talks about food
+    function syncMealUI() {
+      var meal = Store.isMealScene(selectedScene);
+      msgInput.placeholder = meal ? t('meal_placeholder') : t('commit_placeholder');
+      if (itemsLabelText) itemsLabelText.textContent = meal ? t('ate_what') : t('items');
+      if (moreSummary) moreSummary.textContent = meal ? t('add_meal')
+        : (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)');
+    }
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (editing && editing.message && editing.message !== '(no message)') msgInput.value = editing.message;
@@ -641,7 +679,7 @@
           moreDetails.open = true;
         }
         if (res.scene && Store.SCENES.some(function (x) { return x.id === res.scene; })) {
-          selectedScene = res.scene; renderScenePicker();
+          selectedScene = res.scene; renderScenePicker(); syncMealUI();
         }
         toast('✨ ' + (lang === 'zh' ? 'AI 识别完成' : 'Done'));
       }).catch(function (e) {
@@ -656,13 +694,14 @@
     });
 
     // keep the fast path simple: photo + one line. Items/notes are optional & collapsed.
+    var moreSummary = el('summary', { class: 'more-summary',
+      text: (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)') });
+    var itemsLabel = labeled(t('items'), el('div', {}, [itemsWrap,
+      el('button', { class: 'btn tiny ghost', text: t('add_item'),
+        onclick: function () { addItemRow(); } })]));
+    var itemsLabelText = $('.label-text', itemsLabel);
     var moreDetails = el('details', { class: 'more-details' }, [
-      el('summary', { class: 'more-summary',
-        text: (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)') }),
-      labeled(t('items'), el('div', {}, [itemsWrap,
-        el('button', { class: 'btn tiny ghost', text: t('add_item'),
-          onclick: function () { addItemRow(); } })])),
-      labeled(t('notes'), notesInput)
+      moreSummary, itemsLabel, labeled(t('notes'), notesInput)
     ]);
     if (editing && editing.items && editing.items.length) moreDetails.open = true;
 
@@ -673,7 +712,7 @@
         el('div', {}, [preview, fileInput, aiBtn])
       ]),
       labeled(t('message'), msgInput),
-      labeled(t('scene'), sceneGrid),
+      labeled(t('scene'), scenePicker),
       moreDetails,
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
@@ -705,6 +744,7 @@
       ])
     ]);
     v.appendChild(form);
+    syncMealUI(); // set initial food-aware wording (esp. when editing a meal commit)
   }
 
   function labeled(label, control) {
@@ -1147,6 +1187,17 @@
       message: 'MKTG report start version',
       items: [{ name: 'rubric.png', qty: 1 }, { name: 'report_v1.docx', qty: 1 },
         { name: 'chart_sales.png', qty: 1 }, { name: 'refs.txt', qty: 1 }] });
+    // 饭迹 / 饮食 — today's meals
+    Store.addCommit({ scene: 'breakfast', createdAt: now - 9 * 3600000,
+      message: lang === 'zh' ? '豆浆 + 鸡蛋灌饼' : 'Soy milk + egg pancake',
+      items: lang === 'zh'
+        ? [{ name: '豆浆', qty: 1 }, { name: '鸡蛋灌饼', qty: 1 }]
+        : [{ name: 'Soy milk', qty: 1 }, { name: 'Egg pancake', qty: 1 }] });
+    Store.addCommit({ scene: 'lunch', createdAt: now - 4 * 3600000,
+      message: lang === 'zh' ? '黄焖鸡米饭 + 一杯奶茶' : 'Braised chicken rice + milk tea',
+      items: lang === 'zh'
+        ? [{ name: '黄焖鸡米饭', qty: 1 }, { name: '奶茶', qty: 1 }]
+        : [{ name: 'Braised chicken rice', qty: 1 }, { name: 'Milk tea', qty: 1 }] });
     // a decision branch
     Store.addBranch({
       question: lang === 'zh' ? '今晚写作业 还是 出去玩？' : 'Homework tonight, or go out?',
@@ -1378,6 +1429,40 @@
       .addEventListener('change', function () { if (getTheme() === 'system') initNative(); });
   } catch (e) {}
 
+  /* ---------------- native: keyboard (Android focus-jump fix) ----------------
+     Keyboard.resize is 'none' (capacitor.config.ts) so the WebView no longer
+     resizes when the soft keyboard opens — that resize, combined with the
+     sticky frosted topbar, was what made the topbar/page jump on focus.
+     Instead we hide the bottom tab bar while typing, pad the scroll area by the
+     keyboard height, and (since the browser doesn't know the keyboard covers the
+     bottom under resize:none) manually scroll the focused field into view. */
+  function initKeyboard() {
+    try {
+      var Cap = window.Capacitor;
+      if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+      var KB = Cap.Plugins && Cap.Plugins.Keyboard;
+      if (!KB || !KB.addListener) return;
+      KB.addListener('keyboardWillShow', function (info) {
+        var h = (info && info.keyboardHeight) || 0;
+        document.documentElement.style.setProperty('--kb-height', h + 'px');
+        document.body.classList.add('kb-open');
+      });
+      KB.addListener('keyboardWillHide', function () {
+        document.body.classList.remove('kb-open');
+        document.documentElement.style.setProperty('--kb-height', '0px');
+      });
+    } catch (e) {}
+  }
+  // lift the focused field above the keyboard (runs on every platform; harmless)
+  document.addEventListener('focusin', function (e) {
+    var tgt = e.target;
+    if (!tgt || !tgt.tagName) return;
+    if (!/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
+    requestAnimationFrame(function () {
+      try { tgt.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+    });
+  });
+
   /* ---------------- language ---------------- */
   function setLang(l) {
     if (l !== 'zh' && l !== 'en') return;
@@ -1396,6 +1481,7 @@
     var _set = document.getElementById('settings-btn');
     if (_set) _set.addEventListener('click', function () { go('settings'); });
     initNative();
+    initKeyboard();
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();

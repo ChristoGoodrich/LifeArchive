@@ -10,9 +10,9 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // resize the WebView when the keyboard opens, so the fixed bottom tab bar
-    // sits just above the keyboard (no mid-screen floating, no vanishing).
-    Keyboard: { resize: 'native' as any }
+    // Keep the WebView stable while the keyboard opens. app.js hides the bottom
+    // tab bar, pads the scroll area, and lifts the focused field into view.
+    Keyboard: { resize: 'none' as any }
   }
 };
 
