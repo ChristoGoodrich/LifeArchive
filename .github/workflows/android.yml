@@ -35,7 +35,7 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Patch Android project (version + signing + status-bar opt-out)
+      - name: Patch Android project (version + signing + stable IME viewport)
         run: node scripts/set-android-version.mjs
 
       - name: Generate adaptive app icons from assets/

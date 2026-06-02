@@ -33,9 +33,11 @@ async function run() {
   const shots = [
     { hash: '#timeline', name: '1-timeline' },
     { hash: '#diff', name: '2-diff', pre: `
-        var s = document.querySelector('main select');
-        if (s) { s.selectedIndex = Math.min(1, s.options.length - 1); // 桌面 (richer heatmap)
-                 s.dispatchEvent(new Event('change')); }
+        var s = document.querySelector('main .choice-select');
+        if (s && s._choices && s._choices.length) {
+          var pick = s._choices[Math.min(1, s._choices.length - 1)]; // 桌面 (richer heatmap)
+          s.setValue(pick.value, true);
+        }
       `, after: `
         var c = document.querySelector('main canvas');
         if (c) c.scrollIntoView({ block: 'center' });

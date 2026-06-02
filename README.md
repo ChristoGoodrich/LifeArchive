@@ -63,7 +63,7 @@
 <p align="center"><img src="docs/screenshots/4-branch.png" width="85%"></p>
 
 ### ➕ 新建存档
-拍照 / 上传照片 + 写一句 commit message，生成一个生活存档点；清单和备注按需展开。场景选择器内置「🍽 饮食」分组，可快速记录早餐、午餐、晚餐、夜宵和零食饮品。
+底部正中间的大号「＋」是最快入口。拍照 / 上传照片 + 写一句 commit message，生成一个生活存档点；清单和备注按需展开。场景先用左右选框区分「🍽 饮食 / 📦 物品场景」，再选择具体分类，可快速记录早餐、午餐、晚餐、夜宵和零食饮品。
 
 ---
 
@@ -71,7 +71,7 @@
 
 - **核心是一个纯前端、零依赖、可离线的网页 App**（`index.html` + `css/` + `js/`），直接双击就能跑。
 - 桌面版用 **Electron** 套壳打包成 Windows 安装包；**electron-updater + GitHub Releases** 实现云端自动更新。
-- 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK。
+- 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK；Activity 使用 `adjustNothing` 保持输入法弹出时 WebView 稳定，再由页面按遮挡位置抬升当前输入框。
 - **为什么 Diff 不需要 AI 视觉？** 它是两条互补的对比：图像 diff（`js/diff.js` 逐像素求差 + 3×3 网格定位）告诉你**哪里**变了；清单 diff（结构化集合比较）告诉你**什么**变了，稳定可靠、不依赖识别。
 
 ```

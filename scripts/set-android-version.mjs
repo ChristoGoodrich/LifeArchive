@@ -1,8 +1,8 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Opt out of Android 15 forced edge-to-edge so the status bar doesn't overlap
-      the web content (the WebView doesn't reliably expose safe-area insets). */
+   2. Keep the Activity stable while the keyboard opens. Capacitor's Keyboard
+      resize option is iOS-only; Android needs windowSoftInputMode here. */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
@@ -36,14 +36,20 @@ if (!g.includes('signingConfigs')) {
 writeFileSync(gradlePath, g);
 console.log(`Android version -> versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
 
-// --- camera permission for @capacitor/camera ---
+// --- Android manifest: camera permission + stable IME viewport ---
 const manifestPath = 'android/app/src/main/AndroidManifest.xml';
 let m = readFileSync(manifestPath, 'utf8');
 if (!m.includes('android.permission.CAMERA')) {
   m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.CAMERA" />\n</manifest>');
-  writeFileSync(manifestPath, m);
   console.log('AndroidManifest -> added CAMERA permission');
 }
+if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
+  m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustNothing"');
+} else {
+  m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustNothing"');
+}
+writeFileSync(manifestPath, m);
+console.log('AndroidManifest -> Activity windowSoftInputMode="adjustNothing"');
 
 // Status-bar overlap is handled at runtime by @capacitor-community/safe-area
 // (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

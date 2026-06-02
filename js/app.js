@@ -46,7 +46,8 @@
       parent: '基于', root: '初始存档', commits_in: '个存档',
       group_meal: '饮食', group_item: '物品场景', meals_count: '餐',
       meal_placeholder: '例如：午饭 黄焖鸡 + 一杯奶茶',
-      ate_what: '吃了什么', add_meal: '＋ 添加食物 / 备注（可选）'
+      ate_what: '吃了什么', add_meal: '＋ 添加食物 / 备注（可选）',
+      choose_option: '请选择', choice_title: '选择一个选项', choice_close: '取消'
     },
     en: {
       brand: 'Life Archive',
@@ -87,7 +88,8 @@
       parent: 'based on', root: 'initial commit', commits_in: 'commits',
       group_meal: 'Meals', group_item: 'Things', meals_count: 'meals',
       meal_placeholder: 'e.g. Lunch — braised chicken rice + milk tea',
-      ate_what: 'What you ate', add_meal: '＋ Add food / notes (optional)'
+      ate_what: 'What you ate', add_meal: '＋ Add food / notes (optional)',
+      choose_option: 'Choose', choice_title: 'Choose an option', choice_close: 'Cancel'
     }
   };
 
@@ -378,8 +380,8 @@
     nav.innerHTML = '';
     var items = [
       ['timeline', t('nav_timeline')],
-      ['commit', t('nav_commit')],
       ['diff', t('nav_diff')],
+      ['commit', t('nav_commit')],
       ['rollback', t('nav_rollback')],
       ['branch', t('nav_branch')]
     ];
@@ -387,7 +389,8 @@
       var icon = el('span', { class: 'nav-ic' });
       icon.innerHTML = NAV_ICONS[it[0]];
       nav.appendChild(el('button', {
-        class: 'nav-btn' + (current === it[0] ? ' active' : ''),
+        class: 'nav-btn' + (it[0] === 'commit' ? ' nav-btn-create' : '') + (current === it[0] ? ' active' : ''),
+        'data-route': it[0],
         onclick: function () { go(it[0]); }
       }, [icon, el('span', { text: it[1] })]));
     });
@@ -574,6 +577,7 @@
 
     var selectedScene = (editing && editing.scene) || Store.SCENES[0].id;
     var scenePicker = el('div', { class: 'scene-picker' });
+    var selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
     function buildSceneGrid(group) {
       var grid = el('div', { class: 'scene-grid' });
       Store.SCENES.filter(function (sc) { return sc.group === group; }).forEach(function (sc) {
@@ -590,11 +594,24 @@
     }
     function renderScenePicker() {
       scenePicker.innerHTML = '';
-      // 饮食 group first (this release's headline), then 物品场景
-      scenePicker.appendChild(el('div', { class: 'scene-group-label', text: '🍽 ' + t('group_meal') }));
-      scenePicker.appendChild(buildSceneGrid('meal'));
-      scenePicker.appendChild(el('div', { class: 'scene-group-label', text: '📦 ' + t('group_item') }));
-      scenePicker.appendChild(buildSceneGrid('item'));
+      var switcher = el('div', { class: 'scene-kind-switch', role: 'tablist' });
+      [['meal', '🍽', t('group_meal')], ['item', '📦', t('group_item')]].forEach(function (it) {
+        var group = it[0];
+        switcher.appendChild(el('button', {
+          type: 'button', role: 'tab', 'aria-selected': group === selectedGroup ? 'true' : 'false',
+          class: 'scene-kind-btn' + (group === selectedGroup ? ' active' : ''),
+          onclick: function () {
+            if (selectedGroup === group) return;
+            selectedGroup = group;
+            if (Store.sceneById(selectedScene).group !== group) {
+              selectedScene = Store.SCENES.filter(function (sc) { return sc.group === group; })[0].id;
+            }
+            renderScenePicker(); syncMealUI();
+          }
+        }, [el('span', { text: it[1] }), el('span', { text: it[2] })]));
+      });
+      scenePicker.appendChild(switcher);
+      scenePicker.appendChild(buildSceneGrid(selectedGroup));
     }
     renderScenePicker();
 
@@ -679,7 +696,9 @@
           moreDetails.open = true;
         }
         if (res.scene && Store.SCENES.some(function (x) { return x.id === res.scene; })) {
-          selectedScene = res.scene; renderScenePicker(); syncMealUI();
+          selectedScene = res.scene;
+          selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
+          renderScenePicker(); syncMealUI();
         }
         toast('✨ ' + (lang === 'zh' ? 'AI 识别完成' : 'Done'));
       }).catch(function (e) {
@@ -712,7 +731,7 @@
         el('div', {}, [preview, fileInput, aiBtn])
       ]),
       labeled(t('message'), msgInput),
-      labeled(t('scene'), scenePicker),
+      labeledBlock(t('scene'), scenePicker),
       moreDetails,
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
@@ -752,6 +771,86 @@
       el('span', { class: 'label-text', text: label }), control]);
   }
 
+  function labeledBlock(label, control) {
+    return el('div', { class: 'labeled' }, [
+      el('span', { class: 'label-text', text: label }), control]);
+  }
+
+  /* App-owned selector. Native <select> opens an oversized Android radio dialog,
+     so every option picker uses the same compact bottom sheet instead. */
+  function choiceSelect(options, selectedValue, extraClass) {
+    var root = el('div', { class: 'choice-select' + (extraClass ? ' ' + extraClass : '') });
+    var trigger = el('button', {
+      type: 'button', class: 'choice-trigger', 'aria-haspopup': 'listbox',
+      onclick: function () { openChoiceSheet(root); }
+    });
+    root.appendChild(trigger);
+    root._choices = [];
+    root._value = '';
+    root._onChange = null;
+    root.getValue = function () { return root._value; };
+    root.setOptions = function (next, preferredValue) {
+      root._choices = (next || []).map(function (it) {
+        return { value: String(it.value), text: String(it.text) };
+      });
+      var wanted = preferredValue == null ? root._value : String(preferredValue);
+      if (!root._choices.some(function (it) { return it.value === wanted; })) {
+        wanted = root._choices.length ? root._choices[0].value : '';
+      }
+      root._value = wanted;
+      updateChoiceTrigger();
+    };
+    root.setValue = function (value, notify) {
+      value = String(value);
+      if (!root._choices.some(function (it) { return it.value === value; })) return;
+      var changed = root._value !== value;
+      root._value = value;
+      updateChoiceTrigger();
+      if (changed && notify && root._onChange) root._onChange();
+    };
+    root.onChange = function (fn) { root._onChange = fn; };
+    function updateChoiceTrigger() {
+      var picked = root._choices.find(function (it) { return it.value === root._value; });
+      trigger.innerHTML = '';
+      trigger.appendChild(el('span', { class: 'choice-trigger-text', text: picked ? picked.text : t('choose_option') }));
+      trigger.appendChild(el('span', { class: 'choice-chevron', text: '⌄' }));
+    }
+    root.setOptions(options, selectedValue);
+    return root;
+  }
+
+  function openChoiceSheet(select) {
+    var old = $('.choice-sheet-mask');
+    if (old) old.remove();
+    var mask = el('div', { class: 'choice-sheet-mask' });
+    var sheet = el('section', { class: 'choice-sheet', role: 'dialog', 'aria-modal': 'true' }, [
+      el('div', { class: 'choice-sheet-head' }, [
+        el('strong', { text: t('choice_title') }),
+        el('button', { type: 'button', class: 'choice-sheet-close', text: t('choice_close') })
+      ])
+    ]);
+    select._choices.forEach(function (it) {
+      var active = it.value === select.getValue();
+      sheet.appendChild(el('button', {
+        type: 'button', role: 'option', 'aria-selected': active ? 'true' : 'false',
+        class: 'choice-option' + (active ? ' active' : ''),
+        onclick: function () { select.setValue(it.value, true); close(); }
+      }, [
+        el('span', { class: 'choice-option-text', text: it.text }),
+        el('span', { class: 'choice-check', text: active ? '✓' : '' })
+      ]));
+    });
+    function close() {
+      mask.classList.remove('open');
+      setTimeout(function () { if (mask.parentNode) mask.remove(); }, 180);
+    }
+    $('.choice-sheet-close', sheet).addEventListener('click', close);
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    mask.appendChild(sheet);
+    document.body.appendChild(mask);
+    requestAnimationFrame(function () { mask.classList.add('open'); });
+  }
+
   /* ---------------- Reality Diff ---------------- */
   function renderDiff(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_diff') })]));
@@ -762,37 +861,32 @@
     }
 
     // scene picker, defaulting to a scene with >=2 commits
-    var sceneSel = el('select', { class: 'field' });
     var scenesWith2 = Store.SCENES.filter(function (s) {
       return Store.commitsForScene(s.id).length >= 2;
     });
     if (!scenesWith2.length) { v.appendChild(noticeCard(t('need_two'))); return; }
-    scenesWith2.forEach(function (s) {
-      sceneSel.appendChild(el('option', { value: s.id, text: sceneLabel(s) }));
-    });
-
-    var baseSel = el('select', { class: 'field' });
-    var compSel = el('select', { class: 'field' });
+    var sceneSel = choiceSelect(scenesWith2.map(function (s) {
+      return { value: s.id, text: sceneLabel(s) };
+    }));
+    var baseSel = choiceSelect([]);
+    var compSel = choiceSelect([]);
 
     function fillVersionSelects() {
-      var list = Store.commitsForScene(sceneSel.value); // newest first
-      baseSel.innerHTML = ''; compSel.innerHTML = '';
-      list.forEach(function (c) {
-        var label = fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id));
-        baseSel.appendChild(el('option', { value: c.id, text: label }));
-        compSel.appendChild(el('option', { value: c.id, text: label }));
+      var list = Store.commitsForScene(sceneSel.getValue()); // newest first
+      var choices = list.map(function (c) {
+        return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
       });
       // default: base = older (second item), compare = newest
-      compSel.selectedIndex = 0;
-      baseSel.selectedIndex = Math.min(1, list.length - 1);
+      compSel.setOptions(choices, choices[0] && choices[0].value);
+      baseSel.setOptions(choices, choices[Math.min(1, choices.length - 1)] && choices[Math.min(1, choices.length - 1)].value);
     }
     fillVersionSelects();
-    sceneSel.addEventListener('change', function () { fillVersionSelects(); runDiff(); });
+    sceneSel.onChange(function () { fillVersionSelects(); runDiff(); });
 
     var controls = el('div', { class: 'diff-controls' }, [
-      labeled(t('scene'), sceneSel),
-      labeled(t('base'), baseSel),
-      labeled(t('compare'), compSel),
+      labeledBlock(t('scene'), sceneSel),
+      labeledBlock(t('base'), baseSel),
+      labeledBlock(t('compare'), compSel),
       el('button', { class: 'btn primary', text: '🔍 ' + t('run_diff'), onclick: function () { runDiff(); } })
     ]);
     v.appendChild(controls);
@@ -800,12 +894,12 @@
     var result = el('div', { class: 'diff-result' });
     v.appendChild(result);
 
-    baseSel.addEventListener('change', runDiff);
-    compSel.addEventListener('change', runDiff);
+    baseSel.onChange(runDiff);
+    compSel.onChange(runDiff);
 
     function runDiff() {
-      var base = Store.getCommit(baseSel.value);
-      var comp = Store.getCommit(compSel.value);
+      var base = Store.getCommit(baseSel.getValue());
+      var comp = Store.getCommit(compSel.getValue());
       if (!base || !comp) return;
       result.innerHTML = '';
 
@@ -894,25 +988,20 @@
     var commits = Store.commits();
     if (!commits.length) { v.appendChild(noticeCard(t('empty_title'))); return; }
 
-    var sel = el('select', { class: 'field' });
-    commits.forEach(function (c) {
+    var choices = commits.map(function (c) {
       var s = Store.sceneById(c.scene);
-      sel.appendChild(el('option', { value: c.id,
-        text: sceneLabel(s) + ' · ' + fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) }));
+      return { value: c.id,
+        text: sceneLabel(s) + ' · ' + fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
     });
-    if (pendingRollback) {
-      for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === pendingRollback) { sel.selectedIndex = i; break; }
-      }
-      pendingRollback = null;
-    }
+    var sel = choiceSelect(choices, pendingRollback || choices[0].value);
+    pendingRollback = null;
 
-    v.appendChild(labeled(t('rollback_pick'), sel));
+    v.appendChild(labeledBlock(t('rollback_pick'), sel));
     var out = el('div', { class: 'rollback-out' });
     v.appendChild(out);
 
     function build() {
-      var target = Store.getCommit(sel.value);
+      var target = Store.getCommit(sel.getValue());
       if (!target) return;
       out.innerHTML = '';
 
@@ -976,7 +1065,7 @@
         el('strong', { id: 'rb-progress', text: '0 / ' + steps.length })
       ]));
     }
-    sel.addEventListener('change', build);
+    sel.onChange(build);
     build();
   }
 
@@ -1065,21 +1154,22 @@
           b.followup.note ? el('span', { class: 'fu-note', text: '“' + b.followup.note + '”' }) : null
         ]));
       } else {
-        var rate = el('select', { class: 'field tiny-field' });
-        [5, 4, 3, 2, 1].forEach(function (n) { rate.appendChild(el('option', { value: n, text: '⭐ ' + n })); });
+        var rate = choiceSelect([5, 4, 3, 2, 1].map(function (n) {
+          return { value: n, text: '⭐ ' + n };
+        }), '5', 'tiny-choice');
         var note = el('input', { class: 'field', type: 'text', placeholder: t('followup') });
-        var rep = el('select', { class: 'field tiny-field' });
-        rep.appendChild(el('option', { value: '1', text: t('yes') }));
-        rep.appendChild(el('option', { value: '0', text: t('no') }));
+        var rep = choiceSelect([
+          { value: '1', text: t('yes') }, { value: '0', text: t('no') }
+        ], '1', 'tiny-choice');
         children.push(el('div', { class: 'followup-form' }, [
           el('div', { class: 'fu-title', text: '📋 ' + t('followup') }),
           el('div', { class: 'fu-row' }, [
-            labeled(t('rate'), rate), labeled(t('repeat'), rep), labeled(t('notes'), note)
+            labeledBlock(t('rate'), rate), labeledBlock(t('repeat'), rep), labeled(t('notes'), note)
           ]),
           el('button', { class: 'btn tiny primary', text: t('save_followup'), onclick: function () {
             Store.updateBranch(b.id, { followup: {
-              rating: parseInt(rate.value, 10),
-              wouldRepeat: rep.value === '1',
+              rating: parseInt(rate.getValue(), 10),
+              wouldRepeat: rep.getValue() === '1',
               note: note.value.trim(),
               recordedAt: Date.now()
             } });
@@ -1430,37 +1520,60 @@
   } catch (e) {}
 
   /* ---------------- native: keyboard (Android focus-jump fix) ----------------
-     Keyboard.resize is 'none' (capacitor.config.ts) so the WebView no longer
-     resizes when the soft keyboard opens — that resize, combined with the
-     sticky frosted topbar, was what made the topbar/page jump on focus.
-     Instead we hide the bottom tab bar while typing, pad the scroll area by the
-     keyboard height, and (since the browser doesn't know the keyboard covers the
-     bottom under resize:none) manually scroll the focused field into view. */
+     Android's generated Activity uses windowSoftInputMode="adjustNothing"
+     (scripts/set-android-version.mjs), so opening the IME cannot resize or pan
+     the WebView. We hide the tab bar and lift the focused field only when the
+     keyboard actually covers it. */
+  var keyboardHeight = 0;
+  var keyboardLiftTimer = null;
+  function isTextField(node) {
+    return !!(node && node.tagName && /^(INPUT|TEXTAREA)$/.test(node.tagName));
+  }
+  function liftFocusedField() {
+    if (!document.body.classList.contains('kb-open')) return;
+    var tgt = document.activeElement;
+    if (!isTextField(tgt)) return;
+    var rect = tgt.getBoundingClientRect();
+    var topbar = $('.topbar');
+    var visibleTop = (topbar ? topbar.getBoundingClientRect().bottom : 0) + 14;
+    var visibleBottom = window.innerHeight - keyboardHeight - 20;
+    var delta = 0;
+    if (rect.bottom > visibleBottom) delta = rect.bottom - visibleBottom;
+    else if (rect.top < visibleTop) delta = rect.top - visibleTop;
+    if (Math.abs(delta) > 2) window.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+  function queueKeyboardLift(delay) {
+    clearTimeout(keyboardLiftTimer);
+    keyboardLiftTimer = setTimeout(liftFocusedField, delay || 40);
+  }
   function initKeyboard() {
     try {
       var Cap = window.Capacitor;
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      KB.addListener('keyboardWillShow', function (info) {
+      function shown(info) {
         var h = (info && info.keyboardHeight) || 0;
+        keyboardHeight = h;
         document.documentElement.style.setProperty('--kb-height', h + 'px');
         document.body.classList.add('kb-open');
-      });
-      KB.addListener('keyboardWillHide', function () {
+        queueKeyboardLift(60);
+      }
+      function hidden() {
+        keyboardHeight = 0;
         document.body.classList.remove('kb-open');
         document.documentElement.style.setProperty('--kb-height', '0px');
-      });
+      }
+      KB.addListener('keyboardWillShow', shown);
+      KB.addListener('keyboardDidShow', shown);
+      KB.addListener('keyboardWillHide', hidden);
+      KB.addListener('keyboardDidHide', hidden);
     } catch (e) {}
   }
-  // lift the focused field above the keyboard (runs on every platform; harmless)
+  // A newly focused field may sit lower than the previous one while IME stays open.
   document.addEventListener('focusin', function (e) {
-    var tgt = e.target;
-    if (!tgt || !tgt.tagName) return;
-    if (!/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName)) return;
-    requestAnimationFrame(function () {
-      try { tgt.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
-    });
+    if (!isTextField(e.target) || !document.body.classList.contains('kb-open')) return;
+    queueKeyboardLift(40);
   });
 
   /* ---------------- language ---------------- */

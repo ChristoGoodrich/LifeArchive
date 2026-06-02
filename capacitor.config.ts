@@ -10,8 +10,8 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // Keep the WebView stable while the keyboard opens. app.js hides the bottom
-    // tab bar, pads the scroll area, and lifts the focused field into view.
+    // iOS equivalent of Android's generated Activity adjustNothing patch
+    // (scripts/set-android-version.mjs). app.js handles the covered field.
     Keyboard: { resize: 'none' as any }
   }
 };
