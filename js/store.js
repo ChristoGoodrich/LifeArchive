@@ -90,6 +90,18 @@
       return ok ? commit : null;
     },
 
+    updateCommit: function (id, patch) {
+      var all = read(KEY_COMMITS, []);
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].id === id) {
+          for (var k in patch) { if (patch.hasOwnProperty(k)) all[i][k] = patch[k]; }
+          write(KEY_COMMITS, all);
+          return all[i];
+        }
+      }
+      return null;
+    },
+
     deleteCommit: function (id) {
       var all = read(KEY_COMMITS, []).filter(function (c) { return c.id !== id; });
       write(KEY_COMMITS, all);

@@ -447,6 +447,8 @@
         onclick: function () { go('diff'); } }),
       el('button', { class: 'btn tiny', text: '⏮️ ' + t('nav_rollback'),
         onclick: function () { pendingRollback = c.id; go('rollback'); } }),
+      el('button', { class: 'btn tiny', text: '✏️ ' + (lang === 'zh' ? '编辑' : 'Edit'),
+        onclick: function () { pendingEdit = c.id; go('commit'); } }),
       el('button', { class: 'btn tiny danger-ghost', text: t('delete'),
         onclick: function () {
           if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); render(); }
@@ -458,19 +460,26 @@
     return el('div', { class: 'commit-card' }, [thumb, body]);
   }
 
-  /* ---------------- New commit form ---------------- */
+  /* ---------------- New / edit commit form ---------------- */
   var draftPhoto = null;
+  var pendingEdit = null;
   function renderCommitForm(v) {
     draftPhoto = null;
-    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_commit') })]));
+    var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
+    pendingEdit = null;
+    v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
+      text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
 
     var sceneSel = el('select', { class: 'field' });
     Store.SCENES.forEach(function (s) {
       sceneSel.appendChild(el('option', { value: s.id, text: sceneLabel(s) }));
     });
+    if (editing) sceneSel.value = editing.scene;
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
+    if (editing && editing.message && editing.message !== '(no message)') msgInput.value = editing.message;
     var notesInput = el('textarea', { class: 'field', rows: '2' });
+    if (editing && editing.notes) notesInput.value = editing.notes;
 
     var preview = el('div', { class: 'photo-drop' }, [
       el('span', { class: 'photo-hint', text: '📷 ' + t('photo') })
@@ -486,6 +495,12 @@
       });
     });
     preview.addEventListener('click', function () { fileInput.click(); });
+    if (editing && editing.photo) {
+      draftPhoto = editing.photo;
+      preview.innerHTML = '';
+      preview.style.backgroundImage = 'url(' + editing.photo + ')';
+      preview.classList.add('has-photo');
+    }
 
     // dynamic item rows
     var itemsWrap = el('div', { class: 'items-wrap' });
@@ -499,7 +514,11 @@
           onclick: function () { row.remove(); } })]);
       itemsWrap.appendChild(row);
     }
-    addItemRow();
+    if (editing && editing.items && editing.items.length) {
+      editing.items.forEach(function (it) { addItemRow(it.name, it.qty || 1); });
+    } else {
+      addItemRow();
+    }
 
     // AI photo scan: take a photo -> auto-fill description + items (free Zhipu key)
     var aiBtn = el('button', { class: 'btn ghost ai-btn', type: 'button',
@@ -543,6 +562,7 @@
           onclick: function () { addItemRow(); } })])),
       labeled(t('notes'), notesInput)
     ]);
+    if (editing && editing.items && editing.items.length) moreDetails.open = true;
 
     var form = el('div', { class: 'form-card' }, [
       labeled('📷 ' + t('photo'), el('div', {}, [preview, fileInput, aiBtn])),
@@ -558,14 +578,20 @@
             var n = $('.item-name', r).value.trim();
             if (n) items.push({ name: n, qty: parseInt($('.item-qty', r).value, 10) || 1 });
           });
-          var commit = {
+          var payload = {
             scene: sceneSel.value,
             message: msgInput.value.trim() || '(no message)',
             photo: draftPhoto,
             items: items,
             notes: notesInput.value.trim()
           };
-          var ok = Store.addCommit(commit);
+          if (editing) {
+            Store.updateCommit(editing.id, payload);
+            toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
+            go('timeline');
+            return;
+          }
+          var ok = Store.addCommit(payload);
           if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
           toast('✅ ' + t('save_commit'));
           go('timeline');
@@ -1264,6 +1290,18 @@
     var _set = document.getElementById('settings-btn');
     if (_set) _set.addEventListener('click', function () { go('settings'); });
     initNative();
+
+    // hide the fixed bottom tab bar while typing (soft keyboard open)
+    document.addEventListener('focusin', function (e) {
+      var tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') document.body.classList.add('kb-open');
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(function () {
+        var a = document.activeElement, tag = a && a.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') document.body.classList.remove('kb-open');
+      }, 80);
+    });
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
