@@ -24,7 +24,7 @@
       run_diff: '对比', changed: '画面变化', heat_hint: '变化最明显的区域',
       added: '多了', removed: '少了', changed_qty: '数量变化', kept: '保持不变',
       no_change: '两个版本几乎一致 👍',
-      rollback_pick: '选择要恢复到的存档', rollback_steps: '恢复步骤',
+      rollback_pick: '选择要恢复到的存档', rollback_version: '时间描述', rollback_steps: '恢复步骤',
       rollback_intro: '按下面的步骤，把现状恢复到这个存档：',
       step_remove: '拿走 / 移除', step_add: '放回 / 补上', step_check: '确认仍在',
       done: '完成', branch_q: '你在纠结什么？',
@@ -66,7 +66,7 @@
       run_diff: 'Diff', changed: 'pixels changed', heat_hint: 'Hottest change zones',
       added: 'Added', removed: 'Missing', changed_qty: 'Qty changed', kept: 'Unchanged',
       no_change: 'The two versions look nearly identical 👍',
-      rollback_pick: 'Pick the commit to restore to', rollback_steps: 'Restore steps',
+      rollback_pick: 'Pick the commit to restore to', rollback_version: 'Time & description', rollback_steps: 'Restore steps',
       rollback_intro: 'Follow these steps to restore the current state to this commit:',
       step_remove: 'Remove', step_add: 'Put back / add', step_check: 'Confirm present',
       done: 'Done', branch_q: 'What are you torn between?',
@@ -310,7 +310,7 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings', 'detail'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings', 'changelog', 'detail'];
   var current = 'timeline';
 
   function go(route) {
@@ -409,6 +409,7 @@
     else if (current === 'rollback') renderRollback(v);
     else if (current === 'branch') renderBranch(v);
     else if (current === 'settings') renderSettings(v);
+    else if (current === 'changelog') renderChangelog(v);
     else if (current === 'detail') renderDetail(v);
   }
 
@@ -988,17 +989,37 @@
     var commits = Store.commits();
     if (!commits.length) { v.appendChild(noticeCard(t('empty_title'))); return; }
 
-    var choices = commits.map(function (c) {
-      var s = Store.sceneById(c.scene);
-      return { value: c.id,
-        text: sceneLabel(s) + ' · ' + fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
-    });
-    var sel = choiceSelect(choices, pendingRollback || choices[0].value);
+    var initialCommit = Store.getCommit(pendingRollback) || commits[0];
     pendingRollback = null;
+    var scenes = Store.SCENES.filter(function (s) {
+      return Store.commitsForScene(s.id).length > 0;
+    });
+    var sceneSel = choiceSelect(scenes.map(function (s) {
+      return { value: s.id, text: sceneLabel(s) };
+    }), initialCommit.scene);
+    var sel = choiceSelect([]);
 
-    v.appendChild(labeledBlock(t('rollback_pick'), sel));
+    function fillCommitSelect(preferredId) {
+      var choices = Store.commitsForScene(sceneSel.getValue()).map(function (c) {
+        return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
+      });
+      sel.setOptions(choices, preferredId);
+    }
+    fillCommitSelect(initialCommit.id);
+
+    v.appendChild(el('div', { class: 'rollback-controls' }, [
+      labeledBlock(t('scene'), sceneSel),
+      labeledBlock(t('rollback_version'), sel)
+    ]));
     var out = el('div', { class: 'rollback-out' });
     v.appendChild(out);
+
+    function changeScene() {
+      fillCommitSelect();
+      build();
+    }
+    sceneSel.onChange(changeScene);
+    sel.onChange(build);
 
     function build() {
       var target = Store.getCommit(sel.getValue());
@@ -1065,7 +1086,6 @@
         el('strong', { id: 'rb-progress', text: '0 / ' + steps.length })
       ]));
     }
-    sel.onChange(build);
     build();
   }
 
@@ -1343,6 +1363,121 @@
       [el('div', { class: 'set-card-title', text: title })].concat(children));
   }
 
+  var RELEASE_NOTES = [
+    ['1.1.2', '2026-06-02', '移动端布局稳定 + 更新日志收纳 + 回滚整理 + 图标提亮',
+      'Mobile layout stability, release notes, rollback cleanup, brighter icon',
+      ['修复现实对比长描述撑宽页面的问题，底栏不再跟随横向滑动。',
+       '设置内新增可折叠的更新日志二级页，支持系统侧滑返回设置。',
+       '回滚入口改为左侧场景、右侧时间描述，旧存档更容易定位。',
+       'App icon 保留卡片堆造型，整体换成更明亮的蓝紫配色。'],
+      ['Prevent long Reality Diff labels from widening the page or shifting the tab bar.',
+       'Add a collapsible release-notes subpage under Settings with system back navigation.',
+       'Split Rollback selection into scene and time-description controls.',
+       'Keep the card-stack icon while switching to a brighter blue-purple palette.']],
+    ['1.1.1', '2026-06-02', '移动端交互焕新 + 安卓键盘原生修复',
+      'Mobile interaction refresh and native Android keyboard fix',
+      ['安卓键盘弹出时不再重排整个 WebView。', '底栏新增中央大号新建按钮，并统一应用内选择面板。'],
+      ['Stop Android keyboard display from rearranging the whole WebView.', 'Add the central create button and unified in-app option sheets.']],
+    ['1.1.0', '2026-06-02', '饭迹：饮食生活档案',
+      'Meal archive',
+      ['新增早餐、午餐、晚餐、夜宵和零食饮品场景。', '时间线显示每日餐数，AI 识别可自动填写餐次和食物。'],
+      ['Add meal scenes for breakfast, lunch, dinner, late-night food, and snacks.', 'Show daily meal counts and let AI photo scan fill meal details.']],
+    ['1.0.14', '2026-06-02', '相机 + 场景选择器重做 + AI 识别场景',
+      'Camera, scene picker rebuild, and AI scene recognition',
+      ['安卓支持直接拍照或从相册选择。', '场景选择器改成统一图标网格，AI 可自动选择场景。'],
+      ['Support camera capture or gallery selection on Android.', 'Replace the scene picker with an icon grid and add AI scene selection.']],
+    ['1.0.13', '2026-06-02', '顶栏粘性 + 时间线细节统一',
+      'Sticky top bar and timeline polish',
+      ['修复顶栏下滑时消失，恢复左侧蓝色时间线。', '移动端移除卡片右侧桌面专用指示符。'],
+      ['Fix the top bar disappearing while scrolling and restore the blue timeline rail.', 'Remove the desktop-only card chevron on mobile.']],
+    ['1.0.12', '2026-06-02', '详情页 + 时间线分栏 + 磨砂顶栏',
+      'Details page, date groups, and frosted top bar',
+      ['新增存档详情页，集中编辑、对比、回滚和删除。', '时间线按日期分栏，低频数据操作移入设置。'],
+      ['Add a commit details page for edit, diff, rollback, and delete actions.', 'Group timeline entries by date and move low-frequency data actions into Settings.']],
+    ['1.0.11', '2026-06-02', '体验修复：编辑存档 + 输入法 + 桌面对齐',
+      'Editable commits, keyboard fixes, and desktop alignment',
+      ['存档支持预填表单编辑。', '改善输入法弹出布局和桌面端导航对齐。'],
+      ['Allow editing commits with a prefilled form.', 'Improve keyboard layout handling and desktop navigation alignment.']],
+    ['1.0.10', '2026-06-02', '修复安卓云同步失败',
+      'Fix Android cloud sync',
+      ['仅让智谱 AI 请求走原生网络，保留 Supabase 登录令牌。'],
+      ['Route only Zhipu AI requests through native networking so Supabase auth headers remain intact.']],
+    ['1.0.9', '2026-06-02', '账号与云同步',
+      'Accounts and cloud sync',
+      ['新增 Supabase 邮箱注册、登录和多设备同步。'],
+      ['Add Supabase email accounts and multi-device sync.']],
+    ['1.0.8', '2026-06-02', '全面屏安全区 + 设置整合',
+      'Safe-area support and consolidated settings',
+      ['适配全面屏安全区，在设置内集中管理语言和主题。'],
+      ['Support full-screen safe areas and consolidate language and theme controls in Settings.']],
+    ['1.0.7', '2026-06-02', '设置页 + 固定签名 + 状态栏',
+      'Settings, stable signing, and status bar',
+      ['新增设置页、检查更新和固定 Android 签名。'],
+      ['Add Settings, update checks, and stable Android signing.']],
+    ['1.0.6', '2026-06-02', 'AI 拍照识别',
+      'AI photo scan',
+      ['用智谱 GLM-4V-Flash 从照片自动生成描述和物品清单。'],
+      ['Use Zhipu GLM-4V-Flash to generate descriptions and item lists from photos.']],
+    ['1.0.5', '2026-06-02', '状态栏 + 更新安装 + 新建简化',
+      'Status bar, update installs, and simpler commits',
+      ['简化新建存档，并改善状态栏与 Android 覆盖安装。'],
+      ['Simplify new commits and improve status-bar handling and Android update installs.']],
+    ['1.0.4', '2026-06-02', '安全区 + 扁平图标 + 新 Logo',
+      'Safe areas, flat icons, and new logo',
+      ['加入顶部安全区、统一扁平标签图标和卡片堆 Logo。'],
+      ['Add top safe-area spacing, flat tab icons, and the card-stack logo.']],
+    ['1.0.3', '2026-06-02', 'HyperOS 风格界面重做',
+      'HyperOS-style UI rebuild',
+      ['重做亮暗主题、卡片布局、移动端底栏和桌面导航。'],
+      ['Rebuild light and dark themes, card layouts, the mobile tab bar, and desktop navigation.']],
+    ['1.0.2', '2026-06-01', '移动端体验重做 + 彻底改名',
+      'Mobile redesign and full rename',
+      ['重做移动端底栏和触摸区域，统一更名为 Life Archive。'],
+      ['Rebuild mobile tabs and touch targets, and rename the app to Life Archive.']],
+    ['1.0.1', '2026-06-01', 'Life Archive 定名 + 安卓首发',
+      'Life Archive rename and Android launch',
+      ['正式定名 Life Archive，加入新图标和首个 Android APK。'],
+      ['Rename the app to Life Archive, add the new icon, and ship the first Android APK.']],
+    ['1.0.0', '2026-06-01', '首个发布版本',
+      'Initial release',
+      ['发布时间线、现实对比、回滚和分支决策四项核心能力。'],
+      ['Ship Timeline, Reality Diff, Rollback, and Branch Decisions.']]
+  ];
+
+  function renderChangelog(v) {
+    var L = lang === 'zh';
+    var back = el('button', {
+      type: 'button', class: 'subpage-back', text: '‹ ' + (L ? '设置' : 'Settings'),
+      onclick: function () { window.history.back(); }
+    });
+    v.appendChild(el('div', { class: 'subpage-head' }, [
+      back, el('h1', { text: L ? '更新日志' : 'Release notes' })
+    ]));
+    v.appendChild(el('p', { class: 'subpage-hint',
+      text: L ? '点击版本即可展开或收起。系统侧滑返回也会回到设置。'
+        : 'Tap a version to expand or collapse it. System back returns to Settings.' }));
+    var list = el('div', { class: 'release-list' });
+    RELEASE_NOTES.forEach(function (r, idx) {
+      var notes = L ? r[4] : r[5];
+      var details = el('details', { class: 'release-note' }, [
+        el('summary', { class: 'release-summary' }, [
+          el('span', { class: 'release-summary-main' }, [
+            el('span', { class: 'release-version', text: 'v' + r[0] }),
+            el('span', { class: 'release-title', text: L ? r[2] : r[3] }),
+            el('span', { class: 'release-date', text: r[1] })
+          ]),
+          el('span', { class: 'release-chevron', text: '›' })
+        ]),
+        el('ul', { class: 'release-notes' }, notes.map(function (note) {
+          return el('li', { text: note });
+        }))
+      ]);
+      if (idx === 0) details.setAttribute('open', '');
+      list.appendChild(details);
+    });
+    v.appendChild(list);
+  }
+
   function segmented(options, currentVal, onPick) {
     return el('div', { class: 'seg' }, options.map(function (o) {
       var b = el('button', { class: 'seg-btn' + (o[0] === currentVal ? ' active' : ''), text: o[1] });
@@ -1429,11 +1564,17 @@
 
     var updBtn = el('button', { class: 'btn', text: lang === 'zh' ? '检查更新' : 'Check for updates' });
     updBtn.addEventListener('click', function () { checkUpdate(updBtn); });
+    var logsBtn = el('button', { class: 'set-menu-link',
+      onclick: function () { go('changelog'); } }, [
+      el('span', { text: lang === 'zh' ? '更新日志' : 'Release notes' }),
+      el('span', { class: 'set-menu-chevron', text: '›' })
+    ]);
     var about = settingsCard(lang === 'zh' ? '关于' : 'About', [
       el('div', { class: 'set-row' }, [
         el('span', { class: 'set-label', text: lang === 'zh' ? '当前版本' : 'Version' }),
         el('span', { class: 'set-value', text: 'v' + (window.APP_VERSION || '?') })
       ]),
+      logsBtn,
       el('div', { class: 'set-actions' }, [updBtn])
     ]);
 

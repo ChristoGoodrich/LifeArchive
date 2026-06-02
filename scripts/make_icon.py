@@ -1,6 +1,6 @@
 """Generate Life Archive's app icon: a fanned stack of snapshot cards (the
 "life archive" — layered saved states) in the app's blue->purple gradient on a
-dark rounded square. Outputs build/icon.ico (multi-size) + icon.png."""
+bright rounded square. Outputs build/icon.ico (multi-size) + icon.png."""
 import os
 from PIL import Image, ImageDraw
 
@@ -9,16 +9,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "build")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-ACCENT = (110, 168, 254)   # #6ea8fe
-ACCENT2 = (157, 123, 255)  # #9d7bff
-BG_TOP = (18, 24, 38)      # #121826
-BG_BOT = (8, 11, 18)       # #080b12
-SEP = (9, 12, 20)          # dark gap between cards
+ACCENT = (172, 215, 255)   # #acd7ff
+ACCENT2 = (201, 184, 255)  # #c9b8ff
+BG_TOP = (76, 135, 255)    # #4c87ff
+BG_BOT = (115, 84, 238)    # #7354ee
+SEP = (47, 74, 180)        # blue gap between cards
 
 def lerp(a, b, t):
     return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
-# 1) dark vertical-gradient background
+# 1) bright vertical-gradient background
 bg = Image.new("RGB", (S, S))
 bpx = bg.load()
 for y in range(S):
@@ -45,7 +45,7 @@ cards = [
 d_bg = ImageDraw.Draw(icon)
 for (x0, y0), alpha in cards:
     x1, y1 = x0 + CW, y0 + CH
-    # dark gap so the card behind reads as separate
+    # deeper blue gap so the card behind reads as separate
     d_bg.rounded_rectangle([x0 - 12, y0 - 12, x1 + 12, y1 + 12], radius=R + 10, fill=SEP)
     # gradient card via an alpha mask (lower alpha = dimmer back cards)
     mask = Image.new("L", (S, S), 0)
@@ -58,7 +58,7 @@ fx0, fy0 = cards[2][0]
 d = ImageDraw.Draw(icon)
 for i, w in enumerate((150, 96)):
     yy = fy0 + 200 + i * 40
-    d.rounded_rectangle([fx0 + 48, yy, fx0 + 48 + w, yy + 20], radius=10, fill=(11, 15, 26, 150))
+    d.rounded_rectangle([fx0 + 48, yy, fx0 + 48 + w, yy + 20], radius=10, fill=(58, 80, 178, 170))
 
 # 4) round the outer corners (transparent)
 corner = Image.new("L", (S, S), 0)

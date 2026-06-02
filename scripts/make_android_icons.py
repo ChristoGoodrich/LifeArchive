@@ -10,13 +10,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets")
 os.makedirs(OUT, exist_ok=True)
 
-ACCENT = (110, 168, 254); ACCENT2 = (157, 123, 255)
-BG_TOP = (18, 24, 38); BG_BOT = (8, 11, 18); SEP = (9, 12, 20)
+ACCENT = (172, 215, 255); ACCENT2 = (201, 184, 255)
+BG_TOP = (76, 135, 255); BG_BOT = (115, 84, 238); SEP = (47, 74, 180)
 
 def lerp(a, b, t):
     return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
-def navy_bg(size):
+def gradient_bg(size):
     img = Image.new("RGB", (size, size)); px = img.load()
     for y in range(size):
         c = lerp(BG_TOP, BG_BOT, y / size)
@@ -33,8 +33,8 @@ def diagonal_grad(size):
 
 def card_stack(size, transparent):
     """The fanned 3-card stack. transparent=True -> no navy background (for the
-    adaptive foreground layer); False -> composited over navy (full icon)."""
-    base = Image.new("RGBA", (size, size), (0, 0, 0, 0)) if transparent else navy_bg(size)
+    adaptive foreground layer); False -> composited over the blue-purple background."""
+    base = Image.new("RGBA", (size, size), (0, 0, 0, 0)) if transparent else gradient_bg(size)
     grad = diagonal_grad(size)
     CW, CH, R = 430, 300, 46
     cards = [((size // 2 - CW // 2 + 70, 250), 90),
@@ -51,11 +51,11 @@ def card_stack(size, transparent):
     d = ImageDraw.Draw(base)
     for i, w in enumerate((150, 96)):
         yy = fy0 + 200 + i * 40
-        d.rounded_rectangle([fx0 + 48, yy, fx0 + 48 + w, yy + 20], radius=10, fill=(11, 15, 26, 200))
+        d.rounded_rectangle([fx0 + 48, yy, fx0 + 48 + w, yy + 20], radius=10, fill=(58, 80, 178, 190))
     return base
 
-# --- icon-background.png: full-bleed navy (the adaptive background layer) ---
-navy_bg(S).save(os.path.join(OUT, "icon-background.png"))
+# --- icon-background.png: full-bleed gradient (the adaptive background layer) ---
+gradient_bg(S).save(os.path.join(OUT, "icon-background.png"))
 
 # --- icon-foreground.png: just the stack, centred in the adaptive safe zone ---
 stack = card_stack(S, transparent=True)
@@ -71,10 +71,10 @@ fg.save(os.path.join(OUT, "icon-foreground.png"))
 # --- icon-only.png: the full rounded desktop icon (legacy launchers) ---
 shutil.copyfile(os.path.join(ROOT, "build", "icon.png"), os.path.join(OUT, "icon-only.png"))
 
-# --- splash.png / splash-dark.png: navy field with the full icon centred ---
+# --- splash.png / splash-dark.png: blue-purple field with the full icon centred ---
 SP = 2732
 for name in ("splash.png", "splash-dark.png"):
-    canvas = navy_bg(SP)
+    canvas = gradient_bg(SP)
     logo = Image.open(os.path.join(ROOT, "build", "icon.png")).convert("RGBA")
     L = 820
     logo = logo.resize((L, L), Image.LANCZOS)
