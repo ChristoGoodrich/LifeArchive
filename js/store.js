@@ -154,10 +154,17 @@
     },
 
     exportJSON: function () {
-      return JSON.stringify({
-        commits: read(KEY_COMMITS, []),
-        branches: read(KEY_BRANCHES, [])
-      }, null, 2);
+      return JSON.stringify(this.exportRaw(), null, 2);
+    },
+
+    /* ---------- Cloud sync helpers (raw data in/out) ---------- */
+    exportRaw: function () {
+      return { commits: read(KEY_COMMITS, []), branches: read(KEY_BRANCHES, []) };
+    },
+    replaceAll: function (data) {
+      data = data || {};
+      write(KEY_COMMITS, data.commits || []);
+      write(KEY_BRANCHES, data.branches || []);
     }
   };
 

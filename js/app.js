@@ -186,6 +186,106 @@
     }
   };
 
+  /* ---------------- Cloud sync (Supabase — pluggable backend) ----------------
+     Swappable adapter: the rest of the app only touches Cloud.* and cloudSync().
+     Config (project URL + anon key) is stored locally and entered in Settings.
+     To switch backends later, only this block changes. */
+  var _supaSDK = null;
+  function loadSupabaseSDK() {
+    if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+    if (_supaSDK) return _supaSDK;
+    _supaSDK = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      s.onload = function () { resolve(window.supabase); };
+      s.onerror = function () { _supaSDK = null; reject(new Error('无法加载云服务 SDK（请检查网络）')); };
+      document.head.appendChild(s);
+    });
+    return _supaSDK;
+  }
+
+  var Cloud = {
+    URL_LS: 'lifearchive.cloud_url', KEY_LS: 'lifearchive.cloud_key',
+    _client: null, _user: null,
+    getCfg: function () {
+      return { url: (localStorage.getItem(this.URL_LS) || '').trim(),
+               key: (localStorage.getItem(this.KEY_LS) || '').trim() };
+    },
+    setCfg: function (url, key) {
+      localStorage.setItem(this.URL_LS, (url || '').trim());
+      localStorage.setItem(this.KEY_LS, (key || '').trim());
+      this._client = null; this._user = null;
+    },
+    configured: function () { var c = this.getCfg(); return !!(c.url && c.key); },
+    currentUser: function () { return this._user; },
+    client: function () {
+      var self = this;
+      if (self._client) return Promise.resolve(self._client);
+      var c = self.getCfg();
+      if (!c.url || !c.key) return Promise.reject(new Error('NO_CFG'));
+      return loadSupabaseSDK().then(function (sb) {
+        self._client = sb.createClient(c.url, c.key, {
+          auth: { persistSession: true, autoRefreshToken: true, storageKey: 'lifearchive.supa.auth' }
+        });
+        return self._client;
+      });
+    },
+    _ck: function (r) { if (r && r.error) throw new Error(r.error.message || String(r.error)); return r; },
+    refreshUser: function () {
+      var self = this;
+      if (!self.configured()) { self._user = null; return Promise.resolve(null); }
+      return self.client().then(function (c) { return c.auth.getUser(); })
+        .then(function (r) { self._user = (r && r.data && r.data.user) || null; return self._user; })
+        .catch(function () { self._user = null; return null; });
+    },
+    signUp: function (email, pw) {
+      var self = this;
+      return self.client().then(function (c) { return c.auth.signUp({ email: email, password: pw }); })
+        .then(function (r) { self._ck(r); self._user = (r.data && r.data.user) || null; return r; });
+    },
+    signIn: function (email, pw) {
+      var self = this;
+      return self.client().then(function (c) { return c.auth.signInWithPassword({ email: email, password: pw }); })
+        .then(function (r) { self._ck(r); self._user = (r.data && r.data.user) || null; return r; });
+    },
+    signOut: function () {
+      var self = this;
+      return self.client().then(function (c) { return c.auth.signOut(); })
+        .then(function () { self._user = null; });
+    },
+    pull: function () {
+      return this.client().then(function (c) { return c.from('archives').select('data').maybeSingle(); })
+        .then(function (r) { if (r.error) throw new Error(r.error.message); return r.data ? r.data.data : null; });
+    },
+    push: function (blob) {
+      var self = this;
+      return self.client().then(function (c) {
+        var uid = self._user && self._user.id;
+        if (!uid) throw new Error('未登录');
+        return c.from('archives').upsert(
+          { user_id: uid, data: blob, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      }).then(function (r) { if (r.error) throw new Error(r.error.message); return true; });
+    }
+  };
+
+  function mergeData(a, b) {
+    a = a || { commits: [], branches: [] }; b = b || { commits: [], branches: [] };
+    function union(x, y) {
+      var m = {}; (x || []).concat(y || []).forEach(function (it) { if (it && it.id) m[it.id] = it; });
+      return Object.keys(m).map(function (k) { return m[k]; });
+    }
+    return { commits: union(a.commits, b.commits), branches: union(a.branches, b.branches) };
+  }
+
+  function cloudSync() {
+    var local = Store.exportRaw();
+    return Cloud.pull().then(function (remote) {
+      var merged = mergeData(local, remote);
+      Store.replaceAll(merged);
+      return Cloud.push(merged).then(function () { return merged; });
+    });
+  }
+
   /* ---------------- routing ---------------- */
   var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings'];
   var current = 'timeline';
@@ -963,6 +1063,79 @@
     }));
   }
 
+  function accountCard() {
+    var L = lang === 'zh';
+    var title = L ? '账号与云同步' : 'Account & sync';
+
+    // 1) not configured -> ask for Supabase project URL + anon key
+    if (!Cloud.configured()) {
+      var urlI = el('input', { class: 'field', type: 'text', placeholder: 'Supabase URL（https://xxx.supabase.co）' });
+      var keyI = el('input', { class: 'field', type: 'text', placeholder: 'Supabase anon key' });
+      var saveB = el('button', { class: 'btn primary tiny', text: L ? '保存配置' : 'Save' });
+      saveB.addEventListener('click', function () {
+        if (!urlI.value.trim() || !keyI.value.trim()) { toast(L ? '请填写 URL 和 anon key' : 'Fill both fields'); return; }
+        Cloud.setCfg(urlI.value, keyI.value); toast(L ? '已保存配置' : 'Saved'); render();
+      });
+      return settingsCard(title, [
+        el('p', { class: 'set-hint', text: L
+          ? '用 Supabase 免费后端做多设备云同步。填入你的项目地址和 anon key（公开可用、可放心填）。'
+          : 'Multi-device sync via Supabase (free). Paste your project URL + anon key (safe to embed).' }),
+        urlI, keyI, el('div', { class: 'set-actions' }, [saveB])
+      ]);
+    }
+
+    var reconf = el('button', { class: 'btn ghost tiny', text: L ? '重新配置' : 'Reconfigure' });
+    reconf.addEventListener('click', function () {
+      if (confirm(L ? '清除 Supabase 配置？' : 'Clear Supabase config?')) { Cloud.setCfg('', ''); render(); }
+    });
+
+    // 2) configured + signed in
+    var u = Cloud.currentUser();
+    if (u) {
+      var syncB = el('button', { class: 'btn primary tiny', text: '☁ ' + (L ? '立即同步' : 'Sync now') });
+      syncB.addEventListener('click', function () {
+        syncB.disabled = true; var o = syncB.textContent; syncB.textContent = L ? '同步中…' : 'syncing…';
+        cloudSync().then(function () { toast('☁ ' + (L ? '同步完成' : 'Synced')); render(); })
+          .catch(function (e) { toast('⚠ ' + (L ? '同步失败：' : 'Sync failed: ') + (e && e.message || e)); })
+          .then(function () { syncB.disabled = false; syncB.textContent = o; });
+      });
+      var outB = el('button', { class: 'btn ghost tiny', text: L ? '退出登录' : 'Log out' });
+      outB.addEventListener('click', function () { Cloud.signOut().then(function () { toast(L ? '已退出' : 'Logged out'); render(); }); });
+      return settingsCard(title, [
+        el('div', { class: 'set-row' }, [
+          el('span', { class: 'set-label', text: L ? '已登录' : 'Signed in' }),
+          el('span', { class: 'set-value', text: u.email || u.id })
+        ]),
+        el('p', { class: 'set-hint', text: L
+          ? '「立即同步」会把本机存档与云端合并，登录其他设备即可共享。'
+          : 'Sync merges this device with the cloud; sign in elsewhere to share.' }),
+        el('div', { class: 'set-actions' }, [syncB, outB, reconf])
+      ]);
+    }
+
+    // 3) configured + signed out -> email/password
+    var emailI = el('input', { class: 'field', type: 'email', placeholder: L ? '邮箱' : 'Email' });
+    var pwI = el('input', { class: 'field', type: 'password', placeholder: L ? '密码（至少 6 位）' : 'Password (min 6)' });
+    function doAuth(kind) {
+      var fn = kind === 'up' ? Cloud.signUp.bind(Cloud) : Cloud.signIn.bind(Cloud);
+      fn(emailI.value.trim(), pwI.value).then(function (r) {
+        if (kind === 'up' && r && r.data && r.data.user && !r.data.session) {
+          toast(L ? '注册成功，请到邮箱确认后再登录' : 'Sign-up ok — confirm via email, then log in'); render(); return;
+        }
+        toast(L ? '登录成功，正在同步…' : 'Signed in, syncing…');
+        return cloudSync().then(function () { toast('☁ ' + (L ? '已同步' : 'Synced')); render(); });
+      }).catch(function (e) { toast('⚠ ' + (e && e.message || e)); render(); });
+    }
+    var loginB = el('button', { class: 'btn primary tiny', text: L ? '登录' : 'Log in' });
+    loginB.addEventListener('click', function () { doAuth('in'); });
+    var regB = el('button', { class: 'btn tiny', text: L ? '注册' : 'Sign up' });
+    regB.addEventListener('click', function () { doAuth('up'); });
+    return settingsCard(title, [
+      el('p', { class: 'set-hint', text: L ? '登录后即可多设备云同步。' : 'Log in to sync across devices.' }),
+      emailI, pwI, el('div', { class: 'set-actions' }, [loginB, regB, reconf])
+    ]);
+  }
+
   function renderSettings(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: lang === 'zh' ? '设置' : 'Settings' })]));
 
@@ -990,11 +1163,7 @@
       el('div', { class: 'set-actions' }, [saveKey, clrKey])
     ]);
 
-    var account = settingsCard(lang === 'zh' ? '账号与云同步' : 'Account & sync', [
-      el('p', { class: 'set-hint', text: lang === 'zh'
-        ? '账号登录与多设备云端同步正在开发中，敬请期待。'
-        : 'Account login & multi-device cloud sync are coming soon.' })
-    ]);
+    var account = accountCard();
 
     var expBtn = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '导出 JSON' : 'Export JSON' });
     expBtn.addEventListener('click', exportData);
@@ -1084,5 +1253,6 @@
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
     render();
+    if (Cloud.configured()) Cloud.refreshUser().then(function () { if (current === 'settings') render(); });
   });
 })();
