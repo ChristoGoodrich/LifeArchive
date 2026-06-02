@@ -41,7 +41,10 @@ function createWindow() {
     title: 'Life Archive · 生活存档',
     webPreferences: {
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // app loads only local files; this lets the user-initiated AI photo-scan
+      // call the (CORS-less) Zhipu API directly from the renderer.
+      webSecurity: false
     }
   });
   win.loadFile(path.join(__dirname, 'index.html'));

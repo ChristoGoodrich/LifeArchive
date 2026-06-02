@@ -146,6 +146,9 @@ select.field{cursor:pointer}
 .photo-drop.has-photo{border-style:solid}
 .photo-hint{font-size:15px;font-weight:600}
 
+.ai-btn{width:100%;margin-top:10px;color:var(--accent);
+  border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.ai-btn:disabled{opacity:.6;cursor:default}
 .more-details{margin-bottom:18px;border-top:1px solid var(--line);padding-top:14px}
 .more-summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:14.5px;
   list-style:none;padding:6px 0;user-select:none}

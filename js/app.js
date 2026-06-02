@@ -152,6 +152,40 @@
     });
   }
 
+  /* ---------------- AI photo scan (free: Zhipu GLM-4V-Flash) ----------------
+     Uses the user's own free key (bigmodel.cn), stored only in localStorage.
+     No server, no cost. Endpoint/model kept here so they're easy to swap. */
+  var AI = {
+    LS: 'lifearchive.ai_key',
+    ENDPOINT: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    MODEL: 'glm-4v-flash',
+    getKey: function () { return (localStorage.getItem(this.LS) || '').trim(); },
+    setKey: function (k) { localStorage.setItem(this.LS, (k || '').trim()); },
+    analyze: function (dataUrl) {
+      var key = this.getKey();
+      if (!key) return Promise.reject(new Error('NO_KEY'));
+      var b64 = dataUrl.indexOf(',') > -1 ? dataUrl.split(',')[1] : dataUrl;
+      return fetch(this.ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: this.MODEL,
+          temperature: 0.2,
+          messages: [{ role: 'user', content: [
+            { type: 'image_url', image_url: { url: b64 } },
+            { type: 'text', text: '识别这张照片里的主要物品。严格只返回 JSON，不要解释、不要 markdown，格式：{"summary":"一句话中文描述，15字内","items":[{"name":"物品名","qty":数量整数}]}' }
+          ] }]
+        })
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+        var txt = (((j.choices || [])[0] || {}).message || {}).content || '';
+        var m = txt.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('返回无法解析：' + txt.slice(0, 80));
+        return JSON.parse(m[0]);
+      });
+    }
+  };
+
   /* ---------------- routing ---------------- */
   var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch'];
   var current = 'timeline';
@@ -351,6 +385,39 @@
     }
     addItemRow();
 
+    // AI photo scan: take a photo -> auto-fill description + items (free Zhipu key)
+    var aiBtn = el('button', { class: 'btn ghost ai-btn', type: 'button',
+      text: '✨ ' + (lang === 'zh' ? 'AI 识别照片' : 'AI scan photo') });
+    aiBtn.addEventListener('click', function () {
+      if (!draftPhoto) { toast(lang === 'zh' ? '请先拍照 / 选一张照片' : 'Take a photo first'); return; }
+      if (!AI.getKey()) {
+        var k = window.prompt(lang === 'zh'
+          ? '粘贴你的智谱AI API Key（bigmodel.cn 免费申请，仅存手机本地、不上传）：'
+          : 'Paste your Zhipu API Key (free at bigmodel.cn, stored locally):');
+        if (!k) return;
+        AI.setKey(k);
+      }
+      aiBtn.disabled = true;
+      aiBtn.textContent = '⏳ ' + (lang === 'zh' ? '识别中…' : 'analyzing…');
+      AI.analyze(draftPhoto).then(function (res) {
+        if (res.summary && !msgInput.value.trim()) msgInput.value = res.summary;
+        if (res.items && res.items.length) {
+          itemsWrap.innerHTML = '';
+          res.items.forEach(function (it) { addItemRow(it.name, parseInt(it.qty, 10) || 1); });
+          moreDetails.open = true;
+        }
+        toast('✨ ' + (lang === 'zh' ? 'AI 识别完成' : 'Done'));
+      }).catch(function (e) {
+        if (e && e.message === 'NO_KEY') return;
+        var msg = (e && e.message) || String(e);
+        if (/401|apikey|api key|令牌|token|鉴权|invalid|unauthorized/i.test(msg)) AI.setKey('');
+        toast('⚠ ' + (lang === 'zh' ? 'AI 失败：' : 'AI failed: ') + msg);
+      }).then(function () {
+        aiBtn.disabled = false;
+        aiBtn.textContent = '✨ ' + (lang === 'zh' ? 'AI 识别照片' : 'AI scan photo');
+      });
+    });
+
     // keep the fast path simple: photo + one line. Items/notes are optional & collapsed.
     var moreDetails = el('details', { class: 'more-details' }, [
       el('summary', { class: 'more-summary',
@@ -362,7 +429,7 @@
     ]);
 
     var form = el('div', { class: 'form-card' }, [
-      labeled('📷 ' + t('photo'), el('div', {}, [preview, fileInput])),
+      labeled('📷 ' + t('photo'), el('div', {}, [preview, fileInput, aiBtn])),
       labeled(t('message'), msgInput),
       labeled(t('scene'), sceneSel),
       moreDetails,
