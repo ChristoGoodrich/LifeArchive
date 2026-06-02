@@ -19,7 +19,17 @@ create table if not exists public.archives (
   updated_at timestamptz not null default now()
 );
 
+-- 写入时若没带 user_id，自动填成当前登录用户（更稳妥）
+alter table public.archives alter column user_id set default auth.uid();
+
+-- 开启行级安全
 alter table public.archives enable row level security;
+
+-- 先删后建，保证四条权限规则都正确存在（可重复执行）
+drop policy if exists "own archive - select" on public.archives;
+drop policy if exists "own archive - insert" on public.archives;
+drop policy if exists "own archive - update" on public.archives;
+drop policy if exists "own archive - delete" on public.archives;
 
 create policy "own archive - select" on public.archives
   for select using (auth.uid() = user_id);
@@ -31,7 +41,9 @@ create policy "own archive - delete" on public.archives
   for delete using (auth.uid() = user_id);
 ```
 
-> 这套「行级安全（RLS）」规则保证：**每个用户只能读写自己的那行数据**，别人碰不到。
+> 这段是**可重复执行**的：就算你第一次只跑了一半，再跑一遍也会把四条权限规则补齐。
+> 「行级安全（RLS）」保证**每个用户只能读写自己那行数据**，别人碰不到。
+> 报错 `new row violates row-level security policy` 基本就是这段没建全——重跑它即可。
 
 ## 3.（推荐）免确认邮箱，登录更顺
 默认注册后要去邮箱点确认链接才能登录。个人使用想更省事：
