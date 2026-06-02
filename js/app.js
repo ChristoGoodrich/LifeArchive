@@ -402,7 +402,9 @@
         el('span', { class: 'date-label', text: g.label }),
         el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })
       ]));
-      g.items.forEach(function (c) { sec.appendChild(commitCard(c)); });
+      var rail = el('div', { class: 'commit-rail' });
+      g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
+      sec.appendChild(rail);
       v.appendChild(sec);
     });
   }
@@ -508,7 +510,7 @@
         onclick: function () { go('diff'); } }),
       el('button', { class: 'btn', text: '⏮️ ' + t('nav_rollback'),
         onclick: function () { pendingRollback = c.id; go('rollback'); } }),
-      el('button', { class: 'btn danger-ghost', text: '🗑 ' + t('delete'),
+      el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
         onclick: function () { if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); go('timeline'); } } })
     ]));
   }
