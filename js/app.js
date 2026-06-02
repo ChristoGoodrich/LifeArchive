@@ -187,7 +187,7 @@
         temperature: 0.2,
         messages: [{ role: 'user', content: [
           { type: 'image_url', image_url: { url: b64 } },
-          { type: 'text', text: '识别这张照片里的主要物品。严格只返回 JSON，不要解释、不要 markdown，格式：{"summary":"一句话中文描述，15字内","items":[{"name":"物品名","qty":数量整数}]}' }
+          { type: 'text', text: '识别这张照片。严格只返回 JSON，不要解释、不要 markdown。格式：{"summary":"一句话中文描述，15字内","scene":"从以下场景里挑最贴切的一个的英文id（' + Store.SCENES.map(function (x) { return x.id + '=' + x.zh; }).join('，') + '）","items":[{"name":"物品名","qty":数量整数}]}' }
         ] }]
       };
       return apiPost(this.ENDPOINT, { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body).then(function (j) {
@@ -332,6 +332,35 @@
     };
   })();
 
+  /* flat scene icons (unified line style, matching the nav) */
+  var SCENE_ICONS = (function () {
+    function s(inner) {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" '
+        + 'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    }
+    return {
+      bag: s('<path d="M6 9a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v9a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 5V4.5a3 3 0 0 1 6 0V5"/><path d="M9 12h6"/>'),
+      desk: s('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+      room: s('<path d="M3 18v-3h18v3M3 18v2M21 18v2M5 15v-2a3 3 0 0 1 3-3h11a2 2 0 0 1 2 2v3"/><path d="M8 10V8.5A1.5 1.5 0 0 1 9.5 7h2A1.5 1.5 0 0 1 13 8.5V10"/>'),
+      kitchen: s('<path d="M7 3v7M5 3v3a2 2 0 0 0 2 2M9 3v3a2 2 0 0 1-2 2M7 10v11"/><path d="M16 3c-1.7 0-3 2.3-3 5.2 0 2.4 1.2 3.7 3 4V21"/>'),
+      fridge: s('<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M6 10h12M10 6v2M10 13v3"/>'),
+      closet: s('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 3v18M9.5 9v2M14.5 9v2"/>'),
+      luggage: s('<rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M12 11v5"/><path d="M9 20v1M15 20v1"/>'),
+      homework: s('<path d="M6 3h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1 0-4h11"/><path d="M9 7h6M9 10.5h4"/>'),
+      group: s('<circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.3a3 3 0 0 1 0 5.4M16.5 14.3a5.5 5.5 0 0 1 4 5.2"/>'),
+      car: s('<path d="M5 11l1.6-4.1A2 2 0 0 1 8.5 6h7a2 2 0 0 1 1.9 1.3L19 11"/><path d="M3 16v-3a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3h-3M7 16H3"/><path d="M9 16h6"/><circle cx="7" cy="16.5" r="1.6"/><circle cx="17" cy="16.5" r="1.6"/>'),
+      wallet: s('<rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14" r="1.3"/>'),
+      drawer: s('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M10 8h4M10 16h4"/>'),
+      other: s('<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>')
+    };
+  })();
+  function sceneIconSVG(id) { return SCENE_ICONS[id] || SCENE_ICONS.other; }
+  function sceneName(scene) { return lang === 'zh' ? scene.zh : scene.en; }
+  function sceneTag(scene) {
+    var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(scene.id);
+    return el('span', { class: 'commit-scene' }, [ic, el('span', { text: sceneName(scene) })]);
+  }
+
   function renderNav() {
     var nav = $('#nav');
     nav.innerHTML = '';
@@ -439,7 +468,7 @@
     var meta = el('div', { class: 'commit-meta' }, [
       el('div', { class: 'commit-msg', text: c.message || '(no message)' }),
       el('div', { class: 'commit-sub' }, [
-        el('span', { class: 'commit-scene', text: sceneLabel(Store.sceneById(c.scene)) }),
+        sceneTag(Store.sceneById(c.scene)),
         el('span', { class: 'commit-dot', text: '·' }),
         el('span', { text: fmtTime(c.createdAt) }),
         el('span', { class: 'commit-dot', text: '·' }),
@@ -525,11 +554,20 @@
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
 
-    var sceneSel = el('select', { class: 'field' });
-    Store.SCENES.forEach(function (s) {
-      sceneSel.appendChild(el('option', { value: s.id, text: sceneLabel(s) }));
-    });
-    if (editing) sceneSel.value = editing.scene;
+    var selectedScene = (editing && editing.scene) || Store.SCENES[0].id;
+    var sceneGrid = el('div', { class: 'scene-grid' });
+    function renderScenePicker() {
+      sceneGrid.innerHTML = '';
+      Store.SCENES.forEach(function (sc) {
+        var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(sc.id);
+        var opt = el('button', { type: 'button',
+          class: 'scene-opt' + (sc.id === selectedScene ? ' active' : '') },
+          [ic, el('span', { class: 'scene-opt-label', text: sceneName(sc) })]);
+        opt.addEventListener('click', function () { selectedScene = sc.id; renderScenePicker(); });
+        sceneGrid.appendChild(opt);
+      });
+    }
+    renderScenePicker();
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (editing && editing.message && editing.message !== '(no message)') msgInput.value = editing.message;
@@ -539,23 +577,29 @@
     var preview = el('div', { class: 'photo-drop' }, [
       el('span', { class: 'photo-hint', text: '📷 ' + t('photo') })
     ]);
+    function setPhoto(dataUrl) {
+      draftPhoto = dataUrl;
+      preview.innerHTML = '';
+      preview.style.backgroundImage = 'url(' + dataUrl + ')';
+      preview.classList.add('has-photo');
+    }
     var fileInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
     fileInput.addEventListener('change', function () {
       if (!fileInput.files || !fileInput.files[0]) return;
-      downscale(fileInput.files[0], 900).then(function (dataUrl) {
-        draftPhoto = dataUrl;
-        preview.innerHTML = '';
-        preview.style.backgroundImage = 'url(' + dataUrl + ')';
-        preview.classList.add('has-photo');
-      });
+      downscale(fileInput.files[0], 900).then(setPhoto);
     });
-    preview.addEventListener('click', function () { fileInput.click(); });
-    if (editing && editing.photo) {
-      draftPhoto = editing.photo;
-      preview.innerHTML = '';
-      preview.style.backgroundImage = 'url(' + editing.photo + ')';
-      preview.classList.add('has-photo');
-    }
+    preview.addEventListener('click', function () {
+      var Cap = window.Capacitor;
+      if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera) {
+        // native action sheet: 拍照 / 从相册选择
+        Cap.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: 'PROMPT', quality: 80, width: 1200, correctOrientation: true })
+          .then(function (photo) { if (photo && photo.dataUrl) setPhoto(photo.dataUrl); })
+          .catch(function () { /* cancelled */ });
+      } else {
+        fileInput.click();
+      }
+    });
+    if (editing && editing.photo) setPhoto(editing.photo);
 
     // dynamic item rows
     var itemsWrap = el('div', { class: 'items-wrap' });
@@ -596,6 +640,9 @@
           res.items.forEach(function (it) { addItemRow(it.name, parseInt(it.qty, 10) || 1); });
           moreDetails.open = true;
         }
+        if (res.scene && Store.SCENES.some(function (x) { return x.id === res.scene; })) {
+          selectedScene = res.scene; renderScenePicker();
+        }
         toast('✨ ' + (lang === 'zh' ? 'AI 识别完成' : 'Done'));
       }).catch(function (e) {
         if (e && e.message === 'NO_KEY') return;
@@ -626,7 +673,7 @@
         el('div', {}, [preview, fileInput, aiBtn])
       ]),
       labeled(t('message'), msgInput),
-      labeled(t('scene'), sceneSel),
+      labeled(t('scene'), sceneGrid),
       moreDetails,
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
@@ -638,7 +685,7 @@
             if (n) items.push({ name: n, qty: parseInt($('.item-qty', r).value, 10) || 1 });
           });
           var payload = {
-            scene: sceneSel.value,
+            scene: selectedScene,
             message: msgInput.value.trim() || '(no message)',
             photo: draftPhoto,
             items: items,

@@ -36,5 +36,14 @@ if (!g.includes('signingConfigs')) {
 writeFileSync(gradlePath, g);
 console.log(`Android version -> versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
 
+// --- camera permission for @capacitor/camera ---
+const manifestPath = 'android/app/src/main/AndroidManifest.xml';
+let m = readFileSync(manifestPath, 'utf8');
+if (!m.includes('android.permission.CAMERA')) {
+  m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.CAMERA" />\n</manifest>');
+  writeFileSync(manifestPath, m);
+  console.log('AndroidManifest -> added CAMERA permission');
+}
+
 // Status-bar overlap is handled at runtime by @capacitor-community/safe-area
 // (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

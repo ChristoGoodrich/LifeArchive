@@ -37,11 +37,17 @@
   /* ---- Scenes: the preset "repos" a commit can belong to ---- */
   var SCENES = [
     { id: 'bag',     emoji: '🎒', zh: '出门包',   en: 'Go-bag' },
-    { id: 'desk',    emoji: '🖥️', zh: '桌面',     en: 'Desk' },
+    { id: 'desk',    emoji: '🖥️', zh: '书桌',     en: 'Desk' },
     { id: 'room',    emoji: '🛏️', zh: '房间',     en: 'Room' },
+    { id: 'kitchen', emoji: '🍳', zh: '厨房',     en: 'Kitchen' },
     { id: 'fridge',  emoji: '🧊', zh: '冰箱',     en: 'Fridge' },
+    { id: 'closet',  emoji: '👕', zh: '衣柜',     en: 'Closet' },
+    { id: 'luggage', emoji: '🧳', zh: '行李箱',   en: 'Luggage' },
     { id: 'homework',emoji: '📚', zh: '作业资料', en: 'Coursework' },
     { id: 'group',   emoji: '👥', zh: '小组分工', en: 'Group task' },
+    { id: 'car',     emoji: '🚗', zh: '车',       en: 'Car' },
+    { id: 'wallet',  emoji: '💳', zh: '钱包预算', en: 'Wallet' },
+    { id: 'drawer',  emoji: '🗄️', zh: '抽屉',     en: 'Drawer' },
     { id: 'other',   emoji: '📦', zh: '其他',     en: 'Other' }
   ];
 
