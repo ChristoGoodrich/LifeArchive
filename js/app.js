@@ -152,6 +152,23 @@
     });
   }
 
+  /* POST JSON and get parsed JSON back. On native Android the Zhipu API is
+     CORS-less, so route ONLY this through CapacitorHttp.request(); everything
+     else (incl. Supabase) uses normal fetch so auth headers stay intact. */
+  function apiPost(url, headers, bodyObj) {
+    var Cap = window.Capacitor;
+    if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.CapacitorHttp) {
+      return Cap.Plugins.CapacitorHttp.request({ method: 'POST', url: url, headers: headers, data: bodyObj })
+        .then(function (res) {
+          var d = res && res.data;
+          if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) {} }
+          return d;
+        });
+    }
+    return fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(bodyObj) })
+      .then(function (r) { return r.json(); });
+  }
+
   /* ---------------- AI photo scan (free: Zhipu GLM-4V-Flash) ----------------
      Uses the user's own free key (bigmodel.cn), stored only in localStorage.
      No server, no cost. Endpoint/model kept here so they're easy to swap. */
@@ -165,18 +182,16 @@
       var key = this.getKey();
       if (!key) return Promise.reject(new Error('NO_KEY'));
       var b64 = dataUrl.indexOf(',') > -1 ? dataUrl.split(',')[1] : dataUrl;
-      return fetch(this.ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify({
-          model: this.MODEL,
-          temperature: 0.2,
-          messages: [{ role: 'user', content: [
-            { type: 'image_url', image_url: { url: b64 } },
-            { type: 'text', text: '识别这张照片里的主要物品。严格只返回 JSON，不要解释、不要 markdown，格式：{"summary":"一句话中文描述，15字内","items":[{"name":"物品名","qty":数量整数}]}' }
-          ] }]
-        })
-      }).then(function (r) { return r.json(); }).then(function (j) {
+      var body = {
+        model: this.MODEL,
+        temperature: 0.2,
+        messages: [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: b64 } },
+          { type: 'text', text: '识别这张照片里的主要物品。严格只返回 JSON，不要解释、不要 markdown，格式：{"summary":"一句话中文描述，15字内","items":[{"name":"物品名","qty":数量整数}]}' }
+        ] }]
+      };
+      return apiPost(this.ENDPOINT, { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body).then(function (j) {
+        if (!j) throw new Error('无返回');
         if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
         var txt = (((j.choices || [])[0] || {}).message || {}).content || '';
         var m = txt.match(/\{[\s\S]*\}/);

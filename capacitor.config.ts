@@ -4,9 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.lifearchive.app',
   appName: 'Life Archive',
   webDir: 'www',
-  // route fetch/XHR through native so the AI photo-scan can call the
-  // (CORS-less) Zhipu API directly from the WebView without CORS errors.
-  plugins: { CapacitorHttp: { enabled: true } }
+  // Do NOT globally patch fetch/XHR: it strips Supabase's auth (JWT) header on
+  // Android, breaking cloud sync (RLS denies the write). Supabase sends proper
+  // CORS headers so normal fetch works. Only the (CORS-less) Zhipu AI call uses
+  // CapacitorHttp.request() explicitly (see apiPost() in app.js).
+  plugins: { CapacitorHttp: { enabled: false } }
 };
 
 export default config;
