@@ -50,7 +50,7 @@
 <p align="center"><img src="docs/screenshots/2-diff.png" width="85%"></p>
 
 ### 🌳 时间线
-按日期整理的 git 式生活存档，每条 commit 都有场景、时间、清单和一句 commit message。当天有饮食记录时，还会显示「🍽 N 餐」徽标。
+按日期整理的 git 式生活存档，每条 commit 都有场景、时间、清单和一句 commit message。当天有饮食记录时，还会显示「🍽 N 餐」徽标。顶部支持**搜索**（描述 / 物品 / 备注）和**按场景一键筛选**，存档再多也能秒找到。
 
 ### ⏮️ 回滚
 选一个旧存档当目标，自动生成「恢复到这个状态」的分步清单（拿走 X、放回 Y），可逐项打勾。
@@ -70,14 +70,15 @@
 ## 技术 & 设计
 
 - **核心是一个纯前端、零依赖、可离线的网页 App**（`index.html` + `css/` + `js/`），直接双击就能跑。
+- **数据存在本地 IndexedDB**（照片以压缩 JPEG 内联保存），不再受旧版 localStorage 约 5MB 限制；升级后旧数据自动迁移。也可选填自己的 Supabase 做多设备云同步。
 - 桌面版用 **Electron** 套壳打包成 Windows 安装包；**electron-updater + GitHub Releases** 实现云端自动更新。
-- 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK；Activity 使用 `adjustNothing` 保持输入法弹出时 WebView 稳定，再由页面按遮挡位置抬升当前输入框。
+- 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK；输入法弹出时由系统 `adjustResize` 收缩 WebView、自动保持焦点输入框可见。
 - **为什么 Diff 不需要 AI 视觉？** 它是两条互补的对比：图像 diff（`js/diff.js` 逐像素求差 + 3×3 网格定位）告诉你**哪里**变了；清单 diff（结构化集合比较）告诉你**什么**变了，稳定可靠、不依赖识别。
 
 ```
 index.html        外壳 + 顶栏 + 导航
 css/styles.css    暗色「git 客户端」主题
-js/store.js       localStorage 仓库层
+js/store.js       本地仓库层（IndexedDB，自动迁移旧数据）
 js/diff.js        Reality Diff 引擎（热力图 + 清单对比）
 js/app.js         UI / 路由 / 中英双语 / 各页面渲染
 main.js           Electron 桌面外壳 + 自动更新

@@ -1,32 +1,67 @@
 /* Life Archive — local "repository" layer.
-   Everything lives in localStorage so the app runs from file:// with no server.
-   Two collections: commits (life snapshots) and branches (decision forks). */
+   commits + branches live in IndexedDB (large quota; photos are inline dataURLs and
+   would blow past localStorage's ~5MB cap). They are mirrored in an in-memory cache
+   so the rest of the app can read synchronously; Store.init() hydrates the cache
+   (migrating any old localStorage data on first run) before the first render.
+   Small preferences (meta) stay in localStorage so they're available synchronously
+   at module load. If IndexedDB is unavailable (private mode, etc.) we transparently
+   fall back to localStorage. */
 (function (global) {
   'use strict';
 
   var KEY_COMMITS = 'lifearchive.commits.v1';
   var KEY_BRANCHES = 'lifearchive.branches.v1';
   var KEY_META = 'lifearchive.meta.v1';
+  var IDB_NAME = 'lifearchive';
+  var IDB_STORE = 'kv';
 
-  function read(key, fallback) {
-    try {
-      var raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) {
-      console.warn('store.read failed for', key, e);
-      return fallback;
-    }
+  /* ---- localStorage (meta + fallback when IndexedDB is unavailable) ---- */
+  function lsRead(key, fallback) {
+    try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch (e) { console.warn('store.lsRead failed for', key, e); return fallback; }
+  }
+  function lsWrite(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { console.error('store.lsWrite failed (quota?)', e); return false; }
   }
 
-  function write(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (e) {
-      // Most likely the 5MB quota — photos are the usual culprit.
-      console.error('store.write failed (quota?)', e);
-      return false;
-    }
+  /* ---- IndexedDB (a tiny key/value store for the big collections) ---- */
+  var idb = null;
+  function openIDB() {
+    return new Promise(function (resolve) {
+      try {
+        if (!global.indexedDB) return resolve(null);
+        var req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = function () {
+          if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+        };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+        req.onblocked = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }
+  function idbGet(key) {
+    return new Promise(function (resolve) {
+      try {
+        var r = idb.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(key);
+        r.onsuccess = function () { resolve(r.result); };
+        r.onerror = function () { resolve(undefined); };
+      } catch (e) { resolve(undefined); }
+    });
+  }
+  function idbSet(key, value) {
+    try { idb.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(value, key); }
+    catch (e) { console.error('store.idbSet failed', e); }
+  }
+
+  /* ---- in-memory cache (authoritative after init) ---- */
+  var cache = { commits: [], branches: [] };
+  function persist() {
+    if (idb) { idbSet(KEY_COMMITS, cache.commits); idbSet(KEY_BRANCHES, cache.branches); return true; }
+    var a = lsWrite(KEY_COMMITS, cache.commits);
+    var b = lsWrite(KEY_BRANCHES, cache.branches);
+    return a && b;
   }
 
   function uid(prefix) {
@@ -77,12 +112,37 @@
     isMealScene: isMealScene,
     uid: uid,
 
+    /* Hydrate the cache from IndexedDB (migrating old localStorage data on first
+       run). Resolves before the app renders. */
+    init: function () {
+      return openIDB().then(function (db) {
+        idb = db;
+        if (!idb) {
+          cache.commits = lsRead(KEY_COMMITS, []);
+          cache.branches = lsRead(KEY_BRANCHES, []);
+          return;
+        }
+        return Promise.all([idbGet(KEY_COMMITS), idbGet(KEY_BRANCHES)]).then(function (res) {
+          if (res[0] === undefined && res[1] === undefined) {
+            // first run on IDB — migrate anything already saved in localStorage
+            cache.commits = lsRead(KEY_COMMITS, []);
+            cache.branches = lsRead(KEY_BRANCHES, []);
+            if (cache.commits.length || cache.branches.length) {
+              persist();
+              try { localStorage.removeItem(KEY_COMMITS); localStorage.removeItem(KEY_BRANCHES); } catch (e) {}
+            }
+          } else {
+            cache.commits = res[0] || [];
+            cache.branches = res[1] || [];
+          }
+        });
+      });
+    },
+
     /* ---------- Commits ---------- */
     commits: function () {
-      var list = read(KEY_COMMITS, []);
-      // newest first
-      list.sort(function (a, b) { return b.createdAt - a.createdAt; });
-      return list;
+      // newest first; return a copy so callers can't mutate the cache
+      return cache.commits.slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
     },
 
     commitsForScene: function (sceneId) {
@@ -90,113 +150,105 @@
     },
 
     getCommit: function (id) {
-      var all = read(KEY_COMMITS, []);
-      for (var i = 0; i < all.length; i++) {
-        if (all[i].id === id) return all[i];
+      for (var i = 0; i < cache.commits.length; i++) {
+        if (cache.commits[i].id === id) return cache.commits[i];
       }
       return null;
     },
 
     addCommit: function (commit) {
-      var all = read(KEY_COMMITS, []);
       // parent = previous latest commit in the same scene (forms a chain)
-      var sameScene = all.filter(function (c) { return c.scene === commit.scene; });
+      var sameScene = cache.commits.filter(function (c) { return c.scene === commit.scene; });
       sameScene.sort(function (a, b) { return b.createdAt - a.createdAt; });
       commit.id = commit.id || uid('c');
       commit.parentId = sameScene.length ? sameScene[0].id : null;
       commit.createdAt = commit.createdAt || Date.now();
-      all.push(commit);
-      var ok = write(KEY_COMMITS, all);
-      return ok ? commit : null;
+      cache.commits.push(commit);
+      return persist() ? commit : null;
     },
 
     updateCommit: function (id, patch) {
-      var all = read(KEY_COMMITS, []);
-      for (var i = 0; i < all.length; i++) {
-        if (all[i].id === id) {
-          for (var k in patch) { if (patch.hasOwnProperty(k)) all[i][k] = patch[k]; }
-          write(KEY_COMMITS, all);
-          return all[i];
+      for (var i = 0; i < cache.commits.length; i++) {
+        if (cache.commits[i].id === id) {
+          for (var k in patch) { if (patch.hasOwnProperty(k)) cache.commits[i][k] = patch[k]; }
+          persist();
+          return cache.commits[i];
         }
       }
       return null;
     },
 
     deleteCommit: function (id) {
-      var all = read(KEY_COMMITS, []).filter(function (c) { return c.id !== id; });
-      write(KEY_COMMITS, all);
+      cache.commits = cache.commits.filter(function (c) { return c.id !== id; });
+      persist();
     },
 
     /* ---------- Branches (decisions) ---------- */
     branches: function () {
-      var list = read(KEY_BRANCHES, []);
-      list.sort(function (a, b) { return b.createdAt - a.createdAt; });
-      return list;
+      return cache.branches.slice().sort(function (a, b) { return b.createdAt - a.createdAt; });
     },
 
     getBranch: function (id) {
-      var all = read(KEY_BRANCHES, []);
-      for (var i = 0; i < all.length; i++) {
-        if (all[i].id === id) return all[i];
+      for (var i = 0; i < cache.branches.length; i++) {
+        if (cache.branches[i].id === id) return cache.branches[i];
       }
       return null;
     },
 
     addBranch: function (branch) {
-      var all = read(KEY_BRANCHES, []);
       branch.id = branch.id || uid('b');
       branch.createdAt = branch.createdAt || Date.now();
-      all.push(branch);
-      write(KEY_BRANCHES, all);
+      cache.branches.push(branch);
+      persist();
       return branch;
     },
 
     updateBranch: function (id, patch) {
-      var all = read(KEY_BRANCHES, []);
-      for (var i = 0; i < all.length; i++) {
-        if (all[i].id === id) {
-          for (var k in patch) { if (patch.hasOwnProperty(k)) all[i][k] = patch[k]; }
-          write(KEY_BRANCHES, all);
-          return all[i];
+      for (var i = 0; i < cache.branches.length; i++) {
+        if (cache.branches[i].id === id) {
+          for (var k in patch) { if (patch.hasOwnProperty(k)) cache.branches[i][k] = patch[k]; }
+          persist();
+          return cache.branches[i];
         }
       }
       return null;
     },
 
     deleteBranch: function (id) {
-      var all = read(KEY_BRANCHES, []).filter(function (b) { return b.id !== id; });
-      write(KEY_BRANCHES, all);
+      cache.branches = cache.branches.filter(function (b) { return b.id !== id; });
+      persist();
     },
 
-    /* ---------- Meta / preferences ---------- */
-    meta: function () { return read(KEY_META, { lang: 'zh' }); },
+    /* ---------- Meta / preferences (localStorage — tiny, needed at load) ---------- */
+    meta: function () { return lsRead(KEY_META, { lang: 'zh' }); },
     setMeta: function (patch) {
       var m = this.meta();
       for (var k in patch) { if (patch.hasOwnProperty(k)) m[k] = patch[k]; }
-      write(KEY_META, m);
+      lsWrite(KEY_META, m);
       return m;
     },
 
-    /* ---------- Demo seed ---------- */
-    isEmpty: function () { return read(KEY_COMMITS, []).length === 0; },
+    /* ---------- Misc ---------- */
+    isEmpty: function () { return cache.commits.length === 0; },
 
-    clearAll: function () {
-      localStorage.removeItem(KEY_COMMITS);
-      localStorage.removeItem(KEY_BRANCHES);
-    },
+    clearAll: function () { cache.commits = []; cache.branches = []; persist(); },
 
-    exportJSON: function () {
-      return JSON.stringify(this.exportRaw(), null, 2);
+    exportJSON: function () { return JSON.stringify(this.exportRaw(), null, 2); },
+
+    /* approx bytes used by the archive (photos dominate) + which backend is active */
+    usage: function () {
+      try { return JSON.stringify(cache.commits).length + JSON.stringify(cache.branches).length; }
+      catch (e) { return 0; }
     },
+    backend: function () { return idb ? 'indexeddb' : 'localstorage'; },
 
     /* ---------- Cloud sync helpers (raw data in/out) ---------- */
-    exportRaw: function () {
-      return { commits: read(KEY_COMMITS, []), branches: read(KEY_BRANCHES, []) };
-    },
+    exportRaw: function () { return { commits: cache.commits.slice(), branches: cache.branches.slice() }; },
     replaceAll: function (data) {
       data = data || {};
-      write(KEY_COMMITS, data.commits || []);
-      write(KEY_BRANCHES, data.branches || []);
+      cache.commits = data.commits || [];
+      cache.branches = data.branches || [];
+      persist();
     }
   };
 

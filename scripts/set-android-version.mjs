@@ -1,8 +1,10 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Keep the Activity stable while the keyboard opens. Capacitor's Keyboard
-      resize option is iOS-only; Android needs windowSoftInputMode here. */
+   2. Let the IME resize the WebView so the focused field stays visible
+      (windowSoftInputMode="adjustResize" + @capacitor/keyboard resize:'native').
+      The earlier "adjustNothing + JS scroll-lift" over-scrolled the whole page
+      off-screen on some high-DPI devices, so we hand sizing back to the system. */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
@@ -44,12 +46,12 @@ if (!m.includes('android.permission.CAMERA')) {
   console.log('AndroidManifest -> added CAMERA permission');
 }
 if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
-  m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustNothing"');
+  m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustResize"');
 } else {
-  m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustNothing"');
+  m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustResize"');
 }
 writeFileSync(manifestPath, m);
-console.log('AndroidManifest -> Activity windowSoftInputMode="adjustNothing"');
+console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize"');
 
 // Status-bar overlap is handled at runtime by @capacitor-community/safe-area
 // (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

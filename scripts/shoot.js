@@ -3,6 +3,13 @@
 const { app, BrowserWindow, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+
+// Use a throwaway profile so screenshots always seed fresh demo data and never
+// touch (or capture) the real desktop app's archive.
+const SHOT_PROFILE = path.join(os.tmpdir(), 'life-archive-shoot');
+try { fs.rmSync(SHOT_PROFILE, { recursive: true, force: true }); } catch (e) {}
+app.setPath('userData', SHOT_PROFILE);
 
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'screenshots');
@@ -18,7 +25,12 @@ async function run() {
     webPreferences: { backgroundThrottling: false }
   });
   await win.loadFile(path.join(ROOT, 'index.html'));
-  await wait(500);
+  await wait(600);
+
+  // start from a clean archive so the demo dataset is always current + complete
+  await win.webContents.executeJavaScript(`(function(){ try { if (window.RG_STORE) window.RG_STORE.clearAll(); } catch (e) {} return true; })();`);
+  await win.webContents.reload();
+  await wait(700);
 
   // load demo data from the empty-state seed button
   await win.webContents.executeJavaScript(`(function(){
@@ -28,7 +40,18 @@ async function run() {
     if (b) b.click();
     return true;
   })();`);
-  await wait(2800); // let the "demo loaded" toast fade before capturing
+  await wait(2800); // let the demo data settle
+
+  // Remove the toast, then park on another route. The first shot (timeline) is then
+  // a real route change -> full re-render -> the hidden window repaints WITHOUT the
+  // "demo loaded" pill (a hidden window won't repaint a bare DOM removal on its own).
+  await win.webContents.executeJavaScript(`(function(){ var t=document.getElementById('toast'); if(t&&t.parentNode){ t.parentNode.removeChild(t); } location.hash='#commit'; return true; })();`);
+  await wait(300);
+
+  // Warm-up capture (discarded): the very FIRST capturePage on a hidden window can
+  // retain the seed toast's compositor layer; throwing one away makes every real shot clean.
+  await win.webContents.capturePage();
+  await wait(150);
 
   const shots = [
     { hash: '#timeline', name: '1-timeline' },
@@ -57,6 +80,8 @@ async function run() {
       await win.webContents.executeJavaScript(`(function(){ ${sh.after} ; return true; })();`);
       await wait(400);
     }
+    win.webContents.invalidate(); // force a repaint on the hidden window so the capture is current
+    await wait(150);
     const img = await win.webContents.capturePage();
     fs.writeFileSync(path.join(OUT, sh.name + '.png'), img.toPNG());
     console.log('saved', sh.name + '.png');

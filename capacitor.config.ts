@@ -10,9 +10,10 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // iOS equivalent of Android's generated Activity adjustNothing patch
-    // (scripts/set-android-version.mjs). app.js handles the covered field.
-    Keyboard: { resize: 'none' as any }
+    // Let the IME shrink the WebView so the focused field stays visible.
+    // Pairs with Android's Activity windowSoftInputMode="adjustResize"
+    // (scripts/set-android-version.mjs); 'native' resizes the whole web view.
+    Keyboard: { resize: 'native' as any }
   }
 };
 

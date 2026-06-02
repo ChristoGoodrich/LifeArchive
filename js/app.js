@@ -129,6 +129,12 @@
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
       ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
+  function fmtBytes(n) {
+    if (!n) return '0 B';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
   function shortId(id) { return (id || '').split('_').pop().slice(0, 6); }
   function toast(msg) {
     var node = $('#toast');
@@ -138,23 +144,29 @@
     node._t = setTimeout(function () { node.classList.remove('show'); }, 2200);
   }
 
-  /* ---------------- image downscale (keep localStorage small) ---------------- */
+  /* ---------------- image downscale (keep stored photos small) ----------------
+     Both the file picker and the native camera funnel through downscaleSrc so every
+     stored photo is a compact JPEG, regardless of source. */
+  var PHOTO_MAX = 1000, PHOTO_Q = 0.72;
+  function downscaleSrc(src, maxW, quality) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        var w = img.width, h = img.height, mw = maxW || PHOTO_MAX;
+        if (w > mw) { h = Math.round(h * mw / w); w = mw; }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', quality || PHOTO_Q));
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
   function downscale(file, maxW) {
     return new Promise(function (resolve, reject) {
       var reader = new FileReader();
-      reader.onload = function () {
-        var img = new Image();
-        img.onload = function () {
-          var w = img.width, h = img.height;
-          if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-          var c = document.createElement('canvas');
-          c.width = w; c.height = h;
-          c.getContext('2d').drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL('image/jpeg', 0.72));
-        };
-        img.onerror = reject;
-        img.src = reader.result;
-      };
+      reader.onload = function () { downscaleSrc(reader.result, maxW).then(resolve, reject); };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
@@ -414,6 +426,18 @@
   }
 
   /* ---------------- Timeline ---------------- */
+  var tlQuery = '';     // timeline search text (persists across renders this session)
+  var tlScene = null;   // timeline scene filter (null = all scenes)
+  function commitMatches(c, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    var sc = Store.sceneById(c.scene);
+    var hay = [c.message || '', c.notes || '', sc.zh, sc.en]
+      .concat((c.items || []).map(function (it) { return it.name; }))
+      .join(' ').toLowerCase();
+    return hay.indexOf(q) >= 0;
+  }
+
   function renderTimeline(v) {
     var commits = Store.commits();
     if (!commits.length) {
@@ -433,30 +457,76 @@
 
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_timeline') })]));
 
-    // group by day, newest first (commits already sorted desc)
-    var groups = [], map = {};
-    commits.forEach(function (c) {
-      var k = dayKey(c.createdAt);
-      if (!map[k]) { map[k] = { label: dayLabel(c.createdAt), items: [] }; groups.push(map[k]); }
-      map[k].items.push(c);
-    });
+    // ---- search + scene filter (only the list is rebuilt on change, so the
+    //      search box keeps focus while typing) ----
+    var scenesPresent = [];
+    commits.forEach(function (c) { if (scenesPresent.indexOf(c.scene) < 0) scenesPresent.push(c.scene); });
+    if (tlScene && scenesPresent.indexOf(tlScene) < 0) tlScene = null; // stale filter -> reset
 
-    groups.forEach(function (g) {
-      var sec = el('section', { class: 'date-group' });
-      var mealCount = g.items.filter(function (c) { return Store.isMealScene(c.scene); }).length;
-      var headRight = [el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })];
-      if (mealCount > 0) {
-        headRight.unshift(el('span', { class: 'date-meals', text: '🍽 ' + mealCount + ' ' + t('meals_count') }));
+    var searchInput = el('input', { class: 'field tl-search-input', type: 'search',
+      placeholder: lang === 'zh' ? '搜索描述 / 物品 / 备注…' : 'Search message / items / notes…' });
+    searchInput.value = tlQuery;
+    searchInput.addEventListener('input', function () { tlQuery = searchInput.value; renderList(); });
+
+    var chipsRow = el('div', { class: 'tl-chips' });
+    function chipBtn(id, label, withIcon) {
+      var on = id === tlScene || (id === null && tlScene === null);
+      var kids = [];
+      if (withIcon) { var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(id); kids.push(ic); }
+      kids.push(el('span', { text: label }));
+      var b = el('button', { type: 'button', class: 'tl-chip' + (on ? ' active' : '') }, kids);
+      b.addEventListener('click', function () { tlScene = id; renderChips(); renderList(); });
+      return b;
+    }
+    function renderChips() {
+      chipsRow.innerHTML = '';
+      chipsRow.appendChild(chipBtn(null, lang === 'zh' ? '全部' : 'All', false));
+      scenesPresent.forEach(function (id) { chipsRow.appendChild(chipBtn(id, sceneName(Store.sceneById(id)), true)); });
+    }
+    renderChips();
+
+    v.appendChild(el('div', { class: 'tl-search' }, [searchInput, chipsRow]));
+
+    var listWrap = el('div', { class: 'tl-list' });
+    v.appendChild(listWrap);
+
+    function renderList() {
+      listWrap.innerHTML = '';
+      var filtered = commits.filter(function (c) {
+        return (tlScene === null || c.scene === tlScene) && commitMatches(c, tlQuery);
+      });
+      if (!filtered.length) {
+        listWrap.appendChild(el('div', { class: 'tl-empty' }, [
+          el('div', { class: 'tl-empty-ic', text: '🔍' }),
+          el('div', { text: lang === 'zh' ? '没有匹配的存档' : 'No matching commits' })
+        ]));
+        return;
       }
-      sec.appendChild(el('div', { class: 'date-head' }, [
-        el('span', { class: 'date-label', text: g.label }),
-        el('span', { class: 'date-head-right' }, headRight)
-      ]));
-      var rail = el('div', { class: 'commit-rail' });
-      g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
-      sec.appendChild(rail);
-      v.appendChild(sec);
-    });
+      // group by day, newest first (commits already sorted desc)
+      var groups = [], map = {};
+      filtered.forEach(function (c) {
+        var k = dayKey(c.createdAt);
+        if (!map[k]) { map[k] = { label: dayLabel(c.createdAt), items: [] }; groups.push(map[k]); }
+        map[k].items.push(c);
+      });
+      groups.forEach(function (g) {
+        var sec = el('section', { class: 'date-group' });
+        var mealCount = g.items.filter(function (c) { return Store.isMealScene(c.scene); }).length;
+        var headRight = [el('span', { class: 'date-count', text: g.items.length + ' ' + t('commits_in') })];
+        if (mealCount > 0) {
+          headRight.unshift(el('span', { class: 'date-meals', text: '🍽 ' + mealCount + ' ' + t('meals_count') }));
+        }
+        sec.appendChild(el('div', { class: 'date-head' }, [
+          el('span', { class: 'date-label', text: g.label }),
+          el('span', { class: 'date-head-right' }, headRight)
+        ]));
+        var rail = el('div', { class: 'commit-rail' });
+        g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
+        sec.appendChild(rail);
+        listWrap.appendChild(sec);
+      });
+    }
+    renderList();
   }
 
   function dayKey(ts) {
@@ -642,14 +712,14 @@
     var fileInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
     fileInput.addEventListener('change', function () {
       if (!fileInput.files || !fileInput.files[0]) return;
-      downscale(fileInput.files[0], 900).then(setPhoto);
+      downscale(fileInput.files[0]).then(setPhoto);
     });
     preview.addEventListener('click', function () {
       var Cap = window.Capacitor;
       if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera) {
         // native action sheet: 拍照 / 从相册选择
         Cap.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: 'PROMPT', quality: 80, width: 1200, correctOrientation: true })
-          .then(function (photo) { if (photo && photo.dataUrl) setPhoto(photo.dataUrl); })
+          .then(function (photo) { if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(setPhoto); })
           .catch(function () { /* cancelled */ });
       } else {
         fileInput.click();
@@ -1364,6 +1434,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.2.0', '2026-06-03', '时间线搜索 + 照片存储升级 + 安卓键盘修复 + 全新档案图标',
+      'Timeline search, IndexedDB photo storage, Android keyboard fix, and a new archive icon',
+      ['时间线新增搜索框和场景筛选，存档多了也能快速找到。',
+       '照片存储迁移到 IndexedDB，摆脱约 5MB 上限；旧数据首次启动自动迁移、不丢，设置里新增存储用量。',
+       '彻底修复安卓聚焦输入框时整页被顶到看不见（改用系统 adjustResize）。',
+       'App 图标与 Logo 重构成更有档案感的「归档文件夹」。'],
+      ['Add timeline search and scene filters so commits stay easy to find.',
+       'Move photo storage to IndexedDB (no more ~5MB cap); existing data migrates automatically, and Settings now shows storage used.',
+       'Fix the Android page being pushed off-screen when focusing an input (now uses native adjustResize).',
+       'Redesign the app icon and logo into an archive-folder mark.']],
     ['1.1.2', '2026-06-02', '移动端布局稳定 + 更新日志收纳 + 回滚整理 + 图标提亮',
       'Mobile layout stability, release notes, rollback cleanup, brighter icon',
       ['修复现实对比长描述撑宽页面的问题，底栏不再跟随横向滑动。',
@@ -1598,7 +1678,17 @@
     expBtn.addEventListener('click', exportData);
     var clrBtn = el('button', { class: 'btn danger-ghost tiny', text: lang === 'zh' ? '清空全部' : 'Clear all' });
     clrBtn.addEventListener('click', clearAll);
+    var onIdb = Store.backend() === 'indexeddb';
     var data = settingsCard(lang === 'zh' ? '数据' : 'Data', [
+      el('div', { class: 'set-row' }, [
+        el('span', { class: 'set-label', text: lang === 'zh' ? '存储用量' : 'Storage used' }),
+        el('span', { class: 'set-value', text: fmtBytes(Store.usage()) + ' · ' + (onIdb ? 'IndexedDB' : (lang === 'zh' ? '本地' : 'localStorage')) })
+      ]),
+      el('p', { class: 'set-hint', text: lang === 'zh'
+        ? (onIdb ? '照片现在存在 IndexedDB（容量随设备可用空间，通常数百 MB～数 GB），不再受旧版约 5MB 限制。'
+                 : '当前回退到本地存储（约 5MB 上限），照片较多时可能存不下。')
+        : (onIdb ? 'Photos are stored in IndexedDB (hundreds of MB to GBs) — no longer capped at the old ~5MB limit.'
+                 : 'Falling back to localStorage (~5MB cap); many photos may not fit.') }),
       el('div', { class: 'set-actions' }, [expBtn, clrBtn])
     ]);
 
@@ -1660,62 +1750,28 @@
       .addEventListener('change', function () { if (getTheme() === 'system') initNative(); });
   } catch (e) {}
 
-  /* ---------------- native: keyboard (Android focus-jump fix) ----------------
-     Android's generated Activity uses windowSoftInputMode="adjustNothing"
-     (scripts/set-android-version.mjs), so opening the IME cannot resize or pan
-     the WebView. We hide the tab bar and lift the focused field only when the
-     keyboard actually covers it. */
-  var keyboardHeight = 0;
-  var keyboardLiftTimer = null;
-  function isTextField(node) {
-    return !!(node && node.tagName && /^(INPUT|TEXTAREA)$/.test(node.tagName));
-  }
-  function liftFocusedField() {
-    if (!document.body.classList.contains('kb-open')) return;
-    var tgt = document.activeElement;
-    if (!isTextField(tgt)) return;
-    var rect = tgt.getBoundingClientRect();
-    var topbar = $('.topbar');
-    var visibleTop = (topbar ? topbar.getBoundingClientRect().bottom : 0) + 14;
-    var visibleBottom = window.innerHeight - keyboardHeight - 20;
-    var delta = 0;
-    if (rect.bottom > visibleBottom) delta = rect.bottom - visibleBottom;
-    else if (rect.top < visibleTop) delta = rect.top - visibleTop;
-    if (Math.abs(delta) > 2) window.scrollBy({ top: delta, behavior: 'smooth' });
-  }
-  function queueKeyboardLift(delay) {
-    clearTimeout(keyboardLiftTimer);
-    keyboardLiftTimer = setTimeout(liftFocusedField, delay || 40);
-  }
+  /* ---------------- native: keyboard (Android) ----------------
+     The Activity uses windowSoftInputMode="adjustResize" + @capacitor/keyboard
+     resize:'native' (scripts/set-android-version.mjs, capacitor.config.ts), so the
+     system shrinks the WebView when the IME opens and Chromium keeps the focused
+     field visible on its own. We ONLY toggle a class to hide the bottom tab bar (it
+     would otherwise float right above the keyboard) and flatten the frosted topbar.
+     The old "adjustNothing + manual scrollBy" lift over-scrolled the entire page
+     off-screen on high-DPI devices — removed. */
   function initKeyboard() {
     try {
       var Cap = window.Capacitor;
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      function shown(info) {
-        var h = (info && info.keyboardHeight) || 0;
-        keyboardHeight = h;
-        document.documentElement.style.setProperty('--kb-height', h + 'px');
-        document.body.classList.add('kb-open');
-        queueKeyboardLift(60);
-      }
-      function hidden() {
-        keyboardHeight = 0;
-        document.body.classList.remove('kb-open');
-        document.documentElement.style.setProperty('--kb-height', '0px');
-      }
+      function shown() { document.body.classList.add('kb-open'); }
+      function hidden() { document.body.classList.remove('kb-open'); }
       KB.addListener('keyboardWillShow', shown);
       KB.addListener('keyboardDidShow', shown);
       KB.addListener('keyboardWillHide', hidden);
       KB.addListener('keyboardDidHide', hidden);
     } catch (e) {}
   }
-  // A newly focused field may sit lower than the previous one while IME stays open.
-  document.addEventListener('focusin', function (e) {
-    if (!isTextField(e.target) || !document.body.classList.contains('kb-open')) return;
-    queueKeyboardLift(40);
-  });
 
   /* ---------------- language ---------------- */
   function setLang(l) {
@@ -1739,7 +1795,10 @@
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
-    render();
-    if (Cloud.configured()) Cloud.refreshUser().then(function () { if (current === 'settings') render(); });
+    // Hydrate the store (IndexedDB) before the first content render.
+    Store.init().then(function () {
+      render();
+      if (Cloud.configured()) Cloud.refreshUser().then(function () { if (current === 'settings') render(); });
+    });
   });
 })();
