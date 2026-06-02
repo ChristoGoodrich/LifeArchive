@@ -955,6 +955,14 @@
       [el('div', { class: 'set-card-title', text: title })].concat(children));
   }
 
+  function segmented(options, currentVal, onPick) {
+    return el('div', { class: 'seg' }, options.map(function (o) {
+      var b = el('button', { class: 'seg-btn' + (o[0] === currentVal ? ' active' : ''), text: o[1] });
+      b.addEventListener('click', function () { onPick(o[0]); });
+      return b;
+    }));
+  }
+
   function renderSettings(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: lang === 'zh' ? '设置' : 'Settings' })]));
 
@@ -996,32 +1004,70 @@
       el('div', { class: 'set-actions' }, [expBtn, clrBtn])
     ]);
 
-    v.appendChild(el('div', { class: 'settings-wrap' }, [about, ai, account, data]));
+    var appearance = settingsCard(lang === 'zh' ? '外观与语言' : 'Appearance & language', [
+      el('div', { class: 'set-row' }, [
+        el('span', { class: 'set-label', text: lang === 'zh' ? '语言' : 'Language' }),
+        segmented([['zh', '中文'], ['en', 'English']], lang, function (l) { setLang(l); })
+      ]),
+      el('div', { class: 'set-row' }, [
+        el('span', { class: 'set-label', text: lang === 'zh' ? '主题' : 'Theme' }),
+        segmented([
+          ['system', lang === 'zh' ? '跟随系统' : 'System'],
+          ['light', lang === 'zh' ? '浅色' : 'Light'],
+          ['dark', lang === 'zh' ? '深色' : 'Dark']
+        ], getTheme(), function (p) { setTheme(p); render(); })
+      ])
+    ]);
+
+    v.appendChild(el('div', { class: 'settings-wrap' }, [appearance, about, ai, account, data]));
   }
 
-  /* ---------------- native (status bar) ---------------- */
+  /* ---------------- theme (light/dark; follows system or manual override) ---------------- */
+  var THEME_LS = 'lifearchive.theme';
+  function getTheme() { return localStorage.getItem(THEME_LS) || 'system'; }
+  function themeIsDark() {
+    var p = getTheme();
+    if (p === 'dark') return true;
+    if (p === 'light') return false;
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function applyTheme() {
+    var p = getTheme(), root = document.documentElement;
+    if (p === 'light' || p === 'dark') root.setAttribute('data-theme', p);
+    else root.removeAttribute('data-theme');
+  }
+  function setTheme(p) { localStorage.setItem(THEME_LS, p); applyTheme(); initNative(); }
+  applyTheme();
+
+  /* ---------------- native: safe-area insets + system bar colors ----------------
+     @capacitor-community/safe-area reads the real window insets and injects
+     --safe-area-inset-* CSS vars, so the top bar clears the status bar on every
+     full-screen phone (the old edge-to-edge opt-out was ignored on HyperOS). */
   function initNative() {
     try {
       var Cap = window.Capacitor;
-      if (!Cap || !Cap.Plugins || !Cap.Plugins.StatusBar) return;
-      if (Cap.getPlatform && Cap.getPlatform() !== 'android') return;
-      var SB = Cap.Plugins.StatusBar;
-      SB.setOverlaysWebView({ overlay: false }).catch(function () {});
-      var apply = function () {
-        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        SB.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(function () {});
-        SB.setBackgroundColor({ color: dark ? '#0b0b0d' : '#f2f3f5' }).catch(function () {});
-      };
-      apply();
-      try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply); } catch (e) {}
+      if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+      var SA = Cap.Plugins && Cap.Plugins.SafeArea;
+      if (!SA || !SA.enable) return;
+      var dark = themeIsDark();
+      SA.enable({ config: {
+        customColorsForSystemBars: true,
+        statusBarColor: '#00000000', statusBarContent: dark ? 'light' : 'dark',
+        navigationBarColor: '#00000000', navigationBarContent: dark ? 'light' : 'dark'
+      } }).catch(function () {});
     } catch (e) {}
   }
+  try {
+    if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', function () { if (getTheme() === 'system') initNative(); });
+  } catch (e) {}
 
-  /* ---------------- language toggle ---------------- */
-  function toggleLang() {
-    lang = lang === 'zh' ? 'en' : 'zh';
+  /* ---------------- language ---------------- */
+  function setLang(l) {
+    if (l !== 'zh' && l !== 'en') return;
+    lang = l;
     Store.setMeta({ lang: lang });
-    $('#lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
+    document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh' : 'en');
     $('#tagline').textContent = t('tagline');
     var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     renderNav(); render();
@@ -1031,8 +1077,6 @@
   document.addEventListener('DOMContentLoaded', function () {
     $('#tagline').textContent = t('tagline');
     var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
-    $('#lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
-    $('#lang-btn').addEventListener('click', toggleLang);
     var _set = document.getElementById('settings-btn');
     if (_set) _set.addEventListener('click', function () { go('settings'); });
     initNative();

@@ -36,14 +36,5 @@ if (!g.includes('signingConfigs')) {
 writeFileSync(gradlePath, g);
 console.log(`Android version -> versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
 
-// --- 2) status-bar / edge-to-edge opt-out ---
-const stylesPath = 'android/app/src/main/res/values/styles.xml';
-let s = readFileSync(stylesPath, 'utf8');
-if (!s.includes('windowOptOutEdgeToEdgeEnforcement')) {
-  s = s.replace(
-    /(<style name="AppTheme\.NoActionBar"[^>]*>)/,
-    '$1\n        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>\n        <item name="android:fitsSystemWindows">true</item>'
-  );
-  writeFileSync(stylesPath, s);
-  console.log('Android theme -> edge-to-edge opt-out + fitsSystemWindows (status bar no longer overlaps)');
-}
+// Status-bar overlap is handled at runtime by @capacitor-community/safe-area
+// (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

@@ -1,7 +1,7 @@
 /* Life Archive — HyperOS-style UI. Adaptive light/dark (follows system),
    large rounded cards, big titles, bottom tab bar on phones. */
 
-:root{
+:root, :root[data-theme="dark"]{
   color-scheme: light dark;
   /* dark theme (default) */
   --bg:#0b0b0d; --card:#19191c; --card-2:#242428; --inset:#0f0f12;
@@ -15,8 +15,20 @@
   --mono:"SFMono-Regular",ui-monospace,Consolas,Menlo,monospace;
   --tabbar-h:64px;
 }
+/* light palette: applied for manual "light", or (system mode + OS prefers light) */
+:root[data-theme="light"]{
+  color-scheme: light;
+  --bg:#f2f3f5; --card:#ffffff; --card-2:#f0f1f4; --inset:#f6f7f9;
+  --line:rgba(0,0,0,.07); --line-strong:rgba(0,0,0,.12);
+  --text:#15161a; --muted:#6a6e76; --dim:#a2a7af;
+  --accent:#3482ff; --accent-2:#7a5cff; --on-accent:#fff;
+  --green:#34c759; --red:#ff3b30; --amber:#ff9500;
+  --added:#34c759; --removed:#ff3b30; --changed:#ff9500;
+  --shadow:0 12px 34px rgba(20,30,60,.10); --shadow-sm:0 2px 14px rgba(20,30,60,.06);
+}
 @media (prefers-color-scheme: light){
-  :root{
+  :root:not([data-theme="light"]):not([data-theme="dark"]){
+    color-scheme: light;
     --bg:#f2f3f5; --card:#ffffff; --card-2:#f0f1f4; --inset:#f6f7f9;
     --line:rgba(0,0,0,.07); --line-strong:rgba(0,0,0,.12);
     --text:#15161a; --muted:#6a6e76; --dim:#a2a7af;
@@ -40,7 +52,7 @@ body{
 
 /* ---- topbar ---- */
 .topbar{display:flex;align-items:center;justify-content:space-between;
-  padding:calc(16px + env(safe-area-inset-top,0px)) 22px 16px;background:transparent;position:sticky;top:0;z-index:20;
+  padding:calc(16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 22px 16px;background:transparent;position:sticky;top:0;z-index:20;
   backdrop-filter:saturate(1.4) blur(14px);
   -webkit-backdrop-filter:saturate(1.4) blur(14px)}
 .brand{display:flex;align-items:center;gap:12px}
@@ -286,6 +298,12 @@ select.field{cursor:pointer}
 .set-value{font-weight:700;font-family:var(--mono)}
 .set-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .set-hint{color:var(--muted);font-size:13.5px;line-height:1.55;margin:0 0 12px}
+.seg{display:inline-flex;background:var(--inset);border:1px solid var(--line);
+  border-radius:999px;padding:3px;gap:2px}
+.seg-btn{border:none;background:transparent;color:var(--muted);padding:7px 14px;
+  border-radius:999px;font-size:13.5px;font-weight:700;cursor:pointer;transition:.15s}
+.seg-btn.active{background:var(--card);color:var(--text);box-shadow:var(--shadow-sm)}
+.seg-btn:active{transform:scale(.96)}
 
 /* ---- responsive: phone -> bottom tab bar + single column ---- */
 @media (max-width:720px){
@@ -295,9 +313,9 @@ select.field{cursor:pointer}
   .commit-card{flex-direction:column}
   .commit-thumb{width:100%;height:170px}
 
-  .topbar{padding:14px 18px}
+  .topbar{padding:calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 18px 14px}
   .brand-tag{display:none}
-  .view{padding:14px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 22px)}
+  .view{padding:14px 16px calc(var(--tabbar-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 22px)}
   .view-head h1{font-size:26px}
 
   /* HyperOS-style bottom tab bar */
@@ -307,7 +325,7 @@ select.field{cursor:pointer}
     background:color-mix(in srgb,var(--card) 86%,transparent);
     backdrop-filter:saturate(1.5) blur(18px);-webkit-backdrop-filter:saturate(1.5) blur(18px);
     box-shadow:none;gap:0;justify-content:space-around;overflow:visible;z-index:40;
-    padding:8px 6px;padding-bottom:calc(8px + env(safe-area-inset-bottom));
+    padding:8px 6px;padding-bottom:calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   }
   .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
     padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;font-weight:600}
@@ -319,5 +337,5 @@ select.field{cursor:pointer}
   .btn.tiny{padding:10px 14px;font-size:13.5px}
   .commit-actions .btn{flex:1 1 auto}
   .form-actions .btn{flex:1}
-  .toast{bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 18px)}
+  .toast{bottom:calc(var(--tabbar-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 18px)}
 }

@@ -1,6 +1,6 @@
 {
   "name": "life-archive",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Life Archive — version control for everyday life",
   "main": "main.js",
   "author": "Life Archive",
@@ -68,7 +68,7 @@
     }
   },
   "dependencies": {
-    "@capacitor/status-bar": "^8.0.2",
+    "@capacitor-community/safe-area": "^8.0.1",
     "electron-updater": "^6.8.3"
   }
 }
