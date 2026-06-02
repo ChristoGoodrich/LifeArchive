@@ -187,7 +187,7 @@
   };
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings'];
   var current = 'timeline';
 
   function go(route) {
@@ -249,6 +249,7 @@
     else if (current === 'diff') renderDiff(v);
     else if (current === 'rollback') renderRollback(v);
     else if (current === 'branch') renderBranch(v);
+    else if (current === 'settings') renderSettings(v);
   }
 
   /* ---------------- Timeline ---------------- */
@@ -916,6 +917,106 @@
     toast(t('seed_done'));
   }
 
+  /* ---------------- Settings ---------------- */
+  function verCmp(a, b) {
+    var pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+    for (var i = 0; i < 3; i++) {
+      if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+      if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+    }
+    return 0;
+  }
+
+  function checkUpdate(btn) {
+    var cur = window.APP_VERSION || '0.0.0';
+    var orig = btn.textContent; btn.disabled = true;
+    btn.textContent = (lang === 'zh' ? '检查中…' : 'checking…');
+    fetch('https://api.github.com/repos/ChristoGoodrich/LifeArchive/releases/latest',
+      { headers: { 'Accept': 'application/vnd.github+json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var latest = (j.tag_name || '').replace(/^v/, '');
+        if (!latest) throw new Error('no release');
+        if (verCmp(latest, cur) > 0) {
+          if (window.confirm((lang === 'zh' ? '发现新版本 v' : 'New version v') + latest +
+              (lang === 'zh' ? '，前往下载页？' : ' — open download page?'))) {
+            window.open(j.html_url || 'https://github.com/ChristoGoodrich/LifeArchive/releases/latest', '_blank');
+          }
+        } else {
+          toast((lang === 'zh' ? '已是最新版本 · v' : 'Up to date · v') + cur);
+        }
+      })
+      .catch(function (e) { toast((lang === 'zh' ? '检查失败：' : 'Check failed: ') + (e && e.message || e)); })
+      .then(function () { btn.disabled = false; btn.textContent = orig; });
+  }
+
+  function settingsCard(title, children) {
+    return el('section', { class: 'set-card' },
+      [el('div', { class: 'set-card-title', text: title })].concat(children));
+  }
+
+  function renderSettings(v) {
+    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: lang === 'zh' ? '设置' : 'Settings' })]));
+
+    var updBtn = el('button', { class: 'btn', text: lang === 'zh' ? '检查更新' : 'Check for updates' });
+    updBtn.addEventListener('click', function () { checkUpdate(updBtn); });
+    var about = settingsCard(lang === 'zh' ? '关于' : 'About', [
+      el('div', { class: 'set-row' }, [
+        el('span', { class: 'set-label', text: lang === 'zh' ? '当前版本' : 'Version' }),
+        el('span', { class: 'set-value', text: 'v' + (window.APP_VERSION || '?') })
+      ]),
+      el('div', { class: 'set-actions' }, [updBtn])
+    ]);
+
+    var keyInput = el('input', { class: 'field', type: 'text',
+      placeholder: lang === 'zh' ? '粘贴智谱 API Key' : 'Zhipu API Key', value: AI.getKey() });
+    var saveKey = el('button', { class: 'btn primary tiny', text: lang === 'zh' ? '保存' : 'Save' });
+    saveKey.addEventListener('click', function () { AI.setKey(keyInput.value); toast(lang === 'zh' ? '已保存' : 'Saved'); });
+    var clrKey = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '清除' : 'Clear' });
+    clrKey.addEventListener('click', function () { AI.setKey(''); keyInput.value = ''; toast(lang === 'zh' ? '已清除' : 'Cleared'); });
+    var ai = settingsCard(lang === 'zh' ? 'AI 拍照识别' : 'AI photo scan', [
+      el('p', { class: 'set-hint', text: lang === 'zh'
+        ? '免费：到 bigmodel.cn 注册领取 API Key（智谱 GLM-4V-Flash），仅保存在本机、不上传。'
+        : 'Free: get a key at bigmodel.cn. Stored on this device only.' }),
+      keyInput,
+      el('div', { class: 'set-actions' }, [saveKey, clrKey])
+    ]);
+
+    var account = settingsCard(lang === 'zh' ? '账号与云同步' : 'Account & sync', [
+      el('p', { class: 'set-hint', text: lang === 'zh'
+        ? '账号登录与多设备云端同步正在开发中，敬请期待。'
+        : 'Account login & multi-device cloud sync are coming soon.' })
+    ]);
+
+    var expBtn = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '导出 JSON' : 'Export JSON' });
+    expBtn.addEventListener('click', exportData);
+    var clrBtn = el('button', { class: 'btn danger-ghost tiny', text: lang === 'zh' ? '清空全部' : 'Clear all' });
+    clrBtn.addEventListener('click', clearAll);
+    var data = settingsCard(lang === 'zh' ? '数据' : 'Data', [
+      el('div', { class: 'set-actions' }, [expBtn, clrBtn])
+    ]);
+
+    v.appendChild(el('div', { class: 'settings-wrap' }, [about, ai, account, data]));
+  }
+
+  /* ---------------- native (status bar) ---------------- */
+  function initNative() {
+    try {
+      var Cap = window.Capacitor;
+      if (!Cap || !Cap.Plugins || !Cap.Plugins.StatusBar) return;
+      if (Cap.getPlatform && Cap.getPlatform() !== 'android') return;
+      var SB = Cap.Plugins.StatusBar;
+      SB.setOverlaysWebView({ overlay: false }).catch(function () {});
+      var apply = function () {
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        SB.setStyle({ style: dark ? 'DARK' : 'LIGHT' }).catch(function () {});
+        SB.setBackgroundColor({ color: dark ? '#0b0b0d' : '#f2f3f5' }).catch(function () {});
+      };
+      apply();
+      try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply); } catch (e) {}
+    } catch (e) {}
+  }
+
   /* ---------------- language toggle ---------------- */
   function toggleLang() {
     lang = lang === 'zh' ? 'en' : 'zh';
@@ -932,6 +1033,9 @@
     var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     $('#lang-btn').textContent = lang === 'zh' ? 'EN' : '中';
     $('#lang-btn').addEventListener('click', toggleLang);
+    var _set = document.getElementById('settings-btn');
+    if (_set) _set.addEventListener('click', function () { go('settings'); });
+    initNative();
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();

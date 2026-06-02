@@ -53,6 +53,12 @@ body{
   border-radius:999px;min-width:46px;height:36px;cursor:pointer;font-weight:700;
   box-shadow:var(--shadow-sm);transition:.15s}
 .lang-btn:active{transform:scale(.94)}
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:36px;
+  border-radius:999px;background:var(--card);border:1px solid var(--line);color:var(--text);
+  cursor:pointer;box-shadow:var(--shadow-sm);transition:.15s}
+.icon-btn svg{width:19px;height:19px}
+.icon-btn:active{transform:scale(.94)}
 
 /* ---- nav: top segmented (desktop) ---- */
 .nav{display:flex;gap:4px;padding:8px;margin:4px auto 0;max-width:680px;
@@ -268,6 +274,18 @@ select.field{cursor:pointer}
   background:var(--text);color:var(--bg);padding:13px 22px;
   border-radius:999px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.28s;z-index:50;font-weight:700}
 .toast.show{opacity:.96;transform:translateX(-50%) translateY(0)}
+
+/* ---- settings ---- */
+.settings-wrap{display:flex;flex-direction:column;gap:14px}
+.set-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;box-shadow:var(--shadow-sm)}
+.set-card-title{font-size:12.5px;font-weight:800;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.6px;margin-bottom:12px}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0}
+.set-label{color:var(--muted);font-size:14.5px}
+.set-value{font-weight:700;font-family:var(--mono)}
+.set-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.set-hint{color:var(--muted);font-size:13.5px;line-height:1.55;margin:0 0 12px}
 
 /* ---- responsive: phone -> bottom tab bar + single column ---- */
 @media (max-width:720px){

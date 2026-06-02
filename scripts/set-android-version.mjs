@@ -13,8 +13,28 @@ const gradlePath = 'android/app/build.gradle';
 let g = readFileSync(gradlePath, 'utf8');
 g = g.replace(/versionCode\s+\d+/, 'versionCode ' + code)
      .replace(/versionName\s+"[^"]*"/, 'versionName "' + version + '"');
+
+// --- fixed signing: point debug builds at the committed keystore so every APK
+//     shares ONE signature and installs as an update (copying to ~/.android does
+//     NOT work on the GH runner — it redirects the debug-keystore location). ---
+if (!g.includes('signingConfigs')) {
+  const inject =
+    '    signingConfigs {\n' +
+    '        debug {\n' +
+    '            storeFile file("$rootDir/../keystore/debug.keystore")\n' +
+    '            storePassword "android"\n' +
+    '            keyAlias "androiddebugkey"\n' +
+    '            keyPassword "android"\n' +
+    '        }\n' +
+    '    }\n' +
+    '    buildTypes {\n' +
+    '        debug {\n' +
+    '            signingConfig signingConfigs.debug\n' +
+    '        }';
+  g = g.replace(/buildTypes\s*\{/, inject);
+}
 writeFileSync(gradlePath, g);
-console.log(`Android version -> versionName "${version}", versionCode ${code}`);
+console.log(`Android version -> versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
 
 // --- 2) status-bar / edge-to-edge opt-out ---
 const stylesPath = 'android/app/src/main/res/values/styles.xml';

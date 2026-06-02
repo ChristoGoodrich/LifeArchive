@@ -35,13 +35,8 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: Patch Android project (version + status-bar opt-out)
+      - name: Patch Android project (version + signing + status-bar opt-out)
         run: node scripts/set-android-version.mjs
-
-      - name: Use fixed debug keystore (consistent signature, installs as update)
-        run: |
-          mkdir -p ~/.android
-          cp keystore/debug.keystore ~/.android/debug.keystore
 
       - name: Generate adaptive app icons from assets/
         run: npx @capacitor/assets generate --android
