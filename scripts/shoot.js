@@ -1,6 +1,6 @@
 /* Dev-only: render the app in Electron and save PNG screenshots for the README.
    Run with:  npx electron scripts/shoot.js   (quits itself when done) */
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,9 +11,10 @@ const W = 1240, H = 840;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function run() {
+  nativeTheme.themeSource = 'light'; // capture the HyperOS light theme
   const win = new BrowserWindow({
     width: W, height: H, show: false,
-    backgroundColor: '#0b0f1a',
+    backgroundColor: '#f2f3f5',
     webPreferences: { backgroundThrottling: false }
   });
   await win.loadFile(path.join(ROOT, 'index.html'));
@@ -27,7 +28,7 @@ async function run() {
     if (b) b.click();
     return true;
   })();`);
-  await wait(900);
+  await wait(2800); // let the "demo loaded" toast fade before capturing
 
   const shots = [
     { hash: '#timeline', name: '1-timeline' },
