@@ -65,7 +65,10 @@
       predicted_vs_actual: '预测 vs 实际', hit: '命中', miss: '未命中',
       extra_actual: '补充实际结果（每行一条）', merge_to_commit: '生成复盘存档',
       merged_commit: '已生成存档', from_branch: '来自分支',
-      load_more: '加载更多', open_detail: '查看详情'
+      load_more: '加载更多', open_detail: '查看详情',
+      star: '标记重要', unstar: '取消标记', starred_filter: '重要',
+      star_added: '已标记为重要', star_removed: '已取消标记',
+      detail_star: '☆ 标记重要', detail_starred: '★ 已标记重要'
     },
     en: {
       brand: 'Life Archive',
@@ -125,7 +128,10 @@
       predicted_vs_actual: 'Predicted vs actual', hit: 'Hit', miss: 'Miss',
       extra_actual: 'Extra actual results (one per line)', merge_to_commit: 'Create review commit',
       merged_commit: 'Merged commit', from_branch: 'From branch',
-      load_more: 'Load more', open_detail: 'Open detail'
+      load_more: 'Load more', open_detail: 'Open detail',
+      star: 'Star', unstar: 'Unstar', starred_filter: 'Starred',
+      star_added: 'Marked important', star_removed: 'Unmarked',
+      detail_star: '☆ Star', detail_starred: '★ Starred'
     }
   };
 
@@ -363,8 +369,14 @@
 
   function mergeData(a, b) {
     a = a || { commits: [], branches: [] }; b = b || { commits: [], branches: [] };
+    function stamp(it) { return (it && (it.updatedAt || it.createdAt)) || 0; }
+    // Union by id; on conflict keep the most recently modified copy (updatedAt, falling
+    // back to createdAt). This stops a stale remote record from clobbering a fresh local
+    // edit/star — and vice-versa across devices — without losing either side's new rows.
     function union(x, y) {
-      var m = {}; (x || []).concat(y || []).forEach(function (it) { if (it && it.id) m[it.id] = it; });
+      var m = {};
+      function add(it) { if (it && it.id && (!m[it.id] || stamp(it) >= stamp(m[it.id]))) m[it.id] = it; }
+      (x || []).forEach(add); (y || []).forEach(add);
       return Object.keys(m).map(function (k) { return m[k]; });
     }
     return { commits: union(a.commits, b.commits), branches: union(a.branches, b.branches) };
@@ -377,6 +389,27 @@
       Store.replaceAll(merged);
       return Cloud.push(merged).then(function () { return merged; });
     });
+  }
+
+  /* Auto-sync: fire-and-forget cloud sync after the user mutates an archive (new
+     commit / edit / star), if cloud is configured + signed in + online. Debounced so
+     rapid changes coalesce into one round-trip. Only the explicit "new archive" path
+     surfaces a toast; background syncs stay quiet (manual sync is always available). */
+  var _autoSyncTimer = null;
+  function autoSync(showToast) {
+    if (!Cloud.configured() || !Cloud.currentUser()) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      if (showToast) toast('⚠ ' + (lang === 'zh' ? '离线，已存本地，联网后可同步' : 'Offline — saved locally'));
+      return;
+    }
+    clearTimeout(_autoSyncTimer);
+    _autoSyncTimer = setTimeout(function () {
+      cloudSync().then(function () {
+        if (showToast) toast('☁ ' + (lang === 'zh' ? '已自动同步到云端' : 'Auto-synced to cloud'));
+      }).catch(function () {
+        if (showToast) toast('⚠ ' + (lang === 'zh' ? '自动同步失败，可稍后手动同步' : 'Auto-sync failed — try manual sync'));
+      });
+    }, 1000);
   }
 
   /* ---------------- routing ---------------- */
@@ -527,8 +560,17 @@
   /* ---------------- Timeline ---------------- */
   var tlQuery = '';     // timeline search text (persists across renders this session)
   var tlScene = null;   // timeline scene filter (null = all scenes)
+  var tlStarOnly = false; // when true, show only starred (important) commits
   var TL_PAGE_SIZE = 24;
   var tlVisible = TL_PAGE_SIZE;
+  var tlRerender = null;       // set to the current renderList() so card actions can refresh it
+  var tlRerenderChips = null;  // set to renderChips() so starring a card can reveal the filter
+
+  // a single star glyph; CSS fills it gold when the card/commit is starred
+  function starSVG() {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 17.6l-5.2 2.81.99-5.79-4.21-4.1 5.82-.85z"/></svg>';
+  }
+
   function commitMatches(c, q) {
     if (!q) return true;
     q = q.toLowerCase();
@@ -579,8 +621,19 @@
       b.addEventListener('click', function () { tlScene = id; tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
       return b;
     }
+    function starChip() {
+      var ic = el('span', { class: 'tl-chip-star-ic' }); ic.innerHTML = starSVG();
+      var b = el('button', { type: 'button', class: 'tl-chip tl-chip-star' + (tlStarOnly ? ' active' : '') },
+        [ic, el('span', { text: t('starred_filter') })]);
+      b.addEventListener('click', function () {
+        tlStarOnly = !tlStarOnly; tlVisible = TL_PAGE_SIZE; renderChips(); renderList();
+      });
+      return b;
+    }
     function renderChips() {
       chipsRow.innerHTML = '';
+      // only surface the "important" filter once something is starred (keeps it clean)
+      if (tlStarOnly || commits.some(function (c) { return c.starred; })) chipsRow.appendChild(starChip());
       chipsRow.appendChild(chipBtn(null, lang === 'zh' ? '全部' : 'All', false));
       scenesPresent.forEach(function (id) { chipsRow.appendChild(chipBtn(id, sceneName(Store.sceneById(id)), true)); });
     }
@@ -594,12 +647,13 @@
     function renderList() {
       listWrap.innerHTML = '';
       var filtered = commits.filter(function (c) {
-        return (tlScene === null || c.scene === tlScene) && commitMatches(c, tlQuery);
+        return (!tlStarOnly || c.starred) && (tlScene === null || c.scene === tlScene) && commitMatches(c, tlQuery);
       });
       if (!filtered.length) {
         listWrap.appendChild(el('div', { class: 'tl-empty' }, [
-          el('div', { class: 'tl-empty-ic', text: '🔍' }),
-          el('div', { text: lang === 'zh' ? '没有匹配的存档' : 'No matching commits' })
+          el('div', { class: 'tl-empty-ic', text: tlStarOnly ? '⭐' : '🔍' }),
+          el('div', { text: tlStarOnly ? (lang === 'zh' ? '还没有标记重要的存档' : 'No starred commits yet')
+            : (lang === 'zh' ? '没有匹配的存档' : 'No matching commits') })
         ]));
         return;
       }
@@ -632,6 +686,8 @@
           onclick: function () { tlVisible += TL_PAGE_SIZE; renderList(); } }));
       }
     }
+    tlRerender = renderList;
+    tlRerenderChips = renderChips;
     renderList();
   }
 
@@ -689,7 +745,27 @@
 
     var body = el('div', { class: 'commit-body' }, [meta, chips,
       c.notes ? el('div', { class: 'commit-notes', text: c.notes }) : null]);
-    var card = el('div', { class: 'commit-card tappable' }, [thumb, body,
+
+    // quick star toggle, overlaid on the thumbnail corner. stopPropagation so it
+    // never opens the detail page.
+    var starBtn = el('button', { type: 'button', class: 'star-btn' + (c.starred ? ' starred' : ''),
+      'aria-label': c.starred ? t('unstar') : t('star'), title: c.starred ? t('unstar') : t('star') });
+    starBtn.innerHTML = starSVG();
+    starBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var now = Store.toggleStar(c.id); c.starred = now;
+      starBtn.classList.toggle('starred', now);
+      card.classList.toggle('is-starred', now);
+      starBtn.setAttribute('aria-label', now ? t('unstar') : t('star'));
+      starBtn.title = now ? t('unstar') : t('star');
+      toast(now ? ('⭐ ' + t('star_added')) : t('star_removed'));
+      autoSync(false);
+      if (tlRerenderChips) tlRerenderChips();             // reveal/hide the "important" filter
+      if (tlStarOnly && !now && tlRerender) tlRerender(); // drop it from the starred-only view
+    });
+    thumb.appendChild(starBtn);
+
+    var card = el('div', { class: 'commit-card tappable' + (c.starred ? ' is-starred' : '') }, [thumb, body,
       el('span', { class: 'commit-chevron', text: '›' })]);
     card.addEventListener('click', function () { pendingDetail = c.id; go('detail'); });
     return card;
@@ -704,7 +780,16 @@
 
     var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
     back.addEventListener('click', function () { go('timeline'); });
-    v.appendChild(el('div', { class: 'view-head' }, [back]));
+    var starToggle = el('button', { class: 'btn tiny star-toggle' + (c.starred ? ' starred' : ''),
+      text: c.starred ? t('detail_starred') : t('detail_star') });
+    starToggle.addEventListener('click', function () {
+      c.starred = Store.toggleStar(c.id);
+      starToggle.textContent = c.starred ? t('detail_starred') : t('detail_star');
+      starToggle.classList.toggle('starred', c.starred);
+      toast(c.starred ? ('⭐ ' + t('star_added')) : t('star_removed'));
+      autoSync(false);
+    });
+    v.appendChild(el('div', { class: 'view-head' }, [back, starToggle]));
 
     var card = el('div', { class: 'detail-card' });
     if (c.photo) card.appendChild(el('div', { class: 'detail-photo', style: 'background-image:url(' + c.photo + ')' }));
@@ -1093,12 +1178,14 @@
           if (editing) {
             Store.updateCommit(editing.id, payload);
             toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
+            autoSync(false);
             go('timeline');
             return;
           }
           var ok = Store.addCommit(payload);
           if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
           toast('✅ ' + t('save_commit'));
+          autoSync(true);   // auto-sync each newly created archive to the cloud
           go('timeline');
         } })
       ])
@@ -2596,22 +2683,23 @@
 
      Fix at the WEB layer: the viewport meta sets interactive-widget=resizes-content
      (index.html), so the IME shrinks the LAYOUT viewport — the page reflows, the sticky
-     top bar stays put, and the browser keeps the focused field visible. @capacitor/keyboard
-     is resize:'none' so it doesn't fight this. Here we only (1) hide the bottom tab bar and
-     (2) as a safety net, nudge the focused field into the visual viewport — BOUNDED, via
-     window.visualViewport (true CSS px), so it can NEVER fling the page off-screen. */
+     top bar stays put, and the browser keeps the focused field visible.
+
+     SINGLE SOURCE OF TRUTH = window.visualViewport. Previous versions ALSO fed the raw
+     native keyboardHeight into --keyboard-inset AND set @capacitor/keyboard resize:'body',
+     so the layout got shrunk twice (browser + Capacitor + our padding) — that fight is why
+     focusing a field still misbehaved. Now @capacitor/keyboard is resize:'none' (it touches
+     nothing) and we derive everything from the visual viewport:
+       • interactive-widget worked  -> innerHeight shrank too -> overlap ~0 -> inset 0,
+         no extra padding, the browser already keeps the field visible.
+       • overlay/pan fallback (old WebView) -> overlap = keyboard height -> inset pads the
+         scroll area and we nudge the field up — BOUNDED, so it can never fling off-screen. */
   function isTextField(n) { return !!(n && n.tagName && /^(INPUT|TEXTAREA)$/.test(n.tagName)); }
-  // How many px the keyboard overlaps the content. If interactive-widget=resizes-content
-  // took effect, the LAYOUT viewport shrank too (innerHeight ≈ visualViewport.height) so
-  // this is ~0 and we must NOT scroll — the browser already keeps the field visible.
-  // Only when the keyboard overlays (pan/overlay fallback) is this large, and we nudge.
+  // px the keyboard overlaps the content, straight from the visual viewport. ~0 once the
+  // layout viewport shrank (interactive-widget); large only in the overlay/pan fallback.
   function kbOverlayPx() {
     var vv = window.visualViewport;
     return vv ? Math.max(0, window.innerHeight - vv.height) : 0;
-  }
-  function keyboardInsetPx() {
-    var raw = getComputedStyle(document.documentElement).getPropertyValue('--keyboard-inset') || '0';
-    return parseFloat(raw) || 0;
   }
   function setKeyboardInset(px) {
     document.documentElement.style.setProperty('--keyboard-inset', Math.max(0, px || 0) + 'px');
@@ -2619,42 +2707,45 @@
   var kbEnsureTimer = null;
   function scheduleEnsureFieldVisible(ms) {
     clearTimeout(kbEnsureTimer);
-    kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 60);
+    kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 0);
   }
   function ensureFieldVisible() {
     var vv = window.visualViewport, node = document.activeElement;
     if (!vv || !isTextField(node)) return;
-    var inset = keyboardInsetPx();
-    if (kbOverlayPx() < 120 && inset < 80) return;
+    if (kbOverlayPx() < 120) return;          // layout shrank (or no kb) -> browser handles it
     var r = node.getBoundingClientRect();
-    var visibleBottom = Math.min(vv.offsetTop + vv.height, window.innerHeight - inset);
+    var visibleBottom = vv.offsetTop + vv.height;
     var over = r.bottom - (visibleBottom - 16);
     if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'auto' });
   }
+  // Reconcile inset + nav-hide from the visual viewport. Inset comes from the REAL
+  // overlap, never the raw keyboardHeight, so it can't double-count the shrink.
+  function syncKeyboardState() {
+    var overlap = kbOverlayPx();
+    setKeyboardInset(overlap);
+    document.body.classList.toggle('kb-open', overlap > 80);
+    scheduleEnsureFieldVisible(0);
+  }
   function initKeyboard() {
     var vv = window.visualViewport;
-    if (vv) vv.addEventListener('resize', function () { scheduleEnsureFieldVisible(70); });
+    if (vv) {
+      vv.addEventListener('resize', syncKeyboardState);
+      vv.addEventListener('scroll', function () { scheduleEnsureFieldVisible(0); });
+    }
     document.addEventListener('focusin', function (e) {
-      if (isTextField(e.target)) scheduleEnsureFieldVisible(120);
+      if (isTextField(e.target)) scheduleEnsureFieldVisible(150);
     });
     try {
       var Cap = window.Capacitor;
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      var show = function (info) {
-        document.body.classList.add('kb-open');
-        setKeyboardInset(info && info.keyboardHeight ? info.keyboardHeight : kbOverlayPx());
-        scheduleEnsureFieldVisible(80);
-      };
-      var hide = function () {
-        document.body.classList.remove('kb-open');
-        setKeyboardInset(0);
-      };
-      KB.addListener('keyboardWillShow', show);
-      KB.addListener('keyboardDidShow', show);
-      KB.addListener('keyboardWillHide', hide);
-      KB.addListener('keyboardDidHide', hide);
+      // Native events only toggle the nav-hide promptly (snappier than waiting for the
+      // vv.resize); the inset itself is still reconciled from the visual viewport.
+      KB.addListener('keyboardWillShow', function () { document.body.classList.add('kb-open'); scheduleEnsureFieldVisible(60); });
+      KB.addListener('keyboardDidShow', syncKeyboardState);
+      KB.addListener('keyboardWillHide', function () { document.body.classList.remove('kb-open'); });
+      KB.addListener('keyboardDidHide', function () { setKeyboardInset(0); document.body.classList.remove('kb-open'); });
     } catch (e) {}
   }
 

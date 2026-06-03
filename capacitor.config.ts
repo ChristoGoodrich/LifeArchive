@@ -10,9 +10,11 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // Android uses resizeOnFullScreen; the web layer also consumes keyboardHeight
-    // as a fallback for WebViews that ignore interactive-widget.
-    Keyboard: { resize: 'body' as any, resizeOnFullScreen: true }
+    // resize:'none' — the plugin must NOT resize the body/webview. The web layer owns
+    // keyboard avoidance (viewport interactive-widget=resizes-content + a bounded
+    // visualViewport safety net in app.js). 'body'/'native' fought that and double-shrank
+    // the layout, which is what kept the focused field misbehaving. See initKeyboard().
+    Keyboard: { resize: 'none' as any }
   }
 };
 

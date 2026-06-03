@@ -197,6 +197,9 @@
       commit.id = commit.id || uid('c');
       commit.parentId = sameScene.length ? sameScene[0].id : null;
       commit.createdAt = commit.createdAt || Date.now();
+      // updatedAt drives conflict resolution on cloud sync (newest wins) so a fresh
+      // local change is never clobbered by a stale remote copy of the same commit.
+      commit.updatedAt = commit.updatedAt || commit.createdAt;
       cache.commits.push(commit);
       return persist() ? commit : null;
     },
@@ -205,11 +208,25 @@
       for (var i = 0; i < cache.commits.length; i++) {
         if (cache.commits[i].id === id) {
           for (var k in patch) { if (patch.hasOwnProperty(k)) cache.commits[i][k] = patch[k]; }
+          cache.commits[i].updatedAt = Date.now();
           persist();
           return cache.commits[i];
         }
       }
       return null;
+    },
+
+    // Flag/unflag a commit as important (starred). Returns the new starred state.
+    toggleStar: function (id) {
+      for (var i = 0; i < cache.commits.length; i++) {
+        if (cache.commits[i].id === id) {
+          cache.commits[i].starred = !cache.commits[i].starred;
+          cache.commits[i].updatedAt = Date.now();
+          persist();
+          return cache.commits[i].starred;
+        }
+      }
+      return false;
     },
 
     deleteCommit: function (id) {
@@ -232,6 +249,7 @@
     addBranch: function (branch) {
       branch.id = branch.id || uid('b');
       branch.createdAt = branch.createdAt || Date.now();
+      branch.updatedAt = branch.updatedAt || branch.createdAt;
       cache.branches.push(branch);
       persist();
       return branch;
@@ -241,6 +259,7 @@
       for (var i = 0; i < cache.branches.length; i++) {
         if (cache.branches[i].id === id) {
           for (var k in patch) { if (patch.hasOwnProperty(k)) cache.branches[i][k] = patch[k]; }
+          cache.branches[i].updatedAt = Date.now();
           persist();
           return cache.branches[i];
         }

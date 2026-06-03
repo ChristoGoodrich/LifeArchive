@@ -10,15 +10,16 @@ matches. Pure PIL, so it rasterizes cleanly at any size.
 import math
 from PIL import Image, ImageDraw, ImageFilter
 
-# Premium background: a richer, deeper blue->violet read on the diagonal, lit by a
-# soft top-left highlight and grounded by a gentle bottom-right vignette (so the
-# field has depth instead of a flat wash). Keeps the brand's blue->purple identity.
-BG_TL = (70, 184, 238)      # clear cyan-blue light source, top-left
-BG_BR = (55, 35, 154)       # deeper royal indigo, bottom-right
+# Premium background: a clean, refined blue->violet read on the diagonal, lit by a
+# soft top-left highlight and grounded by a gentle bottom-right vignette (so the field
+# has depth instead of a flat wash). Pulled toward the brand's blue->purple identity
+# (less cyan / less navy-black than before) for a simpler, higher-end feel.
+BG_TL = (88, 156, 255)      # bright brand blue, top-left light source
+BG_BR = (98, 52, 196)       # rich royal violet, bottom-right
 # frosted-glass card gradient (top -> bottom)
-CARD_TOP = (233, 243, 255)  # near-white blue
-CARD_BOT = (198, 206, 255)  # light lavender
-SHADOW = (18, 24, 66)       # deep navy used for the soft drop shadows + vignette
+CARD_TOP = (242, 247, 255)  # clean near-white
+CARD_BOT = (210, 216, 255)  # soft lavender
+SHADOW = (22, 26, 74)       # deep indigo used for the soft drop shadows + vignette
 
 
 def lerp(a, b, t):
@@ -122,9 +123,10 @@ def draw_archive(size, transparent=False):
         mask = Image.new("L", (S, S), 0)
         ImageDraw.Draw(mask).rounded_rectangle(box, radius=R, fill=alpha)
         base = Image.alpha_composite(base, Image.composite(cardgrad, clear, mask))
-        # glossy "liquid glass" sheen over the top ~55%, clipped to the card shape
-        sheen = _white_sheen(S, x0, y0, x1, y0 + int(CH * 0.55))
+        # restrained gloss over the top ~50%, clipped to the card shape (calmer than a
+        # full liquid-glass sheen for a cleaner, more premium read)
+        sheen = _white_sheen(S, x0, y0, x1, y0 + int(CH * 0.50), peak=104)
         base = Image.alpha_composite(base, Image.composite(sheen, clear, mask))
-        # bright top/edge rim (light refraction)
-        ImageDraw.Draw(base).rounded_rectangle(box, radius=R, outline=(255, 255, 255, 115), width=rim_w)
+        # subtle bright top/edge rim (light refraction)
+        ImageDraw.Draw(base).rounded_rectangle(box, radius=R, outline=(255, 255, 255, 92), width=rim_w)
     return base
