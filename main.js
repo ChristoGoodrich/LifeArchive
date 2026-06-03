@@ -1,8 +1,39 @@
 /* Life Archive desktop shell — loads the existing static app inside Electron.
    No app logic lives here; the web files (index.html / css / js) are untouched. */
-const { app, BrowserWindow, Menu, dialog, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, dialog, nativeTheme, ipcMain, desktopCapturer, screen } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
+
+/* ---- Screenshot capture for the new-commit form ----
+   The renderer asks (via the preload bridge) to grab the screen the window is on.
+   We briefly hide our own window so the shot captures what's behind it, take a
+   full-resolution frame with desktopCapturer, then restore the window. */
+function setupScreenshot() {
+  ipcMain.handle('capture-screen', async function () {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+    const wasVisible = win && win.isVisible();
+    try {
+      if (win && wasVisible) { win.hide(); await new Promise(function (r) { setTimeout(r, 280); }); }
+      const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay();
+      const sf = display.scaleFactor || 1;
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: Math.round(display.size.width * sf), height: Math.round(display.size.height * sf) }
+      });
+      let src = sources[0];
+      if (sources.length > 1) {
+        const match = sources.find(function (s) { return String(s.display_id) === String(display.id); });
+        if (match) src = match;
+      }
+      return src && src.thumbnail ? src.thumbnail.toDataURL() : null;
+    } catch (e) {
+      console.error('[capture-screen] ' + (e && e.message || e));
+      return null;
+    } finally {
+      if (win && wasVisible) win.show();
+    }
+  });
+}
 
 /* ---- Cloud auto-update (electron-updater + GitHub Releases) ----
    On launch the packaged app checks the configured GitHub repo for a newer
@@ -42,6 +73,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
       // app loads only local files; this lets the user-initiated AI photo-scan
       // call the (CORS-less) Zhipu API directly from the renderer.
       webSecurity: false
@@ -52,6 +84,7 @@ function createWindow() {
 
 app.whenReady().then(function () {
   Menu.setApplicationMenu(null); // no native menu bar; the app has its own nav
+  setupScreenshot();
   createWindow();
   setupAutoUpdate();
   app.on('activate', function () {

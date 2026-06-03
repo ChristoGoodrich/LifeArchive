@@ -1,10 +1,9 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Let the IME resize the WebView so the focused field stays visible
-      (windowSoftInputMode="adjustResize" + @capacitor/keyboard resize:'native').
-      The earlier "adjustNothing + JS scroll-lift" over-scrolled the whole page
-      off-screen on some high-DPI devices, so we hand sizing back to the system. */
+   2. Keep the IME on adjustResize; @capacitor/keyboard resizeOnFullScreen and
+      the web-layer keyboardHeight fallback cover edge-to-edge WebViews that
+      still refuse to resize normally. */
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---

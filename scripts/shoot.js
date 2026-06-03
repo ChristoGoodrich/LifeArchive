@@ -20,11 +20,18 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function run() {
   nativeTheme.themeSource = 'light'; // capture the HyperOS light theme
   const win = new BrowserWindow({
-    width: W, height: H, show: false,
+    width: W, height: H, show: true, skipTaskbar: true,
     backgroundColor: '#f2f3f5',
     webPreferences: { backgroundThrottling: false }
   });
   await win.loadFile(path.join(ROOT, 'index.html'));
+  await win.webContents.insertCSS(`
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  `);
   await wait(600);
 
   // start from a clean archive so the demo dataset is always current + complete
@@ -38,7 +45,7 @@ async function run() {
     var b = Array.from(document.querySelectorAll('main button'))
       .find(function (x) { return x.textContent.indexOf('示例') > -1; });
     if (b) b.click();
-    return true;
+    return window.RG_STORE ? window.RG_STORE.commits().length : 0;
   })();`);
   await wait(2800); // let the demo data settle
 
@@ -64,13 +71,20 @@ async function run() {
       `, after: `
         var c = document.querySelector('main canvas');
         if (c) c.scrollIntoView({ block: 'center' });
+        window.scrollBy(0, -150);
       ` },
     { hash: '#rollback', name: '3-rollback' },
     { hash: '#branch', name: '4-branch' }
   ];
 
   for (const sh of shots) {
-    await win.webContents.executeJavaScript(`(function(){ location.hash='${sh.hash}'; return true; })();`);
+    await win.webContents.executeJavaScript(`(function(){
+      var btn = document.querySelector('.nav-btn[data-route="${sh.hash.slice(1)}"]');
+      if (btn) btn.click();
+      else location.hash='${sh.hash}';
+      window.scrollTo(0, 0);
+      return location.hash;
+    })();`);
     await wait(600);
     if (sh.pre) {
       await win.webContents.executeJavaScript(`(function(){ ${sh.pre} ; return true; })();`);

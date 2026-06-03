@@ -7,15 +7,18 @@ luminous blue->purple field. Used by both make_icon.py (Windows .ico/.png) and
 make_android_icons.py (Android adaptive icons + splash) so every platform's icon
 matches. Pure PIL, so it rasterizes cleanly at any size.
 """
+import math
 from PIL import Image, ImageDraw, ImageFilter
 
-# luminous background gradient (top -> bottom)
-BG_TOP = (88, 150, 255)     # #5896ff
-BG_BOT = (120, 78, 236)     # #784eec
+# Premium background: a richer, deeper blue->violet read on the diagonal, lit by a
+# soft top-left highlight and grounded by a gentle bottom-right vignette (so the
+# field has depth instead of a flat wash). Keeps the brand's blue->purple identity.
+BG_TL = (70, 184, 238)      # clear cyan-blue light source, top-left
+BG_BR = (55, 35, 154)       # deeper royal indigo, bottom-right
 # frosted-glass card gradient (top -> bottom)
 CARD_TOP = (233, 243, 255)  # near-white blue
 CARD_BOT = (198, 206, 255)  # light lavender
-SHADOW = (22, 30, 76)       # deep navy used for the soft drop shadows
+SHADOW = (18, 24, 66)       # deep navy used for the soft drop shadows + vignette
 
 
 def lerp(a, b, t):
@@ -32,9 +35,33 @@ def _vgrad(size, top, bot):
     return img.convert("RGBA")
 
 
+def _radial(size, cx, cy, radius, color, peak, falloff=2.0):
+    """A soft radial overlay (alpha peak at center -> 0 at `radius`)."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    px = img.load()
+    cx, cy, radius = cx * size, cy * size, radius * size
+    for y in range(size):
+        for x in range(size):
+            d = math.hypot(x - cx, y - cy) / radius
+            if d < 1:
+                a = int(peak * (1 - d) ** falloff)
+                if a > 0:
+                    px[x, y] = color + (a,)
+    return img
+
+
 def gradient_bg(size):
-    """Full-bleed vertical blue->purple background."""
-    return _vgrad(size, BG_TOP, BG_BOT)
+    """Full-bleed premium diagonal blue->violet field with a top-left light and a
+    bottom-right vignette for depth."""
+    img = Image.new("RGB", (size, size))
+    px = img.load()
+    for y in range(size):
+        for x in range(size):
+            px[x, y] = lerp(BG_TL, BG_BR, (x + y) / (2 * size))
+    base = img.convert("RGBA")
+    base = Image.alpha_composite(base, _radial(size, 0.30, 0.24, 0.95, (255, 255, 255), 74, 2.2))
+    base = Image.alpha_composite(base, _radial(size, 0.98, 1.00, 1.05, SHADOW, 42, 2.6))
+    return base
 
 
 def diagonal_grad(size):

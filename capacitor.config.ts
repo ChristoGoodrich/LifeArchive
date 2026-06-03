@@ -10,12 +10,9 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // resize:'none' — do NOT let the plugin resize the web view. This app is
-    // edge-to-edge (safe-area plugin), and Android ignores native adjustResize in
-    // edge-to-edge, so we handle the IME at the web layer instead: the viewport meta
-    // interactive-widget=resizes-content (index.html) shrinks the layout viewport and
-    // keeps the focused field visible. The plugin just emits show/hide events.
-    Keyboard: { resize: 'none' as any }
+    // Android uses resizeOnFullScreen; the web layer also consumes keyboardHeight
+    // as a fallback for WebViews that ignore interactive-widget.
+    Keyboard: { resize: 'body' as any, resizeOnFullScreen: true }
   }
 };
 

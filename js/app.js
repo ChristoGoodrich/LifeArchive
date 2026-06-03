@@ -384,40 +384,62 @@
     };
   })();
   function sceneIconSVG(id) { return SCENE_ICONS[id] || SCENE_ICONS.other; }
+
+  /* flat line icons for the in-app photo-source sheet + file rows */
+  var UI_ICONS = (function () {
+    function s(inner) {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" '
+        + 'stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+    }
+    return {
+      camera: s('<path d="M4 9a2 2 0 0 1 2-2h1.4l.9-1.5A1 1 0 0 1 9.1 5h5.8a1 1 0 0 1 .8.5l.9 1.5H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.2"/>'),
+      album: s('<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="M4.5 17.5l4.4-4.1a1.5 1.5 0 0 1 2 0l3.1 3M14 14.5l1.4-1.3a1.5 1.5 0 0 1 2 0l2.1 2"/>'),
+      file: s('<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/>'),
+      screenshot: s('<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.4"/>'),
+      paste: s('<rect x="6" y="4.5" width="12" height="15.5" rx="2"/><path d="M9 4.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 4.5V6H9z"/><path d="M9.5 11.5h5M9.5 14.5h3"/>')
+    };
+  })();
+
   function sceneName(scene) { return lang === 'zh' ? scene.zh : scene.en; }
   function sceneTag(scene) {
     var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(scene.id);
     return el('span', { class: 'commit-scene' }, [ic, el('span', { text: sceneName(scene) })]);
   }
 
+  function navButton(route, label, isCreate) {
+    var icon = el('span', { class: 'nav-ic' });
+    icon.innerHTML = NAV_ICONS[route];
+    // the label is always in the DOM; CSS hides it for the mobile "+" FAB
+    return el('button', {
+      class: 'nav-btn' + (isCreate ? ' nav-btn-create' : '') + (current === route ? ' active' : ''),
+      'data-route': route, 'aria-label': label, title: label,
+      onclick: function () { go(route); }
+    }, [icon, el('span', { class: 'nav-label', text: label })]);
+  }
+
   function renderNav() {
     var nav = $('#nav');
     nav.innerHTML = '';
-    var items = [
-      ['timeline', t('nav_timeline')],
-      ['diff', t('nav_diff')],
-      ['commit', t('nav_commit')],
-      ['rollback', t('nav_rollback')],
-      ['branch', t('nav_branch')]
-    ];
-    items.forEach(function (it) {
-      var icon = el('span', { class: 'nav-ic' });
-      icon.innerHTML = NAV_ICONS[it[0]];
-      var isCreate = it[0] === 'commit';
-      // the center create button is icon-only (no label) — a floating "+" FAB
-      var kids = isCreate ? [icon] : [icon, el('span', { text: it[1] })];
-      nav.appendChild(el('button', {
-        class: 'nav-btn' + (isCreate ? ' nav-btn-create' : '') + (current === it[0] ? ' active' : ''),
-        'data-route': it[0], 'aria-label': it[1], title: it[1],
-        onclick: function () { go(it[0]); }
-      }, kids));
-    });
+    // The four browse tabs live in a pill; "新建存档" is a separate action button.
+    // Desktop: the pill sits left, the create button detaches to the right.
+    // Mobile: the pill flattens (display:contents) and CSS re-orders the create
+    //         button into the center as a floating "+" FAB.
+    var group = el('div', { class: 'nav-group' });
+    [['timeline', t('nav_timeline')], ['diff', t('nav_diff')],
+     ['rollback', t('nav_rollback')], ['branch', t('nav_branch')]
+    ].forEach(function (it) { group.appendChild(navButton(it[0], it[1], false)); });
+    nav.appendChild(group);
+    nav.appendChild(navButton('commit', t('nav_commit'), true));
   }
 
   /* ---------------- main render switch ---------------- */
   var view = function () { return $('#view'); };
 
+  // a page may register a teardown (e.g. the commit form's document-level paste
+  // listener); it runs right before the next page renders so nothing leaks.
+  var viewCleanup = null;
   function render() {
+    if (viewCleanup) { try { viewCleanup(); } catch (e) {} viewCleanup = null; }
     var v = view();
     v.innerHTML = '';
     v.scrollTop = 0;
@@ -576,7 +598,9 @@
         el('span', { class: 'commit-dot', text: '·' }),
         el('span', { text: fmtTime(c.createdAt) }),
         el('span', { class: 'commit-dot', text: '·' }),
-        el('span', { text: (c.items ? c.items.length : 0) + ' ' + t('items_count') })
+        el('span', { text: (c.items ? c.items.length : 0) + ' ' + t('items_count') }),
+        (c.files && c.files.length) ? el('span', { class: 'commit-dot', text: '·' }) : null,
+        (c.files && c.files.length) ? el('span', { class: 'commit-files', text: '📎 ' + c.files.length }) : null
       ])
     ]);
 
@@ -631,6 +655,22 @@
       });
       card.appendChild(list);
     }
+    if (c.files && c.files.length) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
+      var fl = el('div', { class: 'detail-files' });
+      c.files.forEach(function (f) {
+        var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
+        fl.appendChild(el('a', { class: 'detail-file', href: f.data, download: f.name }, [
+          ic,
+          el('div', { class: 'file-meta' }, [
+            el('span', { class: 'file-name', text: f.name }),
+            el('span', { class: 'file-size', text: fmtBytes(f.size) })
+          ]),
+          el('span', { class: 'file-dl', text: '⤓' })
+        ]));
+      });
+      card.appendChild(fl);
+    }
     if (c.notes) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '备注' : 'Notes' }));
       card.appendChild(el('div', { class: 'commit-notes', text: c.notes }));
@@ -651,9 +691,11 @@
 
   /* ---------------- New / edit commit form ---------------- */
   var draftPhoto = null;
+  var draftFiles = [];
   var pendingEdit = null;
   function renderCommitForm(v) {
     draftPhoto = null;
+    draftFiles = [];
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
@@ -704,8 +746,9 @@
       var meal = Store.isMealScene(selectedScene);
       msgInput.placeholder = meal ? t('meal_placeholder') : t('commit_placeholder');
       if (itemsLabelText) itemsLabelText.textContent = meal ? t('ate_what') : t('items');
-      if (moreSummary) moreSummary.textContent = meal ? t('add_meal')
-        : (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)');
+      if (moreSummary) moreSummary.textContent = meal
+        ? (lang === 'zh' ? '＋ 添加食物 / 文件 / 备注（可选）' : '＋ Add food / files / notes (optional)')
+        : (lang === 'zh' ? '＋ 添加物品 / 文件 / 备注（可选）' : '＋ Add items / files / notes (optional)');
     }
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
@@ -726,18 +769,82 @@
     fileInput.addEventListener('change', function () {
       if (!fileInput.files || !fileInput.files[0]) return;
       downscale(fileInput.files[0]).then(setPhoto);
+      fileInput.value = '';
     });
-    preview.addEventListener('click', function () {
-      var Cap = window.Capacitor;
-      if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera) {
-        // native action sheet: 拍照 / 从相册选择
-        Cap.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: 'PROMPT', quality: 80, width: 1200, correctOrientation: true })
-          .then(function (photo) { if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(setPhoto); })
-          .catch(function () { /* cancelled */ });
-      } else {
-        fileInput.click();
+
+    // ---- photo sources, all funneled through the in-app action sheet so the UI
+    //      is consistent across Android / desktop (no bare native OS picker) ----
+    function nativeCamera(source) {
+      window.Capacitor.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: source, quality: 80, width: 1200, correctOrientation: true })
+        .then(function (photo) { if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(setPhoto); })
+        .catch(function () { /* cancelled */ });
+    }
+    function desktopScreenshot() {
+      if (!(window.electronAPI && window.electronAPI.captureScreen)) {
+        toast(lang === 'zh' ? '当前环境不支持截图' : 'Screenshot not supported here'); return;
       }
+      toast(lang === 'zh' ? '正在截图…' : 'Capturing…');
+      window.electronAPI.captureScreen().then(function (dataUrl) {
+        if (!dataUrl) { toast(lang === 'zh' ? '截图失败' : 'Screenshot failed'); return; }
+        downscaleSrc(dataUrl, 1600, 0.85).then(setPhoto);
+      }).catch(function (e) { toast('⚠ ' + (e && e.message || e)); });
+    }
+    function pasteImageFromClipboard() {
+      if (navigator.clipboard && navigator.clipboard.read) {
+        navigator.clipboard.read().then(function (items) {
+          for (var i = 0; i < items.length; i++) {
+            var imgType = (items[i].types || []).filter(function (ty) { return /^image\//.test(ty); })[0];
+            if (imgType) { items[i].getType(imgType).then(function (blob) { downscale(blob).then(setPhoto); }); return; }
+          }
+          toast(lang === 'zh' ? '剪贴板里没有图片' : 'No image in clipboard');
+        }).catch(function () { toast(lang === 'zh' ? '无法读取剪贴板（可直接 Ctrl+V）' : 'Clipboard blocked — try Ctrl+V'); });
+      } else {
+        toast(lang === 'zh' ? '请直接按 Ctrl+V 粘贴' : 'Press Ctrl+V to paste');
+      }
+    }
+    function openPhotoSource() {
+      var Cap = window.Capacitor;
+      var native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera);
+      var L = lang === 'zh';
+      if (native) {
+        actionSheet(L ? '添加照片' : 'Add photo', [
+          { icon: UI_ICONS.camera, label: L ? '拍照' : 'Take photo', onClick: function () { nativeCamera('CAMERA'); } },
+          { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: function () { nativeCamera('PHOTOS'); } }
+        ]);
+      } else {
+        var acts = [{ icon: UI_ICONS.file, label: L ? '选择图片文件' : 'Choose image file', onClick: function () { fileInput.click(); } }];
+        if (window.electronAPI && window.electronAPI.captureScreen) {
+          acts.push({ icon: UI_ICONS.screenshot, label: L ? '截取当前屏幕' : 'Capture screen', onClick: desktopScreenshot });
+        }
+        acts.push({ icon: UI_ICONS.paste, label: L ? '从剪贴板粘贴' : 'Paste from clipboard', onClick: pasteImageFromClipboard });
+        actionSheet(L ? '添加照片' : 'Add photo', acts);
+      }
+    }
+    preview.addEventListener('click', openPhotoSource);
+
+    // drag an image file onto the dropzone -> photo (desktop convenience)
+    preview.addEventListener('dragover', function (e) { e.preventDefault(); preview.classList.add('drag-over'); });
+    preview.addEventListener('dragleave', function () { preview.classList.remove('drag-over'); });
+    preview.addEventListener('drop', function (e) {
+      e.preventDefault(); preview.classList.remove('drag-over');
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f && /^image\//.test(f.type)) downscale(f).then(setPhoto);
     });
+
+    // Ctrl+V anywhere pastes an image as the photo — registered on the document so
+    // it works before any field is focused, and torn down by viewCleanup on nav.
+    function onPasteImg(e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
+          var f = items[i].getAsFile();
+          if (f) { e.preventDefault(); downscale(f).then(setPhoto); toast(lang === 'zh' ? '已粘贴图片' : 'Image pasted'); return; }
+        }
+      }
+    }
+    document.addEventListener('paste', onPasteImg);
+    viewCleanup = function () { document.removeEventListener('paste', onPasteImg); };
+
     if (editing && editing.photo) setPhoto(editing.photo);
 
     // dynamic item rows
@@ -757,6 +864,56 @@
     } else {
       addItemRow();
     }
+
+    // ---- file attachments (stored inline in IndexedDB) ----
+    // Makes coursework / study archives meaningful: keep the actual report,
+    // rubric, slides, etc. with the snapshot, not just their names.
+    if (editing && editing.files && editing.files.length) draftFiles = editing.files.slice();
+    var filesList = el('div', { class: 'files-list' });
+    function renderFilesList() {
+      filesList.innerHTML = '';
+      draftFiles.forEach(function (f, idx) {
+        var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
+        filesList.appendChild(el('div', { class: 'file-row' }, [
+          ic,
+          el('div', { class: 'file-meta' }, [
+            el('span', { class: 'file-name', text: f.name }),
+            el('span', { class: 'file-size', text: fmtBytes(f.size) })
+          ]),
+          el('button', { class: 'btn tiny danger-ghost', type: 'button', text: '✕',
+            onclick: function () { draftFiles.splice(idx, 1); renderFilesList(); } })
+        ]));
+      });
+    }
+    renderFilesList();
+    var fileAttachInput = el('input', { type: 'file', multiple: '', style: 'display:none' });
+    function addFiles(fileLike) {
+      Array.prototype.slice.call(fileLike || []).forEach(function (file) {
+        if (file.size > 50 * 1024 * 1024) { toast((lang === 'zh' ? '文件过大（>50MB）：' : 'Too large (>50MB): ') + file.name); return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+          draftFiles.push({ id: Store.uid('f'), name: file.name, type: file.type || '', size: file.size, data: reader.result });
+          renderFilesList();
+          if (moreDetails) moreDetails.open = true;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    fileAttachInput.addEventListener('change', function () { addFiles(fileAttachInput.files); fileAttachInput.value = ''; });
+    var filesBlock = el('div', { class: 'files-block' }, [
+      filesList,
+      el('button', { class: 'btn tiny ghost', type: 'button',
+        text: (lang === 'zh' ? '＋ 添加文件' : '+ Add files'),
+        onclick: function () { fileAttachInput.click(); } }),
+      fileAttachInput
+    ]);
+    // drag files onto the block to attach them (desktop)
+    filesBlock.addEventListener('dragover', function (e) { e.preventDefault(); filesBlock.classList.add('drag-over'); });
+    filesBlock.addEventListener('dragleave', function () { filesBlock.classList.remove('drag-over'); });
+    filesBlock.addEventListener('drop', function (e) {
+      e.preventDefault(); filesBlock.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
 
     // AI photo scan: take a photo -> auto-fill description + items (free Zhipu key)
     var aiBtn = el('button', { class: 'btn ghost ai-btn', type: 'button',
@@ -798,15 +955,17 @@
 
     // keep the fast path simple: photo + one line. Items/notes are optional & collapsed.
     var moreSummary = el('summary', { class: 'more-summary',
-      text: (lang === 'zh' ? '＋ 添加物品清单 / 备注（可选）' : '＋ Add items / notes (optional)') });
+      text: (lang === 'zh' ? '＋ 添加物品 / 文件 / 备注（可选）' : '＋ Add items / files / notes (optional)') });
     var itemsLabel = labeled(t('items'), el('div', {}, [itemsWrap,
       el('button', { class: 'btn tiny ghost', text: t('add_item'),
         onclick: function () { addItemRow(); } })]));
     var itemsLabelText = $('.label-text', itemsLabel);
     var moreDetails = el('details', { class: 'more-details' }, [
-      moreSummary, itemsLabel, labeled(t('notes'), notesInput)
+      moreSummary, itemsLabel,
+      labeledBlock(lang === 'zh' ? '文件' : 'Files', filesBlock),
+      labeled(t('notes'), notesInput)
     ]);
-    if (editing && editing.items && editing.items.length) moreDetails.open = true;
+    if (editing && ((editing.items && editing.items.length) || (editing.files && editing.files.length))) moreDetails.open = true;
 
     var form = el('div', { class: 'form-card' }, [
       // NOT a <label> (a file input inside a label fires twice -> re-opens picker)
@@ -831,6 +990,7 @@
             message: msgInput.value.trim() || '(no message)',
             photo: draftPhoto,
             items: items,
+            files: draftFiles.slice(),
             notes: notesInput.value.trim()
           };
           if (editing) {
@@ -928,6 +1088,38 @@
       mask.classList.remove('open');
       setTimeout(function () { if (mask.parentNode) mask.remove(); }, 180);
     }
+    $('.choice-sheet-close', sheet).addEventListener('click', close);
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    mask.appendChild(sheet);
+    document.body.appendChild(mask);
+    requestAnimationFrame(function () { mask.classList.add('open'); });
+  }
+
+  /* App-owned action sheet (same frosted bottom-sheet look as the choice sheet).
+     `actions` = [{ icon (svg html), label, onClick }]. Used for the photo source
+     picker so 拍照/相册/截图/粘贴 match the rest of the app instead of the bare
+     native OS sheet. */
+  function actionSheet(title, actions) {
+    var old = $('.choice-sheet-mask');
+    if (old) old.remove();
+    var mask = el('div', { class: 'choice-sheet-mask' });
+    var sheet = el('section', { class: 'choice-sheet action-sheet', role: 'dialog', 'aria-modal': 'true' }, [
+      el('div', { class: 'choice-sheet-head' }, [
+        el('strong', { text: title }),
+        el('button', { type: 'button', class: 'choice-sheet-close', text: t('choice_close') })
+      ])
+    ]);
+    function close() {
+      mask.classList.remove('open');
+      setTimeout(function () { if (mask.parentNode) mask.remove(); }, 180);
+    }
+    actions.forEach(function (a) {
+      var ic = el('span', { class: 'action-ic' }); ic.innerHTML = a.icon || '';
+      var row = el('button', { type: 'button', class: 'choice-option action-option' },
+        [ic, el('span', { class: 'choice-option-text', text: a.label })]);
+      row.addEventListener('click', function () { close(); setTimeout(a.onClick, 170); });
+      sheet.appendChild(row);
+    });
     $('.choice-sheet-close', sheet).addEventListener('click', close);
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
     mask.appendChild(sheet);
@@ -1447,6 +1639,18 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.2.2', '2026-06-03', '桌面存档增强 + 移动端交互打磨',
+      'Desktop archive upgrades + mobile interaction polish',
+      ['桌面端「新建存档」从 tab 组中独立出来，固定为右侧单独按钮，移动端仍保留中间悬浮加号。',
+       '新建存档支持真实文件附件存储，可保存作业、资料、报告等文件，并可在详情页下载。',
+       '桌面端新增截取当前屏幕、拖拽图片、直接粘贴剪贴板图片，实时存档不再每次翻文件。',
+       '再次修复移动端键盘：启用 Android 全屏键盘 workaround，并用键盘高度驱动页面底部空间。',
+       '重做移动端加号、照片来源面板、筛选栏阴影和图标底色，整体更干净统一。'],
+      ['Detach the desktop New commit action to its own right-side button while keeping the centered mobile FAB.',
+       'Store real file attachments with commits and download them from the detail page.',
+       'Add desktop screen capture, drag-and-drop images, and direct clipboard image paste for faster real-time commits.',
+       'Harden the mobile keyboard fix with Android resizeOnFullScreen plus keyboard-height driven page spacing.',
+       'Redesign the mobile FAB, photo-source sheet, filter-bar shadow, and icon background for a cleaner finish.']],
     ['1.2.1', '2026-06-03', '键盘根因修复 + 液态玻璃图标 + 侧滑返回与动效',
       'Root-cause keyboard fix, liquid-glass icon, back-swipe + page transitions',
       ['从根因修复安卓聚焦输入框顶飞整页：edge-to-edge 下系统会忽略 adjustResize，改用网页层 interactive-widget=resizes-content + 有界兜底。',
@@ -1787,11 +1991,29 @@
      (2) as a safety net, nudge the focused field into the visual viewport — BOUNDED, via
      window.visualViewport (true CSS px), so it can NEVER fling the page off-screen. */
   function isTextField(n) { return !!(n && n.tagName && /^(INPUT|TEXTAREA)$/.test(n.tagName)); }
+  // How many px the keyboard overlaps the content. If interactive-widget=resizes-content
+  // took effect, the LAYOUT viewport shrank too (innerHeight ≈ visualViewport.height) so
+  // this is ~0 and we must NOT scroll — the browser already keeps the field visible.
+  // Only when the keyboard overlays (pan/overlay fallback) is this large, and we nudge.
+  function kbOverlayPx() {
+    var vv = window.visualViewport;
+    return vv ? Math.max(0, window.innerHeight - vv.height) : 0;
+  }
+  function keyboardInsetPx() {
+    var raw = getComputedStyle(document.documentElement).getPropertyValue('--keyboard-inset') || '0';
+    return parseFloat(raw) || 0;
+  }
+  function setKeyboardInset(px) {
+    document.documentElement.style.setProperty('--keyboard-inset', Math.max(0, px || 0) + 'px');
+  }
   function ensureFieldVisible() {
-    var vv = window.visualViewport, el = document.activeElement;
-    if (!vv || !isTextField(el)) return;
-    var r = el.getBoundingClientRect();
-    var over = r.bottom - (vv.offsetTop + vv.height - 12); // px the field sits below the visible area
+    var vv = window.visualViewport, node = document.activeElement;
+    if (!vv || !isTextField(node)) return;
+    var inset = keyboardInsetPx();
+    if (kbOverlayPx() < 120 && inset < 80) return;
+    var r = node.getBoundingClientRect();
+    var visibleBottom = Math.min(vv.offsetTop + vv.height, window.innerHeight - inset);
+    var over = r.bottom - (visibleBottom - 16);
     if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'smooth' });
   }
   function initKeyboard() {
@@ -1805,8 +2027,15 @@
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      var show = function () { document.body.classList.add('kb-open'); };
-      var hide = function () { document.body.classList.remove('kb-open'); };
+      var show = function (info) {
+        document.body.classList.add('kb-open');
+        setKeyboardInset(info && info.keyboardHeight ? info.keyboardHeight : kbOverlayPx());
+        setTimeout(ensureFieldVisible, 80);
+      };
+      var hide = function () {
+        document.body.classList.remove('kb-open');
+        setKeyboardInset(0);
+      };
       KB.addListener('keyboardWillShow', show);
       KB.addListener('keyboardDidShow', show);
       KB.addListener('keyboardWillHide', hide);
