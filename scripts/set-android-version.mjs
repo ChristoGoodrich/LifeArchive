@@ -7,13 +7,17 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
-const version = JSON.parse(readFileSync('package.json', 'utf8')).version; // "1.0.5"
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+const version = pkg.version; // "1.0.5"
 const [maj, min, pat] = version.split('.').map(Number);
 const code = maj * 10000 + min * 100 + pat;                              // 1.0.5 -> 10005
+const appId = 'com.lifearchive.app';
 const gradlePath = 'android/app/build.gradle';
 let g = readFileSync(gradlePath, 'utf8');
 g = g.replace(/versionCode\s+\d+/, 'versionCode ' + code)
-     .replace(/versionName\s+"[^"]*"/, 'versionName "' + version + '"');
+     .replace(/versionName\s+"[^"]*"/, 'versionName "' + version + '"')
+     .replace(/namespace\s*=\s*"[^"]*"/, 'namespace = "' + appId + '"')
+     .replace(/applicationId\s+"[^"]*"/, 'applicationId "' + appId + '"');
 
 // --- fixed signing: point debug builds at the committed keystore so every APK
 //     shares ONE signature and installs as an update (copying to ~/.android does
@@ -35,7 +39,7 @@ if (!g.includes('signingConfigs')) {
   g = g.replace(/buildTypes\s*\{/, inject);
 }
 writeFileSync(gradlePath, g);
-console.log(`Android version -> versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
+console.log(`Android appId "${appId}", versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
 
 // --- Android manifest: camera permission + stable IME viewport ---
 const manifestPath = 'android/app/src/main/AndroidManifest.xml';

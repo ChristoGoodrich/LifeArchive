@@ -58,19 +58,19 @@
 <p align="center"><img src="docs/screenshots/3-rollback.png" width="85%"></p>
 
 ### 🔀 分支决策
-纠结时开两个 branch，写下每条路的预期结果，选一条，事后回来复盘评分，慢慢攒出你自己的「生活决策版本库」。
+纠结时开 2～4 个 branch，写下每条路的预期结果，选一条，事后回来复盘评分。已有分支可继续编辑，删除前会二次确认，慢慢攒出你自己的「生活决策版本库」。
 
 <p align="center"><img src="docs/screenshots/4-branch.png" width="85%"></p>
 
 ### ➕ 新建存档
-底部正中间的大号「＋」是最快入口。拍照 / 上传照片 + 写一句 commit message，生成一个生活存档点；清单和备注按需展开。场景先用左右选框区分「🍽 饮食 / 📦 物品场景」，再选择具体分类，可快速记录早餐、午餐、晚餐、夜宵和零食饮品。
+底部正中间的大号「＋」是最快入口。拍照 / 上传照片 + 写一句 commit message，生成一个生活存档点；清单、文件 / 图片附件和备注按需展开。一个存档可保存多个文件或图片，详情页可预览图片并下载原文件。场景先用左右选框区分「🍽 饮食 / 📦 物品场景」，再选择具体分类，可快速记录早餐、午餐、晚餐、夜宵和零食饮品。
 
 ---
 
 ## 技术 & 设计
 
 - **核心是一个纯前端、零依赖、可离线的网页 App**（`index.html` + `css/` + `js/`），直接双击就能跑。
-- **数据存在本地 IndexedDB**（照片以压缩 JPEG 内联保存），不再受旧版 localStorage 约 5MB 限制；升级后旧数据自动迁移。也可选填自己的 Supabase 做多设备云同步。
+- **数据存在本地 IndexedDB**（照片、图片附件和文件以内联数据保存），不再受旧版 localStorage 约 5MB 限制；升级后旧数据自动迁移。也可选填自己的 Supabase 做多设备云同步。
 - 桌面版用 **Electron** 套壳打包成 Windows 安装包；**electron-updater + GitHub Releases** 实现云端自动更新。
 - 安卓版用 **Capacitor** 套壳，在 **GitHub Actions** 云端构建出 APK；输入法弹出时由系统 `adjustResize` 收缩 WebView、自动保持焦点输入框可见。
 - **为什么 Diff 不需要 AI 视觉？** 它是两条互补的对比：图像 diff（`js/diff.js` 逐像素求差 + 3×3 网格定位）告诉你**哪里**变了；清单 diff（结构化集合比较）告诉你**什么**变了，稳定可靠、不依赖识别。
@@ -98,6 +98,7 @@ npm start                   # 以 Electron 桌面应用启动
 npx electron-builder --win  # 构建 Windows 安装包到 dist/
 
 # 安卓 APK：GitHub 仓库 → Actions → "Build Android APK" → Run workflow
+# 打包脚本会同步 www/、appId、versionName/versionCode；安装后可在设置页确认版本号
 ```
 
 Windows 发布新版本 = 双击项目里的 **`发布新版本.bat`**（改版本号 → 自动构建 → 上传 GitHub Release）。

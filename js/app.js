@@ -16,7 +16,7 @@
       empty_sub: '在出门、收拾、写作业之前，先给现实拍一张「commit」。',
       empty_cta: '创建第一个存档', empty_seed: '载入示例数据',
       scene: '场景', message: 'Commit message（一句话说明）', photo: '拍照 / 上传照片',
-      items: '物品 / 清单', notes: '备注', files: '文件（仅记录名称）',
+      items: '物品 / 清单', notes: '备注', files: '文件 / 图片',
       add_item: '+ 添加一项', item_name: '物品名', item_qty: '数量',
       save_commit: '提交存档', cancel: '取消',
       commit_placeholder: '例如：出门去学校前，带电脑和充电器',
@@ -36,6 +36,10 @@
       yes: '会', no: '不会', save_followup: '保存复盘',
       branch_empty: '还没有决策分支。纠结的时候，让现实也开个 branch。',
       delete: '删除', confirm_delete: '确定删除这个存档？',
+      commit_id: '存档号', add_file: '＋ 添加文件 / 图片',
+      confirm_delete_branch: '确定删除这个分支决策？',
+      new_branch: '新建分支决策', edit_branch: '编辑分支',
+      save_branch: '保存分支', add_option: '＋ 添加选项', remove_option: '删除选项',
       reference: '目标参考图', current_state: '当前状态',
       no_photo: '（无照片）', items_count: '项', files_label: '文件',
       seed_done: '已载入示例数据', export: '导出 JSON', clear: '清空全部',
@@ -58,7 +62,7 @@
       empty_sub: 'Before you head out, tidy up, or start homework — commit reality first.',
       empty_cta: 'Create first commit', empty_seed: 'Load demo data',
       scene: 'Scene', message: 'Commit message', photo: 'Photo',
-      items: 'Items / checklist', notes: 'Notes', files: 'Files (names only)',
+      items: 'Items / checklist', notes: 'Notes', files: 'Files / images',
       add_item: '+ Add item', item_name: 'Item', item_qty: 'Qty',
       save_commit: 'Commit', cancel: 'Cancel',
       commit_placeholder: 'e.g. Leaving for school — laptop + charger packed',
@@ -78,6 +82,10 @@
       yes: 'Yes', no: 'No', save_followup: 'Save review',
       branch_empty: 'No decision branches yet. When torn, let reality branch too.',
       delete: 'Delete', confirm_delete: 'Delete this commit?',
+      commit_id: 'Archive ID', add_file: '+ Add files / images',
+      confirm_delete_branch: 'Delete this decision branch?',
+      new_branch: 'New decision branch', edit_branch: 'Edit branch',
+      save_branch: 'Save branch', add_option: '+ Add option', remove_option: 'Remove option',
       reference: 'Target reference', current_state: 'Current state',
       no_photo: '(no photo)', items_count: 'items', files_label: 'Files',
       seed_done: 'Demo data loaded', export: 'Export JSON', clear: 'Clear all',
@@ -136,6 +144,17 @@
     return (n / 1048576).toFixed(1) + ' MB';
   }
   function shortId(id) { return (id || '').split('_').pop().slice(0, 6); }
+  function isImageFile(f) { return !!(f && /^image\//.test(f.type || '') && f.data); }
+  function firstImageFile(files) {
+    for (var i = 0; i < (files || []).length; i++) {
+      if (isImageFile(files[i])) return files[i];
+    }
+    return null;
+  }
+  function commitThumbSrc(c) {
+    var img = firstImageFile(c.files);
+    return c.photo || (img && img.data) || '';
+  }
   function toast(msg) {
     var node = $('#toast');
     node.textContent = msg;
@@ -587,8 +606,9 @@
 
   function commitCard(c) {
     var isRoot = !c.parentId;
-    var thumb = c.photo
-      ? el('div', { class: 'commit-thumb', style: 'background-image:url(' + c.photo + ')' })
+    var thumbSrc = commitThumbSrc(c);
+    var thumb = thumbSrc
+      ? el('div', { class: 'commit-thumb', style: 'background-image:url(' + thumbSrc + ')' })
       : el('div', { class: 'commit-thumb noimg', text: t('no_photo') });
 
     var meta = el('div', { class: 'commit-meta' }, [
@@ -641,7 +661,7 @@
       el('span', { class: 'commit-dot', text: '·' }),
       el('span', { text: fmtDate(c.createdAt) }),
       el('span', { class: 'commit-dot', text: '·' }),
-      el('span', { class: 'commit-hash', text: shortId(c.id) })
+      el('span', { class: 'commit-hash', text: t('commit_id') + ' ' + shortId(c.id) })
     ]));
     if (c.items && c.items.length) {
       card.appendChild(el('div', { class: 'detail-section-title',
@@ -657,6 +677,20 @@
     }
     if (c.files && c.files.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
+      var imgs = (c.files || []).filter(isImageFile);
+      if (imgs.length) {
+        var gallery = el('div', { class: 'detail-gallery' });
+        imgs.forEach(function (f) {
+          gallery.appendChild(el('a', {
+            class: 'detail-image',
+            href: f.data,
+            download: f.name,
+            style: 'background-image:url(' + f.data + ')',
+            title: f.name
+          }));
+        });
+        card.appendChild(gallery);
+      }
       var fl = el('div', { class: 'detail-files' });
       c.files.forEach(function (f) {
         var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
@@ -903,7 +937,7 @@
     var filesBlock = el('div', { class: 'files-block' }, [
       filesList,
       el('button', { class: 'btn tiny ghost', type: 'button',
-        text: (lang === 'zh' ? '＋ 添加文件' : '+ Add files'),
+        text: t('add_file'),
         onclick: function () { fileAttachInput.click(); } }),
       fileAttachInput
     ]);
@@ -1365,44 +1399,106 @@
   }
 
   /* ---------------- Branch (decisions) ---------------- */
+  var branchEditingId = null;
+  var BRANCH_LETTERS = ['A', 'B', 'C', 'D'];
+  function branchLabel(idx) { return BRANCH_LETTERS[idx] || String(idx + 1); }
+  function branchTone(idx) { return ['a', 'b', 'c', 'd'][idx] || 'a'; }
+  function normalizedBranches(b) {
+    var list = (b && b.branches && b.branches.length ? b.branches : []).slice(0, 4);
+    while (list.length < 2) list.push({ name: '', predicted: [] });
+    return list;
+  }
+
   function renderBranch(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_branch') })]));
 
-    // create form
-    var qInput = el('input', { class: 'field', type: 'text', placeholder: t('branch_q_ph') });
-    var aName = el('input', { class: 'field', type: 'text', placeholder: t('branch_a') });
-    var aOut = el('textarea', { class: 'field', rows: '3', placeholder: t('outcome') });
-    var bName = el('input', { class: 'field', type: 'text', placeholder: t('branch_b') });
-    var bOut = el('textarea', { class: 'field', rows: '3', placeholder: t('outcome') });
-
-    var form = el('div', { class: 'form-card branch-form' }, [
-      labeled(t('branch_q'), qInput),
-      el('div', { class: 'branch-cols' }, [
-        el('div', { class: 'branch-col a' }, [labeled(t('branch_a'), aName), labeled(t('outcome'), aOut)]),
-        el('div', { class: 'branch-col b' }, [labeled(t('branch_b'), bName), labeled(t('outcome'), bOut)])
-      ]),
-      el('div', { class: 'form-actions' }, [
-        el('button', { class: 'btn primary', text: t('create_branch'), onclick: function () {
-          if (!qInput.value.trim()) { toast('⚠ ' + t('branch_q')); return; }
-          Store.addBranch({
-            question: qInput.value.trim(),
-            branches: [
-              { name: aName.value.trim() || t('branch_a'), predicted: splitLines(aOut.value) },
-              { name: bName.value.trim() || t('branch_b'), predicted: splitLines(bOut.value) }
-            ],
-            chosenIndex: null,
-            followup: null
-          });
-          toast('✅ ' + t('create_branch'));
-          render();
-        } })
-      ])
-    ]);
-    v.appendChild(form);
+    var editing = branchEditingId ? Store.getBranch(branchEditingId) : null;
+    v.appendChild(branchForm(editing));
 
     var list = Store.branches();
     if (!list.length) { v.appendChild(noticeCard(t('branch_empty'))); return; }
     list.forEach(function (b) { v.appendChild(branchCard(b)); });
+  }
+
+  function branchForm(editing) {
+    var isEdit = !!editing;
+    var details = el('details', { class: 'branch-form form-card' });
+    if (isEdit) details.setAttribute('open', '');
+    details.appendChild(el('summary', { class: 'more-summary branch-summary',
+      text: isEdit ? t('edit_branch') : t('new_branch') }));
+
+    var qInput = el('input', { class: 'field', type: 'text', placeholder: t('branch_q_ph'),
+      value: (editing && editing.question) || '' });
+    var optionRows = el('div', { class: 'branch-options' });
+    var branches = normalizedBranches(editing);
+
+    function optionEditor(br, idx) {
+      var name = el('input', { class: 'field', type: 'text',
+        placeholder: (lang === 'zh' ? '选项 ' : 'Option ') + branchLabel(idx),
+        value: br && br.name || '' });
+      var out = el('textarea', { class: 'field', rows: '3', placeholder: t('outcome'),
+        value: (br && br.predicted || []).join('\n') });
+      var row = el('div', { class: 'branch-col ' + branchTone(idx) });
+      row.appendChild(el('div', { class: 'branch-col-head' }, [
+        el('span', { class: 'branch-tag', text: branchLabel(idx) }),
+        el('span', { class: 'branch-name', text: (lang === 'zh' ? '选项 ' : 'Option ') + branchLabel(idx) })
+      ]));
+      row.appendChild(labeled(t('branch_name'), name));
+      row.appendChild(labeled(t('outcome'), out));
+      if (idx > 1) {
+        row.appendChild(el('button', { class: 'btn tiny danger-ghost', type: 'button',
+          text: t('remove_option'), onclick: function () { row.remove(); renumberOptions(); } }));
+      }
+      row._name = name; row._out = out;
+      return row;
+    }
+
+    function renumberOptions() {
+      Array.prototype.slice.call(optionRows.children).forEach(function (row, idx) {
+        row.className = 'branch-col ' + branchTone(idx);
+        $('.branch-tag', row).textContent = branchLabel(idx);
+        $('.branch-name', row).textContent = (lang === 'zh' ? '选项 ' : 'Option ') + branchLabel(idx);
+      });
+      addBtn.disabled = optionRows.children.length >= 4;
+    }
+
+    branches.forEach(function (br, idx) { optionRows.appendChild(optionEditor(br, idx)); });
+    var addBtn = el('button', { class: 'btn tiny ghost', type: 'button', text: t('add_option'), onclick: function () {
+      if (optionRows.children.length >= 4) return;
+      optionRows.appendChild(optionEditor({ name: '', predicted: [] }, optionRows.children.length));
+      renumberOptions();
+    } });
+    renumberOptions();
+
+    details.appendChild(labeled(t('branch_q'), qInput));
+    details.appendChild(optionRows);
+    details.appendChild(el('div', { class: 'form-actions branch-form-actions' }, [
+      addBtn,
+      isEdit ? el('button', { class: 'btn ghost', type: 'button', text: t('cancel'), onclick: function () {
+        branchEditingId = null; render();
+      } }) : null,
+      el('button', { class: 'btn primary', type: 'button', text: isEdit ? t('save_branch') : t('create_branch'), onclick: function () {
+        if (!qInput.value.trim()) { toast('⚠ ' + t('branch_q')); return; }
+        var nextBranches = Array.prototype.slice.call(optionRows.children).map(function (row, idx) {
+          return {
+            name: row._name.value.trim() || ((lang === 'zh' ? '选项 ' : 'Option ') + branchLabel(idx)),
+            predicted: splitLines(row._out.value)
+          };
+        }).slice(0, 4);
+        var patch = { question: qInput.value.trim(), branches: nextBranches };
+        if (isEdit) {
+          if (editing.chosenIndex != null && editing.chosenIndex >= nextBranches.length) patch.chosenIndex = null;
+          Store.updateBranch(editing.id, patch);
+          branchEditingId = null;
+          toast('✅ ' + t('save_branch'));
+        } else {
+          Store.addBranch({ question: patch.question, branches: patch.branches, chosenIndex: null, followup: null });
+          toast('✅ ' + t('create_branch'));
+        }
+        render();
+      } })
+    ]));
+    return details;
   }
 
   function splitLines(s) {
@@ -1418,13 +1514,14 @@
     ]);
 
     var cols = el('div', { class: 'branch-cols' });
-    b.branches.forEach(function (br, idx) {
+    normalizedBranches(b).forEach(function (br, idx) {
       var chosen = b.chosenIndex === idx;
       var preds = el('ul', { class: 'pred-ul' });
       (br.predicted || []).forEach(function (p) { preds.appendChild(el('li', { text: p })); });
-      var col = el('div', { class: 'branch-col ' + (idx === 0 ? 'a' : 'b') + (chosen ? ' chosen' : '') }, [
+      if (!preds.children.length) preds.appendChild(el('li', { text: lang === 'zh' ? '未填写预期结果' : 'No predicted outcome yet' }));
+      var col = el('div', { class: 'branch-col ' + branchTone(idx) + (chosen ? ' chosen' : '') }, [
         el('div', { class: 'branch-col-head' }, [
-          el('span', { class: 'branch-tag', text: idx === 0 ? 'A' : 'B' }),
+          el('span', { class: 'branch-tag', text: branchLabel(idx) }),
           el('span', { class: 'branch-name', text: br.name })
         ]),
         preds,
@@ -1474,8 +1571,14 @@
       }
     }
 
-    children.push(el('button', { class: 'btn tiny danger-ghost branch-del', text: t('delete'),
-      onclick: function () { Store.deleteBranch(b.id); render(); } }));
+    children.push(el('div', { class: 'branch-card-actions' }, [
+      el('button', { class: 'btn tiny ghost', text: t('edit_branch'), onclick: function () {
+        branchEditingId = b.id; render();
+      } }),
+      el('button', { class: 'btn tiny danger-ghost', text: t('delete'), onclick: function () {
+        if (confirm(t('confirm_delete_branch'))) { Store.deleteBranch(b.id); render(); }
+      } })
+    ]));
 
     return el('div', { class: 'branch-card' }, children);
   }
@@ -1594,7 +1697,11 @@
         { name: lang === 'zh' ? '出去玩' : 'Go out', predicted: [
           lang === 'zh' ? '今晚开心' : 'Fun tonight',
           lang === 'zh' ? '明天赶工' : 'Crunch tomorrow',
-          lang === 'zh' ? '睡眠变差' : 'Worse sleep'] }
+          lang === 'zh' ? '睡眠变差' : 'Worse sleep'] },
+        { name: lang === 'zh' ? '先写一小时再出门' : 'Study one hour, then go out', predicted: [
+          lang === 'zh' ? '两边都不落空' : 'Both sides get some time',
+          lang === 'zh' ? '需要严格看时间' : 'Needs a hard time limit',
+          lang === 'zh' ? '明天压力适中' : 'Moderate stress tomorrow'] }
       ], chosenIndex: null, followup: null
     });
     toast(t('seed_done'));
@@ -1639,6 +1746,18 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.2.3', '2026-06-03', '移动端版本同步 + 多图附件 + 分支决策增强',
+      'Android version sync, multi-image attachments, and branch upgrades',
+      ['修复 Android 原生工程里残留旧 appId/版本信息的风险，打包脚本会同步 appId、versionName、versionCode 和 www 资源。',
+       '存档附件升级为「文件 / 图片」：单个存档可保存多个文件或图片，详情页会直接展示图片附件预览。',
+       '存档号显示为明确的「存档号 okc08」，避免误以为是地点、标签或分类。',
+       '分支决策支持 2 到 4 个选项，创建表单默认收起，可编辑已有分支，删除前需要确认。',
+       'README 截图和说明重新生成，展示当前版本的分支页与多附件能力。'],
+      ['Harden Android packaging by syncing appId, versionName, versionCode, and www assets.',
+       'Upgrade attachments to files / images: one commit can keep multiple files or pictures, with image previews in details.',
+       'Show short hashes as explicit archive IDs, e.g. "Archive ID okc08".',
+       'Branches now support 2 to 4 options, a collapsed create form, editing, and delete confirmation.',
+       'Refresh README screenshots and copy for the current branch and attachment experience.']],
     ['1.2.2', '2026-06-03', '桌面存档增强 + 移动端交互打磨',
       'Desktop archive upgrades + mobile interaction polish',
       ['桌面端「新建存档」从 tab 组中独立出来，固定为右侧单独按钮，移动端仍保留中间悬浮加号。',

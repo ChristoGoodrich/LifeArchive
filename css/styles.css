@@ -351,6 +351,10 @@ textarea.field{resize:vertical}
 .detail-files{display:flex;flex-direction:column;gap:8px}
 .detail-file{text-decoration:none;color:var(--text);cursor:pointer;transition:.15s}
 .detail-file:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--inset))}
+.detail-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px;margin-bottom:10px}
+.detail-image{display:block;aspect-ratio:1.25;border-radius:14px;background-size:cover;background-position:center;
+  background-color:var(--inset);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.detail-image:hover{border-color:var(--accent)}
 .file-dl{color:var(--accent);font-size:19px;flex:0 0 auto;line-height:1}
 .commit-files{color:var(--muted)}
 
@@ -430,15 +434,20 @@ textarea.field{resize:vertical}
 
 /* ---- branches ---- */
 .branch-form{margin-bottom:24px}
-.branch-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
+.branch-summary{font-weight:900}
+.branch-options,.branch-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:8px}
 .branch-col{background:var(--inset);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px}
 .branch-col.a{border-top:4px solid var(--accent)}
 .branch-col.b{border-top:4px solid var(--accent-2)}
+.branch-col.c{border-top:4px solid var(--amber)}
+.branch-col.d{border-top:4px solid var(--green)}
 .branch-col.chosen{box-shadow:0 0 0 2px var(--green);border-color:var(--green)}
 .branch-col-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
 .branch-tag{width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;
   font-weight:800;font-family:var(--mono);background:var(--card);border:1px solid var(--line)}
 .branch-name{font-weight:800;font-size:15px}
+.branch-form-actions{align-items:center;justify-content:flex-end}
+.branch-form-actions .btn:first-child{margin-right:auto}
 .pred-ul{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:7px}
 .pred-ul li{font-size:14px;color:var(--muted);padding-left:18px;position:relative}
 .pred-ul li::before{content:"→";position:absolute;left:0;color:var(--dim)}
@@ -461,7 +470,8 @@ textarea.field{resize:vertical}
 .repeat{font-weight:800;font-size:13px}
 .repeat.yes{color:var(--green)} .repeat.no{color:var(--red)}
 .fu-note{color:var(--muted);font-style:italic;font-size:13.5px}
-.branch-del{position:absolute;top:16px;right:16px}
+.branch-card-actions{position:absolute;top:16px;right:16px;display:flex;gap:8px}
+.branch-card .branch-head{padding-right:132px}
 
 /* ---- toast ---- */
 .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
@@ -518,7 +528,7 @@ textarea.field{resize:vertical}
 /* ---- responsive: phone -> bottom tab bar + single column ---- */
 @media (max-width:720px){
   .diff-controls{grid-template-columns:1fr}
-  .diff-photos,.branch-cols{grid-template-columns:1fr}
+  .diff-photos,.branch-cols,.branch-options{grid-template-columns:1fr}
   .fu-row{grid-template-columns:1fr}
   .commit-card{flex-direction:column}
   .commit-thumb{width:100%;height:170px}
