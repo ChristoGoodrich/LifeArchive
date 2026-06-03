@@ -191,11 +191,12 @@
     },
 
     addCommit: function (commit) {
-      // parent = previous latest commit in the same scene (forms a chain)
-      var sameScene = cache.commits.filter(function (c) { return c.scene === commit.scene; });
+      // parent = previous latest REAL commit in the same scene (forms a chain).
+      // Planned drafts (预存档/计划) never join the chain, so real history stays clean.
+      var sameScene = cache.commits.filter(function (c) { return c.scene === commit.scene && !c.planned; });
       sameScene.sort(function (a, b) { return b.createdAt - a.createdAt; });
       commit.id = commit.id || uid('c');
-      commit.parentId = sameScene.length ? sameScene[0].id : null;
+      commit.parentId = commit.planned ? null : (sameScene.length ? sameScene[0].id : null);
       commit.createdAt = commit.createdAt || Date.now();
       // updatedAt drives conflict resolution on cloud sync (newest wins) so a fresh
       // local change is never clobbered by a stale remote copy of the same commit.
@@ -227,6 +228,27 @@
         }
       }
       return false;
+    },
+
+    // Turn a planned (预存档 / 计划) commit into a real one: it "happens" now, joins
+    // the scene's real chain, and stops showing in the 计划中 section.
+    fulfillCommit: function (id) {
+      for (var i = 0; i < cache.commits.length; i++) {
+        if (cache.commits[i].id === id) {
+          var c = cache.commits[i];
+          var sameScene = cache.commits.filter(function (x) {
+            return x.scene === c.scene && !x.planned && x.id !== id;
+          });
+          sameScene.sort(function (a, b) { return b.createdAt - a.createdAt; });
+          c.planned = false;
+          c.parentId = sameScene.length ? sameScene[0].id : null;
+          c.createdAt = Date.now();
+          c.updatedAt = Date.now();
+          persist();
+          return c;
+        }
+      }
+      return null;
     },
 
     deleteCommit: function (id) {

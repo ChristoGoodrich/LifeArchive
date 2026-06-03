@@ -68,7 +68,16 @@
       load_more: '加载更多', open_detail: '查看详情',
       star: '标记重要', unstar: '取消标记', starred_filter: '重要',
       star_added: '已标记为重要', star_removed: '已取消标记',
-      detail_star: '☆ 标记重要', detail_starred: '★ 已标记重要'
+      detail_star: '☆ 标记重要', detail_starred: '★ 已标记重要',
+      planned_save: '存为计划', planned_badge: '计划', planned_section: '计划中',
+      planned_section_sub: '还没真正发生 · 完成后会转为正式存档',
+      planned_saved: '已存为计划，完成后记得标记', planned_empty: '没有匹配的计划',
+      mark_done: '完成', mark_done_full: '✅ 标记为已完成（转为正式存档）',
+      planned_done: '已完成 · 已转为正式存档', planned_tag: '📌 这是一条计划（预存档）',
+      replicate: '照着再记一笔', replicate_now: '立即记一笔',
+      replicate_meal_hint: '饮食记录无需回滚。你可以照着这一餐，快速再记一笔，或先存为计划（想吃／要点的），真正吃到后再标记完成。',
+      replicate_item_hint: '也可以照着这个版本，把要补齐的东西先存为一条计划，备齐后再标记完成。',
+      pick_multi: '选择多张图片', album_multi: '从相册选择多张', photos_added: '已添加 {n} 张图片'
     },
     en: {
       brand: 'Life Archive',
@@ -131,7 +140,16 @@
       load_more: 'Load more', open_detail: 'Open detail',
       star: 'Star', unstar: 'Unstar', starred_filter: 'Starred',
       star_added: 'Marked important', star_removed: 'Unmarked',
-      detail_star: '☆ Star', detail_starred: '★ Starred'
+      detail_star: '☆ Star', detail_starred: '★ Starred',
+      planned_save: 'Save as plan', planned_badge: 'Plan', planned_section: 'Planned',
+      planned_section_sub: 'Not yet — mark done to turn into a real commit',
+      planned_saved: 'Saved as a plan — mark it done later', planned_empty: 'No matching plans',
+      mark_done: 'Done', mark_done_full: '✅ Mark as done (turn into a real commit)',
+      planned_done: 'Done · archived', planned_tag: '📌 This is a plan (draft)',
+      replicate: 'Log it again', replicate_now: 'Log now',
+      replicate_meal_hint: 'Meals don’t need a rollback. Log this one again, or save it as a plan (what you want / will order) and mark it done once you actually have it.',
+      replicate_item_hint: 'You can also save this version as a plan for what to restock, then mark it done once everything is back.',
+      pick_multi: 'Pick multiple images', album_multi: 'Pick multiple from album', photos_added: 'Added {n} image(s)'
     }
   };
 
@@ -200,6 +218,10 @@
     var img = firstImageFile(c.files);
     return c.photo || (img && img.data) || '';
   }
+  function notPlanned(c) { return !c.planned; }
+  // real (non-planned) commits in a scene, newest first — used by diff / rollback so
+  // a not-yet-happened 计划 never shows up as a comparable/rollbackable version.
+  function realCommitsForScene(id) { return Store.commitsForScene(id).filter(notPlanned); }
   function toast(msg) {
     var node = $('#toast');
     node.textContent = msg;
@@ -646,10 +668,12 @@
 
     function renderList() {
       listWrap.innerHTML = '';
-      var filtered = commits.filter(function (c) {
+      var matched = commits.filter(function (c) {
         return (!tlStarOnly || c.starred) && (tlScene === null || c.scene === tlScene) && commitMatches(c, tlQuery);
       });
-      if (!filtered.length) {
+      var plannedList = matched.filter(function (c) { return c.planned; });
+      var realList = matched.filter(notPlanned);
+      if (!matched.length) {
         listWrap.appendChild(el('div', { class: 'tl-empty' }, [
           el('div', { class: 'tl-empty-ic', text: tlStarOnly ? '⭐' : '🔍' }),
           el('div', { text: tlStarOnly ? (lang === 'zh' ? '还没有标记重要的存档' : 'No starred commits yet')
@@ -657,8 +681,22 @@
         ]));
         return;
       }
-      var shown = filtered.slice(0, tlVisible);
-      // group by day, newest first (commits already sorted desc)
+
+      // ---- 计划中 (planned drafts) float to the top, like a to-do list ----
+      if (plannedList.length) {
+        var psec = el('section', { class: 'planned-group' });
+        psec.appendChild(el('div', { class: 'planned-head' }, [
+          el('span', { class: 'planned-head-title', text: '📌 ' + t('planned_section') + ' · ' + plannedList.length }),
+          el('span', { class: 'planned-head-sub', text: t('planned_section_sub') })
+        ]));
+        var prail = el('div', { class: 'planned-rail' });
+        plannedList.forEach(function (c) { prail.appendChild(commitCard(c)); });
+        psec.appendChild(prail);
+        listWrap.appendChild(psec);
+      }
+
+      // ---- real commits, grouped by day, newest first ----
+      var shown = realList.slice(0, tlVisible);
       var groups = [], map = {};
       shown.forEach(function (c) {
         var k = dayKey(c.createdAt);
@@ -681,8 +719,8 @@
         sec.appendChild(rail);
         listWrap.appendChild(sec);
       });
-      if (filtered.length > shown.length) {
-        listWrap.appendChild(el('button', { class: 'btn ghost load-more', text: t('load_more') + ' · ' + shown.length + ' / ' + filtered.length,
+      if (realList.length > shown.length) {
+        listWrap.appendChild(el('button', { class: 'btn ghost load-more', text: t('load_more') + ' · ' + shown.length + ' / ' + realList.length,
           onclick: function () { tlVisible += TL_PAGE_SIZE; renderList(); } }));
       }
     }
@@ -715,39 +753,9 @@
   function commitCard(c) {
     var isRoot = !c.parentId;
     var thumbSrc = commitThumbSrc(c);
-    var thumb = thumbSrc
-      ? el('div', { class: 'commit-thumb', style: 'background-image:url(' + thumbSrc + ')' })
-      : el('div', { class: 'commit-thumb noimg', text: t('no_photo') });
 
-    var meta = el('div', { class: 'commit-meta' }, [
-      el('div', { class: 'commit-msg', text: c.message || '(no message)' }),
-      el('div', { class: 'commit-sub' }, [
-        sceneTag(Store.sceneById(c.scene)),
-        el('span', { class: 'commit-dot', text: '·' }),
-        el('span', { text: fmtTime(c.createdAt) }),
-        el('span', { class: 'commit-dot', text: '·' }),
-        el('span', { text: (c.items ? c.items.length : 0) + ' ' + t('items_count') }),
-        (c.files && c.files.length) ? el('span', { class: 'commit-dot', text: '·' }) : null,
-        (c.files && c.files.length) ? el('span', { class: 'commit-files', text: '📎 ' + c.files.length }) : null
-      ])
-    ]);
-
-    var chips = el('div', { class: 'commit-chips' });
-    if (isRoot) chips.appendChild(el('span', { class: 'chip root', text: t('root') }));
-    if (c.fromBranchId) chips.appendChild(el('span', { class: 'chip branch-link', text: t('from_branch') + ' ' + shortId(c.fromBranchId) }));
-    (c.items || []).slice(0, 6).forEach(function (it) {
-      chips.appendChild(el('span', { class: 'chip',
-        text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') }));
-    });
-    if ((c.items || []).length > 6) {
-      chips.appendChild(el('span', { class: 'chip more', text: '+' + (c.items.length - 6) }));
-    }
-
-    var body = el('div', { class: 'commit-body' }, [meta, chips,
-      c.notes ? el('div', { class: 'commit-notes', text: c.notes }) : null]);
-
-    // quick star toggle, overlaid on the thumbnail corner. stopPropagation so it
-    // never opens the detail page.
+    // quick star toggle. stopPropagation so it never opens the detail page. It rides
+    // the photo corner when there's an image, or the card corner otherwise.
     var starBtn = el('button', { type: 'button', class: 'star-btn' + (c.starred ? ' starred' : ''),
       'aria-label': c.starred ? t('unstar') : t('star'), title: c.starred ? t('unstar') : t('star') });
     starBtn.innerHTML = starSVG();
@@ -763,10 +771,67 @@
       if (tlRerenderChips) tlRerenderChips();             // reveal/hide the "important" filter
       if (tlStarOnly && !now && tlRerender) tlRerender(); // drop it from the starred-only view
     });
-    thumb.appendChild(starBtn);
 
-    var card = el('div', { class: 'commit-card tappable' + (c.starred ? ' is-starred' : '') }, [thumb, body,
-      el('span', { class: 'commit-chevron', text: '›' })]);
+    // photo-first: a real <img> at its natural aspect ratio (no cropping), so cards
+    // grow to fit each picture and the timeline reads as a vertical waterfall.
+    var media = null;
+    if (thumbSrc) {
+      var img = el('img', { class: 'commit-img', src: thumbSrc, alt: c.message || '',
+        loading: 'lazy', decoding: 'async' });
+      media = el('div', { class: 'commit-media' }, [img, starBtn]);
+      var imgN = (c.files || []).filter(isImageFile).length + (c.photo ? 1 : 0);
+      if (imgN > 1) media.appendChild(el('span', { class: 'commit-img-count', text: '⧉ ' + imgN }));
+    }
+
+    var subKids = [
+      sceneTag(Store.sceneById(c.scene)),
+      el('span', { class: 'commit-dot', text: '·' }),
+      el('span', { text: fmtTime(c.createdAt) }),
+      el('span', { class: 'commit-dot', text: '·' }),
+      el('span', { text: (c.items ? c.items.length : 0) + ' ' + t('items_count') })
+    ];
+    if (c.files && c.files.length) {
+      subKids.push(el('span', { class: 'commit-dot', text: '·' }));
+      subKids.push(el('span', { class: 'commit-files', text: '📎 ' + c.files.length }));
+    }
+
+    var titleRow = el('div', { class: 'commit-title-row' }, [
+      el('div', { class: 'commit-msg', text: c.message || '(no message)' }),
+      c.planned ? el('span', { class: 'commit-plan-pill', text: '📌 ' + t('planned_badge') }) : null
+    ]);
+
+    var chips = el('div', { class: 'commit-chips' });
+    if (isRoot && !c.planned) chips.appendChild(el('span', { class: 'chip root', text: t('root') }));
+    if (c.fromBranchId) chips.appendChild(el('span', { class: 'chip branch-link', text: t('from_branch') + ' ' + shortId(c.fromBranchId) }));
+    (c.items || []).slice(0, 6).forEach(function (it) {
+      chips.appendChild(el('span', { class: 'chip',
+        text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') }));
+    });
+    if ((c.items || []).length > 6) {
+      chips.appendChild(el('span', { class: 'chip more', text: '+' + (c.items.length - 6) }));
+    }
+
+    var bodyKids = [titleRow, el('div', { class: 'commit-sub' }, subKids), chips,
+      c.notes ? el('div', { class: 'commit-notes', text: c.notes }) : null];
+
+    // a planned draft carries a quick "✅ 完成" footer so it can be fulfilled right
+    // from the timeline — it then drops into the real date timeline at "now".
+    if (c.planned) {
+      var doneBtn = el('button', { type: 'button', class: 'commit-done-btn', text: '✅ ' + t('mark_done') });
+      doneBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        Store.fulfillCommit(c.id);
+        toast('✅ ' + t('planned_done'));
+        autoSync(false);
+        render(); // full re-render so it leaves 计划中 and re-sorts into today's group
+      });
+      bodyKids.push(doneBtn);
+    }
+
+    var body = el('div', { class: 'commit-body' }, bodyKids);
+    var cardKids = media ? [media, body] : [body, starBtn];
+    var card = el('div', { class: 'commit-card tappable'
+      + (c.starred ? ' is-starred' : '') + (c.planned ? ' is-planned' : '') + (media ? '' : ' no-media') }, cardKids);
     card.addEventListener('click', function () { pendingDetail = c.id; go('detail'); });
     return card;
   }
@@ -791,8 +856,10 @@
     });
     v.appendChild(el('div', { class: 'view-head' }, [back, starToggle]));
 
-    var card = el('div', { class: 'detail-card' });
-    if (c.photo) card.appendChild(el('div', { class: 'detail-photo', style: 'background-image:url(' + c.photo + ')' }));
+    var card = el('div', { class: 'detail-card' + (c.planned ? ' is-planned' : '') });
+    if (c.planned) card.appendChild(el('div', { class: 'detail-plan-banner', text: t('planned_tag') }));
+    // photo at its natural aspect ratio (no cropping), matching the timeline cards
+    if (c.photo) card.appendChild(el('img', { class: 'detail-photo', src: c.photo, alt: c.message || '', decoding: 'async' }));
     card.appendChild(el('div', { class: 'detail-title', text: c.message || '(no message)' }));
     card.appendChild(el('div', { class: 'detail-sub' }, [
       el('span', { class: 'commit-scene', text: sceneLabel(Store.sceneById(c.scene)) }),
@@ -827,13 +894,11 @@
       if (imgs.length) {
         var gallery = el('div', { class: 'detail-gallery' });
         imgs.slice(0, 12).forEach(function (f) {
-          gallery.appendChild(el('a', {
-            class: 'detail-image',
-            href: f.data,
-            download: f.name,
-            style: 'background-image:url(' + f.data + ')',
-            title: f.name
-          }));
+          gallery.appendChild(el('a', { class: 'detail-image-link', href: f.data,
+            download: f.name, title: f.name }, [
+            el('img', { class: 'detail-image', src: f.data, alt: f.name,
+              loading: 'lazy', decoding: 'async' })
+          ]));
         });
         if (imgs.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more',
           text: '+' + (imgs.length - 12) }));
@@ -859,6 +924,26 @@
     }
     v.appendChild(card);
 
+    // a planned draft: the headline action is "mark done" (it becomes a real commit);
+    // diff/rollback don't apply to something that hasn't happened yet.
+    if (c.planned) {
+      var fulfillBtn = el('button', { class: 'btn primary detail-fulfill', text: t('mark_done_full') });
+      fulfillBtn.addEventListener('click', function () {
+        Store.fulfillCommit(c.id);
+        toast('✅ ' + t('planned_done'));
+        autoSync(false);
+        go('timeline');
+      });
+      v.appendChild(fulfillBtn);
+      v.appendChild(el('div', { class: 'detail-actions' }, [
+        el('button', { class: 'btn', text: '✏️ ' + (L ? '编辑' : 'Edit'),
+          onclick: function () { pendingEdit = c.id; go('commit'); } }),
+        el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
+          onclick: function () { if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); go('timeline'); } } })
+      ]));
+      return;
+    }
+
     v.appendChild(el('div', { class: 'detail-actions' }, [
       el('button', { class: 'btn primary', text: '✏️ ' + (L ? '编辑' : 'Edit'),
         onclick: function () { pendingEdit = c.id; go('commit'); } }),
@@ -875,15 +960,21 @@
   var draftPhoto = null;
   var draftFiles = [];
   var pendingEdit = null;
+  var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
   function renderCommitForm(v) {
     draftPhoto = null;
     draftFiles = [];
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
+    var template = (!editing && pendingTemplate) ? pendingTemplate : null;
+    pendingTemplate = null;
+    var src = editing || template; // where prefilled values come from (edit OR replicate)
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
+    if (template) v.appendChild(el('div', { class: 'form-template-hint',
+      text: '↩︎ ' + (lang === 'zh' ? '已照着上一条带入内容，可改后「提交存档」或「存为计划」。' : 'Copied from a previous entry — edit, then Commit or Save as plan.') }));
 
-    var selectedScene = (editing && editing.scene) || Store.SCENES[0].id;
+    var selectedScene = (src && src.scene) || Store.SCENES[0].id;
     var scenePicker = el('div', { class: 'scene-picker' });
     var selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
     function buildSceneGrid(group) {
@@ -934,9 +1025,9 @@
     }
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
-    if (editing && editing.message && editing.message !== '(no message)') msgInput.value = editing.message;
+    if (src && src.message && src.message !== '(no message)') msgInput.value = src.message;
     var notesInput = el('textarea', { class: 'field', rows: '2' });
-    if (editing && editing.notes) notesInput.value = editing.notes;
+    if (src && src.notes) notesInput.value = src.notes;
 
     var preview = el('div', { class: 'photo-drop' }, [
       el('span', { class: 'photo-hint', text: '📷 ' + t('photo') })
@@ -944,22 +1035,81 @@
     function setPhoto(dataUrl) {
       draftPhoto = dataUrl;
       preview.innerHTML = '';
-      preview.style.backgroundImage = 'url(' + dataUrl + ')';
+      preview.style.backgroundImage = 'none';
+      // show the cover at its natural aspect ratio (no cropping) — the dropzone grows
+      // to fit, matching how the timeline now displays photos
+      preview.appendChild(el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' }));
       preview.classList.add('has-photo');
     }
-    var fileInput = el('input', { type: 'file', accept: 'image/*', style: 'display:none' });
+    function imageEntryFromFile(file) {
+      return downscale(file).then(function (data) {
+        return { data: data, name: (file && file.name) || '', type: 'image/jpeg',
+          size: Math.round((data.length || 0) * 0.75) };
+      });
+    }
+    function imageFileName(entry) {
+      var n = (entry && entry.name) || ('image_' + (draftFiles.length + 1) + '.jpg');
+      return /\.[a-z0-9]+$/i.test(n) ? n : (n + '.jpg');
+    }
+    // Add one or more images at once. A single-image pick replaces the cover; multi
+    // picks keep the first image as cover only when there is no cover yet, then add
+    // the rest as image attachments. Every path (desktop, native, paste, drag/drop)
+    // lands here so multi-image behavior stays consistent.
+    function addImageDataUrls(entries, opts) {
+      entries = (entries || []).map(function (x) {
+        return typeof x === 'string' ? { data: x } : x;
+      }).filter(function (x) { return x && x.data; });
+      if (!entries.length) return;
+      var replaceCover = !!(opts && opts.replaceCover);
+      var extras = 0;
+      entries.forEach(function (entry, idx) {
+        if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data); return; }
+        draftFiles.push({ id: Store.uid('f'), name: imageFileName(entry),
+          type: 'image/jpeg', size: entry.size || Math.round((entry.data.length || 0) * 0.75),
+          data: entry.data });
+        extras++;
+      });
+      if (extras) { renderFilesList(); if (moreDetails) moreDetails.open = true; }
+      if (entries.length > 1 || extras) toast(t('photos_added').replace('{n}', entries.length));
+    }
+    var fileInput = el('input', { type: 'file', accept: 'image/*', multiple: '', style: 'display:none' });
     fileInput.addEventListener('change', function () {
-      if (!fileInput.files || !fileInput.files[0]) return;
-      downscale(fileInput.files[0]).then(setPhoto);
+      var picked = Array.prototype.slice.call(fileInput.files || [])
+        .filter(function (f) { return /^image\//.test(f.type); });
       fileInput.value = '';
+      if (!picked.length) return;
+      Promise.all(picked.map(imageEntryFromFile)).then(function (entries) {
+        addImageDataUrls(entries, { replaceCover: picked.length === 1 });
+      });
     });
 
     // ---- photo sources, all funneled through the in-app action sheet so the UI
     //      is consistent across Android / desktop (no bare native OS picker) ----
     function nativeCamera(source) {
       window.Capacitor.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: source, quality: 80, width: 1200, correctOrientation: true })
-        .then(function (photo) { if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(setPhoto); })
+        .then(function (photo) {
+          if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(function (data) {
+            addImageDataUrls([{ data: data, name: 'photo.jpg' }], { replaceCover: true });
+          });
+        })
         .catch(function () { /* cancelled */ });
+    }
+    // multi-select straight from the gallery (Android). pickImages returns webPaths,
+    // so fetch each, downscale, then funnel through addImageDataUrls.
+    function nativePickMulti() {
+      var Cam = window.Capacitor.Plugins.Camera;
+      if (!Cam || !Cam.pickImages) { nativeCamera('PHOTOS'); return; }
+      Cam.pickImages({ quality: 80, width: 1200, correctOrientation: true }).then(function (res) {
+        var photos = (res && res.photos) || [];
+        if (!photos.length) return;
+        return Promise.all(photos.map(function (p, idx) {
+          return fetch(p.webPath || p.path).then(function (r) { return r.blob(); }).then(function (b) {
+            return downscale(b).then(function (data) {
+              return { data: data, name: (p && p.name) || ('album_' + (idx + 1) + '.jpg') };
+            });
+          });
+        })).then(addImageDataUrls);
+      }).catch(function (e) { if (e && e.message) toast('⚠ ' + e.message); });
     }
     function desktopScreenshot() {
       if (!(window.electronAPI && window.electronAPI.captureScreen)) {
@@ -968,7 +1118,9 @@
       toast(lang === 'zh' ? '正在截图…' : 'Capturing…');
       window.electronAPI.captureScreen().then(function (dataUrl) {
         if (!dataUrl) { toast(lang === 'zh' ? '截图失败' : 'Screenshot failed'); return; }
-        downscaleSrc(dataUrl, 1600, 0.85).then(setPhoto);
+        downscaleSrc(dataUrl, 1600, 0.85).then(function (data) {
+          addImageDataUrls([{ data: data, name: 'screenshot.jpg' }], { replaceCover: true });
+        });
       }).catch(function (e) { toast('⚠ ' + (e && e.message || e)); });
     }
     function pasteImageFromClipboard() {
@@ -976,7 +1128,14 @@
         navigator.clipboard.read().then(function (items) {
           for (var i = 0; i < items.length; i++) {
             var imgType = (items[i].types || []).filter(function (ty) { return /^image\//.test(ty); })[0];
-            if (imgType) { items[i].getType(imgType).then(function (blob) { downscale(blob).then(setPhoto); }); return; }
+            if (imgType) {
+              items[i].getType(imgType).then(function (blob) {
+                downscale(blob).then(function (data) {
+                  addImageDataUrls([{ data: data, name: 'clipboard.jpg' }], { replaceCover: true });
+                });
+              });
+              return;
+            }
           }
           toast(lang === 'zh' ? '剪贴板里没有图片' : 'No image in clipboard');
         }).catch(function () { toast(lang === 'zh' ? '无法读取剪贴板（可直接 Ctrl+V）' : 'Clipboard blocked — try Ctrl+V'); });
@@ -991,16 +1150,23 @@
       if (native) {
         actionSheet(L ? '添加照片' : 'Add photo', [
           { icon: UI_ICONS.camera, label: L ? '拍照' : 'Take photo', onClick: function () { nativeCamera('CAMERA'); } },
-          { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: function () { nativeCamera('PHOTOS'); } }
+          { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: function () { nativeCamera('PHOTOS'); } },
+          { icon: UI_ICONS.album, label: t('album_multi'), onClick: nativePickMulti }
         ]);
       } else {
-        var acts = [{ icon: UI_ICONS.file, label: L ? '选择图片文件' : 'Choose image file', onClick: function () { fileInput.click(); } }];
+        var acts = [{ icon: UI_ICONS.file, label: L ? '选择图片（可多选）' : 'Choose images (multi)', onClick: function () { fileInput.click(); } }];
         if (window.electronAPI && window.electronAPI.captureScreen) {
           acts.push({ icon: UI_ICONS.screenshot, label: L ? '截取当前屏幕' : 'Capture screen', onClick: desktopScreenshot });
         }
         acts.push({ icon: UI_ICONS.paste, label: L ? '从剪贴板粘贴' : 'Paste from clipboard', onClick: pasteImageFromClipboard });
         actionSheet(L ? '添加照片' : 'Add photo', acts);
       }
+    }
+    function openMultiPhotoPicker() {
+      var Cap = window.Capacitor;
+      var native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera);
+      if (native) nativePickMulti();
+      else fileInput.click();
     }
     preview.addEventListener('click', openPhotoSource);
 
@@ -1009,25 +1175,38 @@
     preview.addEventListener('dragleave', function () { preview.classList.remove('drag-over'); });
     preview.addEventListener('drop', function (e) {
       e.preventDefault(); preview.classList.remove('drag-over');
-      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f && /^image\//.test(f.type)) downscale(f).then(setPhoto);
+      var files = Array.prototype.slice.call(e.dataTransfer && e.dataTransfer.files || [])
+        .filter(function (f) { return /^image\//.test(f.type); });
+      if (files.length) {
+        Promise.all(files.map(imageEntryFromFile)).then(function (entries) {
+          addImageDataUrls(entries, { replaceCover: files.length === 1 });
+        });
+      }
     });
 
     // Ctrl+V anywhere pastes an image as the photo — registered on the document so
     // it works before any field is focused, and torn down by viewCleanup on nav.
     function onPasteImg(e) {
       var items = (e.clipboardData && e.clipboardData.items) || [];
+      var imgs = [];
       for (var i = 0; i < items.length; i++) {
         if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
           var f = items[i].getAsFile();
-          if (f) { e.preventDefault(); downscale(f).then(setPhoto); toast(lang === 'zh' ? '已粘贴图片' : 'Image pasted'); return; }
+          if (f) imgs.push(f);
         }
+      }
+      if (imgs.length) {
+        e.preventDefault();
+        Promise.all(imgs.map(imageEntryFromFile)).then(function (entries) {
+          addImageDataUrls(entries, { replaceCover: imgs.length === 1 });
+          if (imgs.length === 1) toast(lang === 'zh' ? '已粘贴图片' : 'Image pasted');
+        });
       }
     }
     document.addEventListener('paste', onPasteImg);
     viewCleanup = function () { document.removeEventListener('paste', onPasteImg); };
 
-    if (editing && editing.photo) setPhoto(editing.photo);
+    if (src && src.photo) setPhoto(src.photo);
 
     // dynamic item rows
     var itemsWrap = el('div', { class: 'items-wrap' });
@@ -1041,8 +1220,8 @@
           onclick: function () { row.remove(); } })]);
       itemsWrap.appendChild(row);
     }
-    if (editing && editing.items && editing.items.length) {
-      editing.items.forEach(function (it) { addItemRow(it.name, it.qty || 1); });
+    if (src && src.items && src.items.length) {
+      src.items.forEach(function (it) { addItemRow(it.name, it.qty || 1); });
     } else {
       addItemRow();
     }
@@ -1147,13 +1326,50 @@
       labeledBlock(lang === 'zh' ? '文件' : 'Files', filesBlock),
       labeled(t('notes'), notesInput)
     ]);
-    if (editing && ((editing.items && editing.items.length) || (editing.files && editing.files.length))) moreDetails.open = true;
+    if ((src && src.items && src.items.length) || (src && src.files && src.files.length)) moreDetails.open = true;
+
+    // collect + persist. `planned` only matters for NEW commits; editing preserves the
+    // commit's existing planned/real state.
+    function doSave(planned) {
+      var items = [];
+      itemsWrap.querySelectorAll('.item-row').forEach(function (r) {
+        var n = $('.item-name', r).value.trim();
+        if (n) items.push({ name: n, qty: parseInt($('.item-qty', r).value, 10) || 1 });
+      });
+      var payload = {
+        scene: selectedScene,
+        message: msgInput.value.trim() || '(no message)',
+        photo: draftPhoto,
+        items: items,
+        files: draftFiles.slice(),
+        notes: notesInput.value.trim(),
+        planned: !!planned
+      };
+      if (editing) {
+        payload.planned = !!editing.planned;
+        Store.updateCommit(editing.id, payload);
+        toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
+        autoSync(false);
+        go('timeline');
+        return;
+      }
+      var ok = Store.addCommit(payload);
+      if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
+      if (planned) { toast('📌 ' + t('planned_saved')); autoSync(false); }
+      else { toast('✅ ' + t('save_commit')); autoSync(true); } // auto-sync real archives to cloud
+      go('timeline');
+    }
 
     var form = el('div', { class: 'form-card' }, [
       // NOT a <label> (a file input inside a label fires twice -> re-opens picker)
       el('div', { class: 'labeled' }, [
         el('span', { class: 'label-text', text: '📷 ' + t('photo') }),
-        el('div', {}, [preview, fileInput, aiBtn])
+        el('div', {}, [preview, fileInput,
+          el('div', { class: 'photo-tools' }, [
+            el('button', { class: 'btn tiny ghost photo-extra-btn', type: 'button',
+              text: '＋ ' + t('pick_multi'), onclick: openMultiPhotoPicker })
+          ]),
+          aiBtn])
       ]),
       labeled(t('message'), msgInput),
       labeledBlock(t('scene'), scenePicker),
@@ -1161,33 +1377,11 @@
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
           onclick: function () { go('timeline'); } }),
-        el('button', { class: 'btn primary', text: t('save_commit'), onclick: function () {
-          var items = [];
-          itemsWrap.querySelectorAll('.item-row').forEach(function (r) {
-            var n = $('.item-name', r).value.trim();
-            if (n) items.push({ name: n, qty: parseInt($('.item-qty', r).value, 10) || 1 });
-          });
-          var payload = {
-            scene: selectedScene,
-            message: msgInput.value.trim() || '(no message)',
-            photo: draftPhoto,
-            items: items,
-            files: draftFiles.slice(),
-            notes: notesInput.value.trim()
-          };
-          if (editing) {
-            Store.updateCommit(editing.id, payload);
-            toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
-            autoSync(false);
-            go('timeline');
-            return;
-          }
-          var ok = Store.addCommit(payload);
-          if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
-          toast('✅ ' + t('save_commit'));
-          autoSync(true);   // auto-sync each newly created archive to the cloud
-          go('timeline');
-        } })
+        // "存为计划" only for NEW commits — it saves a 预存档/draft to fulfill later
+        editing ? null : el('button', { class: 'btn plan-btn', text: '📌 ' + t('planned_save'),
+          onclick: function () { doSave(true); } }),
+        el('button', { class: 'btn primary', text: t('save_commit'),
+          onclick: function () { doSave(false); } })
       ])
     ]);
     v.appendChild(form);
@@ -1314,15 +1508,15 @@
   /* ---------------- Reality Diff ---------------- */
   function renderDiff(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_diff') })]));
-    var commits = Store.commits();
+    var commits = Store.commits().filter(notPlanned);
     if (commits.length < 2) {
       v.appendChild(noticeCard(t('need_two')));
       return;
     }
 
-    // scene picker, defaulting to a scene with >=2 commits
+    // scene picker, defaulting to a scene with >=2 (real) commits
     var scenesWith2 = Store.SCENES.filter(function (s) {
-      return Store.commitsForScene(s.id).length >= 2;
+      return realCommitsForScene(s.id).length >= 2;
     });
     if (!scenesWith2.length) { v.appendChild(noticeCard(t('need_two'))); return; }
     var sceneSel = choiceSelect(scenesWith2.map(function (s) {
@@ -1332,7 +1526,7 @@
     var compSel = choiceSelect([]);
 
     function fillVersionSelects() {
-      var list = Store.commitsForScene(sceneSel.getValue()); // newest first
+      var list = realCommitsForScene(sceneSel.getValue()); // newest first, real only
       var choices = list.map(function (c) {
         return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
       });
@@ -1441,17 +1635,28 @@
       ]), ul]);
   }
 
-  /* ---------------- Rollback ---------------- */
+  /* ---------------- Rollback / 照着再记一笔 ---------------- */
   var pendingRollback = null;
+  // copy an existing commit into the new-commit form as a fresh entry (the user then
+  // chooses 提交存档 or 存为计划). Powers "照着再记一笔" for meals and items alike.
+  function replicateCommit(c) {
+    pendingTemplate = {
+      scene: c.scene, message: c.message,
+      items: (c.items || []).map(function (it) { return { name: it.name, qty: it.qty || 1 }; }),
+      photo: c.photo || null, notes: ''
+    };
+    go('commit');
+  }
   function renderRollback(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_rollback') })]));
-    var commits = Store.commits();
+    var commits = Store.commits().filter(notPlanned);
     if (!commits.length) { v.appendChild(noticeCard(t('empty_title'))); return; }
 
-    var initialCommit = Store.getCommit(pendingRollback) || commits[0];
+    var pre = Store.getCommit(pendingRollback);
+    var initialCommit = (pre && !pre.planned) ? pre : commits[0];
     pendingRollback = null;
     var scenes = Store.SCENES.filter(function (s) {
-      return Store.commitsForScene(s.id).length > 0;
+      return realCommitsForScene(s.id).length > 0;
     });
     var sceneSel = choiceSelect(scenes.map(function (s) {
       return { value: s.id, text: sceneLabel(s) };
@@ -1459,7 +1664,7 @@
     var sel = choiceSelect([]);
 
     function fillCommitSelect(preferredId) {
-      var choices = Store.commitsForScene(sceneSel.getValue()).map(function (c) {
+      var choices = realCommitsForScene(sceneSel.getValue()).map(function (c) {
         return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
       });
       sel.setOptions(choices, preferredId);
@@ -1480,23 +1685,45 @@
     sceneSel.onChange(changeScene);
     sel.onChange(build);
 
+    function replicateButton(primary) {
+      var b = el('button', { class: 'btn replicate-btn' + (primary ? ' primary' : ''), text: '↩︎ ' + t('replicate') });
+      b.addEventListener('click', function () { var tgt = Store.getCommit(sel.getValue()); if (tgt) replicateCommit(tgt); });
+      return b;
+    }
+
     function build() {
       var target = Store.getCommit(sel.getValue());
       if (!target) return;
       out.innerHTML = '';
 
-      // current state = latest commit in the same scene
-      var sceneCommits = Store.commitsForScene(target.scene); // newest first
+      // ----- meal scenes: a rollback is meaningless; offer "照着再记一笔 / 存为计划" -----
+      if (Store.isMealScene(target.scene)) {
+        out.appendChild(el('p', { class: 'rollback-intro', text: t('replicate_meal_hint') }));
+        var mealCard = el('div', { class: 'rollback-ref replicate-card' });
+        if (target.photo) mealCard.appendChild(el('img', { class: 'ref-photo-img', src: target.photo, alt: '' }));
+        mealCard.appendChild(el('div', { class: 'replicate-card-title', text: '🍽 ' + (target.message || shortId(target.id)) }));
+        if (target.items && target.items.length) {
+          var ml = el('div', { class: 'commit-chips' });
+          target.items.forEach(function (it) { ml.appendChild(el('span', { class: 'chip', text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') })); });
+          mealCard.appendChild(ml);
+        }
+        out.appendChild(mealCard);
+        out.appendChild(el('div', { class: 'replicate-actions' }, [replicateButton(true)]));
+        return;
+      }
+
+      // current state = latest real commit in the same scene
+      var sceneCommits = realCommitsForScene(target.scene); // newest first
       var currentC = sceneCommits[0];
       var d = Diff.itemDiff(currentC.items, target.items);
 
       out.appendChild(el('p', { class: 'rollback-intro', text: t('rollback_intro') }));
 
-      // reference photo
+      // reference photo (natural aspect ratio, no cropping)
       if (target.photo) {
         out.appendChild(el('div', { class: 'rollback-ref' }, [
           el('div', { class: 'ref-label', text: '🎯 ' + t('reference') + ' · ' + (target.message || '') }),
-          el('div', { class: 'ref-photo', style: 'background-image:url(' + target.photo + ')' })
+          el('img', { class: 'ref-photo-img', src: target.photo, alt: '' })
         ]));
       }
 
@@ -1544,6 +1771,8 @@
         el('span', { text: t('done') + ': ' }),
         el('strong', { id: 'rb-progress', text: '0 / ' + steps.length })
       ]));
+      out.appendChild(el('p', { class: 'replicate-hint', text: t('replicate_item_hint') }));
+      out.appendChild(el('div', { class: 'replicate-actions' }, [replicateButton(false)]));
     }
     build();
   }
@@ -1779,7 +2008,7 @@
     ], (editing && editing.confidence) || '', 'tiny-choice');
     var tagsInput = el('input', { class: 'field', type: 'text', placeholder: t('branch_tags_ph'),
       value: (editing && editing.tags || []).join(' ') });
-    var contextChoices = [{ value: '', text: t('no_context') }].concat(Store.commits().slice(0, 80).map(function (c) {
+    var contextChoices = [{ value: '', text: t('no_context') }].concat(Store.commits().filter(notPlanned).slice(0, 80).map(function (c) {
       return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
     }));
     var contextSel = choiceSelect(contextChoices, (editing && editing.contextCommitId) || '');
@@ -2308,6 +2537,32 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.3.2', '2026-06-03', '时间线瀑布流 + 多图存档 + 饮食计划 + 输入框再加固',
+      'Timeline waterfall, multi-image commits, meal plans, and keyboard hardening',
+      ['时间线卡片统一为图片在上、内容在下的单列瀑布流；左侧日期节点、连接短线和竖向轨道更清晰。',
+       '存档卡片、详情主图、回滚参考图和新建预览都按原图比例展示，不再裁切横图或竖图。',
+       '新建存档新增「选择多张图片」按钮，文件选择器支持多选；第一张作封面，其余作为图片附件。',
+       '新增「存为计划」：计划浮在时间线顶部，不参与对比 / 回滚 / 真实链路，完成后转为正式存档。',
+       '饮食和零食饮品类回滚改为「照着再记一笔」，也可先存为想吃 / 要点的计划。',
+       'Android 原生环境锁住 document，只让内容区滚动，进一步避免输入框聚焦时顶栏或整页被输入法推飞。'],
+      ['Unify timeline cards into a single-column waterfall with photo-first cards and a stronger left rail.',
+       'Show commit photos, detail heroes, rollback references, and form previews at their natural aspect ratio.',
+       'Add a dedicated multi-image picker; the first image becomes the cover and the rest become image attachments.',
+       'Add planned commits: they float above the timeline, stay out of diff/rollback/history, and become real commits when marked done.',
+       'Meal and snack rollback now offers "log it again" or save as a plan instead of fake restore steps.',
+       'On native Android, lock document scrolling and let only the content view scroll to reduce input-focus page flinging.']],
+    ['1.3.1', '2026-06-03', '键盘根因再修 + 新建即自动同步 + 星标存档 + 扁平加号 + 图标提质',
+      'Keyboard hardening, auto-sync, starred commits, flatter create button, and icon polish',
+      ['统一只用 visualViewport 处理键盘避让，并把 @capacitor/keyboard resize 改为 none，避免重复缩放布局。',
+       '新建存档后自动尝试云同步；编辑、星标等后台变更静默同步。',
+       '新增星标存档和重要筛选，重要卡片拥有金色节点。',
+       '移动底栏中间加号改为更克制的扁平按钮。',
+       '图标与应用内 Logo 统一为更通透的蓝紫层叠卡片。'],
+      ['Use visualViewport as the single keyboard-avoidance source and disable Capacitor body resizing.',
+       'Auto-sync newly created commits, with quiet background sync for edits and stars.',
+       'Add starred commits plus an important filter and amber timeline nodes.',
+       'Flatten the centered mobile create button.',
+       'Polish the icon and in-app logo with the blue-purple card-stack mark.']],
     ['1.3.0', '2026-06-03', '移动端卡死修复 + 分支复盘闭环升级',
       'Mobile freeze fixes and branch review loop upgrades',
       ['修复大数据手机端卡死风险：存储用量不再同步 JSON.stringify 全部照片/附件，时间线和分支列表改为分段渲染，详情页图片预览限制首屏解码数量。',
@@ -2659,6 +2914,9 @@
     try {
       var Cap = window.Capacitor;
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+      // lock the document to the visual viewport and scroll ONLY the content area
+      // (CSS `body.native`), so the Android IME can't pan the topbar off-screen.
+      document.body.classList.add('native');
       var SA = Cap.Plugins && Cap.Plugins.SafeArea;
       if (!SA || !SA.enable) return;
       var dark = themeIsDark();
@@ -2716,7 +2974,12 @@
     var r = node.getBoundingClientRect();
     var visibleBottom = vv.offsetTop + vv.height;
     var over = r.bottom - (visibleBottom - 16);
-    if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'auto' });
+    if (over <= 4) return;
+    // native shell locks the document (overflow:hidden), so the scroller is .view;
+    // elsewhere the document itself scrolls. Either way the nudge stays bounded.
+    var sc = document.body.classList.contains('native') ? document.getElementById('view') : null;
+    if (sc) sc.scrollTop += Math.min(over, 600);
+    else window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'auto' });
   }
   // Reconcile inset + nav-hide from the visual viewport. Inset comes from the REAL
   // overlap, never the raw keyboardHeight, so it can't double-count the shrink.

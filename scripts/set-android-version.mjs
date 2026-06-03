@@ -1,9 +1,8 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Keep the IME on adjustResize; @capacitor/keyboard resizeOnFullScreen and
-      the web-layer keyboardHeight fallback cover edge-to-edge WebViews that
-      still refuse to resize normally. */
+   2. Keep the manifest on adjustResize for compatible WebViews, while the web
+      layer owns keyboard avoidance via interactive-widget + visualViewport. */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
