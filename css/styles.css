@@ -1,5 +1,5 @@
 /* Life Archive — HyperOS-style UI. Adaptive light/dark (follows system),
-   large rounded cards, big titles, bottom tab bar on phones. */
+   large rounded cards, big titles, top tab rail on phones. */
 
 :root, :root[data-theme="dark"]{
   color-scheme: light dark;
@@ -70,6 +70,7 @@ body{
    the viewport's interactive-widget=resizes-content + the bounded visualViewport nudge. */
 body.native{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
 body.native .topbar{position:static;flex:0 0 auto}
+body.native .nav{position:static;flex:0 0 auto}
 body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
 /* ---- topbar ---- */
@@ -130,7 +131,8 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .nav-btn-create .nav-ic svg{width:1.2em;height:1.2em}
 
 /* ---- layout ---- */
-.view{max-width:760px;margin:0 auto;padding:18px 20px calc(60px + var(--keyboard-inset))}
+.view{max-width:760px;margin:0 auto;padding:18px 20px calc(60px + var(--keyboard-inset));
+  scroll-padding-bottom:calc(var(--keyboard-inset) + 32px)}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;margin:6px 2px 20px;gap:12px}
 .view-head h1{font-size:30px;margin:0;font-weight:800;letter-spacing:-.4px}
 .head-actions{display:flex;gap:8px}
@@ -238,13 +240,21 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .tl-empty-ic{font-size:34px;opacity:.7}
 
 /* ---- timeline date sections ---- */
-.date-group{margin-bottom:24px}
-.date-head{position:relative;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  margin:2px 4px 12px;padding-left:28px}
+.tl-list{position:relative}
+.timeline-stream{position:relative}
+.timeline-stream::before{content:"";position:absolute;left:7px;top:12px;bottom:8px;width:2.5px;border-radius:3px;
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));opacity:.66}
+.timeline-stream .commit-rail::before{display:none}
+.date-group{margin-bottom:0;padding-bottom:24px;position:relative}
+.date-head{position:sticky;top:126px;z-index:12;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin:2px 0 12px;padding:8px 10px 8px 28px;border-radius:15px;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:saturate(1.55) blur(18px);backdrop-filter:saturate(1.55) blur(18px)}
 .date-head::before{content:"";position:absolute;left:1px;top:.58em;width:14px;height:14px;border-radius:50%;
   background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 12%,transparent)}
 .date-head::after{content:"";position:absolute;left:16px;top:calc(.58em + 6px);width:12px;height:2px;
   border-radius:2px;background:var(--accent);opacity:.35}
+body.native .date-head{top:0}
 .date-label{font-size:17px;font-weight:800;letter-spacing:-.2px}
 .date-head-right{display:inline-flex;align-items:baseline;gap:8px}
 .date-count{font-size:12.5px;color:var(--dim);font-family:var(--mono)}
@@ -349,6 +359,7 @@ textarea.field{resize:vertical}
 .photo-drop-img{width:100%;height:auto;display:block}
 .photo-hint{font-size:15px;font-weight:600}
 .photo-tools{display:flex;gap:10px;margin-top:10px}
+.photo-tools.is-hidden{display:none}
 .photo-extra-btn{width:100%;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 32%,var(--line));
   background:color-mix(in srgb,var(--accent) 7%,transparent)}
 
@@ -479,6 +490,14 @@ textarea.field{resize:vertical}
 .diff-controls>*{min-width:0}
 .diff-controls .labeled{margin-bottom:0}
 .diff-controls .btn{height:48px}
+.diff-tuning{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;
+  background:color-mix(in srgb,var(--card) 72%,transparent);border:1px solid var(--line);
+  border-radius:var(--radius-sm);padding:14px 16px;margin:-6px 0 16px;
+  -webkit-backdrop-filter:saturate(1.25) blur(10px);backdrop-filter:saturate(1.25) blur(10px)}
+.diff-tuning .labeled{margin-bottom:0}
+.diff-threshold-row{display:flex;align-items:center;gap:12px;min-height:42px}
+.diff-threshold{width:100%;accent-color:var(--accent)}
+.diff-threshold-value{min-width:34px;text-align:right;color:var(--accent);font-family:var(--mono);font-weight:900}
 .diff-photos{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
 .diff-photo-col{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
   padding:12px;box-shadow:var(--shadow-sm)}
@@ -494,6 +513,21 @@ textarea.field{resize:vertical}
 .heat-stats{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
 .big-pct{font-size:22px;font-weight:800;color:var(--amber);font-family:var(--mono)}
 .heat-zones{font-size:13.5px;color:var(--muted)}
+.diff-mode-card{overflow:hidden}
+.diff-mode-hint{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.45;text-align:left}
+.diff-slider-frame,.diff-blink-frame{position:relative;width:100%;overflow:hidden;border-radius:var(--radius-sm);
+  background:var(--inset);border:1px solid var(--line)}
+.diff-slider-spacer{display:block;width:100%;height:auto;visibility:hidden}
+.diff-slider-layer{position:absolute;inset:0;background-size:contain;background-repeat:no-repeat;background-position:center}
+.diff-slider-after{filter:saturate(1.04)}
+.diff-slider-handle{position:absolute;top:0;bottom:0;width:0;transform:translateX(-1px);pointer-events:none}
+.diff-slider-handle::before{content:"";position:absolute;left:-14px;top:50%;width:28px;height:28px;border-radius:999px;
+  transform:translateY(-50%);background:var(--card);border:1px solid var(--line-strong);
+  box-shadow:var(--shadow-sm)}
+.diff-slider-handle::after{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;background:rgba(255,255,255,.86)}
+.diff-slider-range{width:100%;margin:12px 0 0;accent-color:var(--accent)}
+.diff-blink-after{animation:diffBlink 1.45s ease-in-out infinite alternate}
+@keyframes diffBlink{from{opacity:.12}to{opacity:.92}}
 
 .sem-diff{display:flex;flex-direction:column;gap:12px}
 .diff-block{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
@@ -681,9 +715,10 @@ textarea.field{resize:vertical}
 .release-notes{margin:0;padding:0 18px 14px 34px;border-top:1px solid var(--line)}
 .release-notes li{padding-top:10px;color:var(--muted);font-size:13.5px;line-height:1.55}
 
-/* ---- responsive: phone -> bottom tab bar + single column ---- */
+/* ---- responsive: phone -> top tab rail + single column ---- */
 @media (max-width:720px){
   .diff-controls{grid-template-columns:1fr}
+  .diff-tuning{grid-template-columns:1fr}
   .diff-photos,.branch-cols,.branch-options{grid-template-columns:1fr}
   .branch-meta-grid,.branch-meta-rows{grid-template-columns:1fr}
   .branch-insights{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -694,60 +729,46 @@ textarea.field{resize:vertical}
 
   .topbar{padding:calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 18px 14px}
   .brand-tag{display:none}
-  .view{padding:14px 16px calc(var(--tabbar-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + var(--keyboard-inset) + 22px)}
+  .view{padding:14px 16px calc(var(--keyboard-inset) + 26px)}
   .view-head h1{font-size:26px}
   .subpage-head h1{font-size:26px}
 
-  /* HyperOS-style bottom tab bar */
   .nav{
-    position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;max-width:none;
-    border-radius:0;border:none;border-top:1px solid var(--line);
-    background:color-mix(in srgb,var(--card) 86%,transparent);
+    position:sticky;top:calc(62px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    bottom:auto;left:auto;right:auto;margin:0 auto;max-width:760px;
+    border:none;border-bottom:1px solid var(--line);border-radius:0;
+    background:linear-gradient(to bottom,
+      color-mix(in srgb,var(--bg) 92%,transparent),
+      color-mix(in srgb,var(--bg) 72%,transparent));
     backdrop-filter:saturate(1.5) blur(18px);-webkit-backdrop-filter:saturate(1.5) blur(18px);
-    box-shadow:none;gap:0;justify-content:space-around;align-items:flex-start;overflow:visible;z-index:40;
-    padding:8px 6px;padding-bottom:calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
-    transition:transform .2s ease;
+    box-shadow:none;gap:8px;justify-content:flex-start;align-items:center;overflow-x:auto;z-index:19;
+    padding:6px 16px 10px;scrollbar-width:none;transition:none;
   }
-  /* the desktop pill dissolves into the bar; CSS order interleaves the create FAB
-     into the center: timeline · diff · [+] · rollback · branch */
-  .nav-group{display:contents}
-  .nav-btn[data-route="timeline"]{order:1}
-  .nav-btn[data-route="diff"]{order:2}
-  .nav-btn[data-route="rollback"]{order:4}
-  .nav-btn[data-route="branch"]{order:5}
-  /* keyboard open (Android): with viewport interactive-widget=resizes-content the
-     browser shrinks the layout viewport and keeps the focused field visible. We
-     only hide the bottom nav (it would otherwise float above the keyboard) — no
-     spacer, or it would leave a blank gap below the shrunk viewport. */
-  body.kb-open .nav{transform:translateY(120%)}
-  body.kb-open .topbar::before{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;
-    -webkit-mask-image:none;mask-image:none}
-  .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
-    padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;font-weight:600}
-  .nav-ic{font-size:23px;transition:.18s}
-  .nav-btn.active{background:transparent;color:var(--accent);box-shadow:none}
-  .nav-btn.active .nav-ic{transform:translateY(-1px);filter:drop-shadow(0 4px 8px color-mix(in srgb,var(--accent) 50%,transparent))}
-  /* center create button: a flat, simple HyperOS-style "+". It sits INSIDE the bar
-     (no protruding FAB, no gloss/glow) — just a clean accent squircle with a big
-     crisp plus. Reset the desktop pill styles first. */
-  .nav-btn-create{order:3;margin:0;gap:0;padding:4px 2px;align-self:center;
-    background:transparent;box-shadow:none;border-radius:15px}
-  .nav-btn-create .nav-label{display:none}
-  .nav-btn-create .nav-ic{width:44px;height:44px;border-radius:14px;color:var(--on-accent);
-    display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(135deg,var(--accent),var(--accent-2));
-    box-shadow:0 4px 12px -5px color-mix(in srgb,var(--accent) 75%,transparent);
-    transition:transform .16s ease}
-  /* hide the icon's outline circle so only the clean, crisp "+" shows */
+  .nav::-webkit-scrollbar{display:none}
+  body.native .nav{position:static}
+  .nav-group{display:flex;gap:6px;padding:0;background:transparent;border:none;border-radius:0;box-shadow:none;overflow:visible;min-width:max-content}
+  .nav-btn{flex:0 0 auto;flex-direction:row;gap:5px;justify-content:center;align-items:center;
+    padding:8px 11px;border-radius:999px;font-size:12px;line-height:1.1;white-space:nowrap;min-width:0;font-weight:700}
+  .nav-ic{font-size:17px;transition:.18s}
+  .nav-btn.active{color:var(--on-accent);background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    box-shadow:0 4px 12px rgba(61,125,255,.30)}
+  .nav-btn.active .nav-ic{transform:none;filter:none}
+  .nav-btn-create{margin-left:auto;gap:6px;padding:8px 12px;align-self:center;border-radius:999px;
+    color:var(--on-accent);background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    box-shadow:0 5px 15px rgba(61,125,255,.35)}
+  .nav-btn-create .nav-label{display:inline}
+  .nav-btn-create .nav-ic{width:auto;height:auto;border-radius:0;color:var(--on-accent);
+    display:inline-flex;background:transparent;box-shadow:none}
   .nav-btn-create .nav-ic svg circle{display:none}
-  .nav-btn-create .nav-ic svg{width:26px;height:26px;stroke-width:2.4}
-  .nav-btn-create.active .nav-ic{transform:scale(1.04)}
-  .nav-btn-create:active .nav-ic{transform:scale(.9)}
+  .nav-btn-create .nav-ic svg{width:1.15em;height:1.15em;stroke-width:2.4}
+  .nav-btn-create.active .nav-ic{transform:none}
+  .nav-btn-create:active .nav-ic{transform:scale(.95)}
+  .date-head{top:112px}
 
   .field{font-size:16px}            /* avoid iOS focus-zoom */
   .field,.choice-trigger,.photo-drop{scroll-margin-bottom:calc(var(--keyboard-inset) + 28px)}
   .btn.tiny{padding:10px 14px;font-size:13.5px}
   .commit-actions .btn{flex:1 1 auto}
   .form-actions .btn{flex:1}
-  .toast{bottom:calc(var(--tabbar-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 18px)}
+  .toast{bottom:24px}
 }
