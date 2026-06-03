@@ -185,12 +185,16 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .commit-card{position:relative;display:flex;flex-direction:column;background:var(--card);
   border:1px solid var(--line);border-radius:var(--radius);margin-bottom:16px;
   box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .15s ease;overflow:visible}
-/* node + short connector linking the card to the rail */
-.commit-card::before{content:"";position:absolute;left:-27px;top:20px;width:15px;height:15px;z-index:1;
-  border-radius:50%;background:var(--accent);border:2.5px solid var(--card);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
-.commit-card::after{content:"";position:absolute;left:-14px;top:26.5px;width:14px;height:2.5px;
-  background:var(--accent);opacity:.45;border-radius:2px}
+/* node + short connector linking the card to the rail — a polished "commit dot":
+   a glossy accent disc punched through the rail with a card-colored ring and soft glow */
+.commit-card::before{content:"";position:absolute;left:-27.5px;top:19px;width:16px;height:16px;z-index:2;
+  border-radius:50%;border:3px solid var(--card);
+  background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.85),transparent 52%),
+    linear-gradient(150deg,var(--accent),var(--accent-2));
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent),
+    0 3px 9px color-mix(in srgb,var(--accent) 45%,transparent)}
+.commit-card::after{content:"";position:absolute;left:-13px;top:26px;width:13px;height:2.5px;z-index:1;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 70%,transparent),transparent);border-radius:2px}
 .commit-media{position:relative;width:100%;background:var(--card-2);line-height:0;font-size:0;
   border-radius:calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;overflow:hidden}
 .commit-img{width:100%;height:auto;display:block}
@@ -242,25 +246,34 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 /* ---- timeline date sections ---- */
 .tl-list{position:relative}
 .timeline-stream{position:relative}
-.timeline-stream::before{content:"";position:absolute;left:7px;top:12px;bottom:8px;width:2.5px;border-radius:3px;
-  background:linear-gradient(180deg,var(--accent),var(--accent-2));opacity:.66}
+/* one continuous spine tying every archive together; faded at both ends so it doesn't
+   hard-stop, with a faint glow for a softer, prettier look */
+.timeline-stream::before{content:"";position:absolute;left:6.5px;top:6px;bottom:6px;width:3px;border-radius:3px;
+  background:linear-gradient(180deg,
+    transparent 0,var(--accent) 22px,var(--accent-2) calc(100% - 22px),transparent 100%);
+  opacity:.72;box-shadow:0 0 10px color-mix(in srgb,var(--accent) 30%,transparent)}
 .timeline-stream .commit-rail::before{display:none}
 .date-group{margin-bottom:0;padding-bottom:24px;position:relative}
-.date-head{position:sticky;top:126px;z-index:12;display:flex;align-items:baseline;justify-content:space-between;gap:10px;
-  margin:2px 0 12px;padding:8px 10px 8px 28px;border-radius:15px;
-  background:color-mix(in srgb,var(--bg) 82%,transparent);
-  -webkit-backdrop-filter:saturate(1.55) blur(18px);backdrop-filter:saturate(1.55) blur(18px)}
-.date-head::before{content:"";position:absolute;left:1px;top:.58em;width:14px;height:14px;border-radius:50%;
-  background:var(--bg);border:2px solid var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 12%,transparent)}
-.date-head::after{content:"";position:absolute;left:16px;top:calc(.58em + 6px);width:12px;height:2px;
-  border-radius:2px;background:var(--accent);opacity:.35}
-body.native .date-head{top:0}
-.date-label{font-size:17px;font-weight:800;letter-spacing:-.2px}
-.date-head-right{display:inline-flex;align-items:baseline;gap:8px}
-.date-count{font-size:12.5px;color:var(--dim);font-family:var(--mono)}
-.date-meals{font-size:12px;font-weight:700;color:var(--accent);
-  background:color-mix(in srgb,var(--accent) 12%,transparent);
-  padding:3px 9px;border-radius:999px}
+/* Lighter sticky date header: two frosted "pills" (date + count) that float over the
+   timeline instead of a heavy full-width bar — gentler, so day-to-day handoff while
+   scrolling reads as a smooth glide rather than an abrupt block swap. */
+.date-head{position:sticky;top:126px;z-index:12;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin:2px 0 13px;padding-left:30px;pointer-events:none}
+.date-head::before{content:"";position:absolute;left:1.5px;top:50%;transform:translateY(-50%);
+  width:13px;height:13px;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.85),transparent 54%),
+    linear-gradient(150deg,var(--accent),var(--accent-2));
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent),
+    0 2px 7px color-mix(in srgb,var(--accent) 40%,transparent)}
+body.native .date-head{top:6px}
+.date-pill{display:inline-flex;align-items:center;border-radius:999px;
+  background:color-mix(in srgb,var(--bg) 60%,transparent);border:1px solid var(--line);
+  box-shadow:0 2px 12px rgba(0,0,0,.10);
+  -webkit-backdrop-filter:saturate(1.7) blur(16px);backdrop-filter:saturate(1.7) blur(16px)}
+.date-label{font-size:14.5px;font-weight:800;letter-spacing:-.2px;padding:5px 13px}
+.date-head-right{display:inline-flex;align-items:center;gap:7px;padding:5px 11px}
+.date-count{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.date-meals{font-size:11.5px;font-weight:800;color:var(--accent)}
 .commit-card.tappable{cursor:pointer}
 .commit-card.tappable:active{transform:scale(.99);box-shadow:var(--shadow)}
 .commit-scene{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:600}
@@ -420,37 +433,36 @@ textarea.field{resize:vertical}
 .choice-trigger-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .choice-chevron{flex:0 0 auto;color:var(--accent);font-size:18px;line-height:1}
 .tiny-choice .choice-trigger{min-height:40px;padding:9px 12px;font-size:14px}
-.choice-sheet-mask{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;
-  justify-content:center;padding:16px;background:rgba(0,0,0,.36);opacity:0;transition:opacity .18s ease}
-.choice-sheet-mask.open{opacity:1}
-.choice-sheet{width:min(520px,100%);max-height:min(72dvh,620px);overflow:auto;padding:8px;
-  border:1px solid var(--line);border-radius:24px;background:var(--card);box-shadow:var(--shadow);
-  transform:translateY(18px);transition:transform .18s ease}
-.choice-sheet-mask.open .choice-sheet{transform:translateY(0)}
-.choice-sheet-head{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 8px;
-  color:var(--muted);font-size:13.5px}
-.choice-sheet-close{border:none;border-radius:999px;padding:7px 11px;background:var(--card-2);
-  color:var(--accent);cursor:pointer;font-family:inherit;font-weight:800}
-.choice-option{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
-  padding:14px 13px;border:none;border-radius:14px;background:transparent;color:var(--text);
-  cursor:pointer;font-family:inherit;font-size:15px;text-align:left;transition:.15s}
-.choice-option:active{transform:scale(.985);background:var(--card-2)}
-.choice-option.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);font-weight:800}
-.choice-option-text{min-width:0}
-.choice-check{flex:0 0 auto;width:20px;color:var(--accent);font-weight:900;text-align:center}
-/* in-app photo-source action sheet (拍照 / 相册 / 截图 / 粘贴) */
-.action-sheet{padding:10px}
-.action-option{justify-content:flex-start;gap:14px;padding:16px 14px;font-weight:800;
-  border:1px solid color-mix(in srgb,var(--line) 70%,transparent);
-  background:linear-gradient(180deg,
-    color-mix(in srgb,var(--card-2) 72%,transparent),
-    color-mix(in srgb,var(--inset) 86%,transparent))}
-.action-option + .action-option{margin-top:8px}
-.action-option:active{background:color-mix(in srgb,var(--accent) 10%,var(--card-2))}
-.action-ic{width:34px;height:34px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
-  color:var(--accent);border-radius:12px;background:color-mix(in srgb,var(--accent) 12%,transparent);
+/* ---- anchored dropdown menu (app-owned <select> + photo source) ----
+   Replaces the old bottom sheet: the panel pops right at the trigger you tapped
+   (drops below, flips above when cramped), clamped to the viewport. */
+.popover-mask{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.14);
+  opacity:0;transition:opacity .15s ease}
+.popover-mask.open{opacity:1}
+.popover-menu{position:fixed;z-index:121;padding:6px;overflow:auto;
+  max-height:min(62dvh,520px);border:1px solid var(--line-strong);border-radius:18px;
+  background:color-mix(in srgb,var(--card) 90%,transparent);box-shadow:0 18px 52px rgba(0,0,0,.34);
+  -webkit-backdrop-filter:saturate(1.7) blur(22px);backdrop-filter:saturate(1.7) blur(22px);
+  opacity:0;transform:scale(.95) translateY(-4px);
+  transition:opacity .16s ease,transform .17s cubic-bezier(.22,.61,.36,1)}
+.popover-mask.open .popover-menu{opacity:1;transform:none}
+.popover-menu::-webkit-scrollbar{width:7px}
+.popover-title{padding:8px 12px 6px;color:var(--muted);font-size:12.5px;font-weight:800}
+.popover-list{display:flex;flex-direction:column;gap:2px}
+.popover-option{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  padding:12px 12px;border:none;border-radius:12px;background:transparent;color:var(--text);
+  cursor:pointer;font-family:inherit;font-size:15px;text-align:left;transition:.13s}
+.popover-option:hover{background:var(--card-2)}
+.popover-option:active{transform:scale(.985);background:var(--card-2)}
+.popover-option.active{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent);font-weight:800}
+.popover-option-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.popover-check{flex:0 0 auto;width:18px;color:var(--accent);font-weight:900;text-align:center}
+/* action variant: leading icon tile (photo source 拍照 / 相册 / 截图 / 粘贴) */
+.popover-action{gap:13px;padding:12px 12px;font-weight:700}
+.popover-ic{width:34px;height:34px;flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  color:var(--accent);border-radius:11px;background:color-mix(in srgb,var(--accent) 13%,transparent);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
-.action-ic svg{width:20px;height:20px}
+.popover-ic svg{width:20px;height:20px}
 
 /* ---- photo dropzone drag state + file attachments ---- */
 .photo-drop.drag-over{border-color:var(--accent);border-style:solid;
@@ -715,7 +727,41 @@ textarea.field{resize:vertical}
 .release-notes{margin:0;padding:0 18px 14px 34px;border-top:1px solid var(--line)}
 .release-notes li{padding-top:10px;color:var(--muted);font-size:13.5px;line-height:1.55}
 
-/* ---- responsive: phone -> top tab rail + single column ---- */
+/* ---- stats: calendar dot-matrix heatmap (存档热力图) ---- */
+.stat-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:2px 2px 16px}
+.stat-tile{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:14px 12px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:3px;min-width:0}
+.stat-tile-val{font-size:23px;font-weight:800;font-family:var(--mono);letter-spacing:-.5px}
+.stat-tile-label{font-size:11.5px;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heat-card{display:flex;flex-direction:column;gap:14px}
+.heat-card .seg{align-self:flex-start}
+.heat-grid-wrap{overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.heat-grid-wrap::-webkit-scrollbar{height:7px}
+.heat-grid{display:flex;gap:8px;min-width:max-content}
+.heat-weekdays{display:grid;grid-template-rows:15px repeat(7,13px);row-gap:4px;align-items:center;
+  font-size:10px;color:var(--dim);font-family:var(--mono)}
+.heat-wd{display:flex;align-items:center;height:13px}
+.heat-right{display:flex;flex-direction:column;gap:4px;min-width:max-content}
+.heat-months{display:grid;grid-auto-columns:17px;height:15px;font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+.heat-month{grid-row:1;white-space:nowrap}
+.heat-cols{display:flex;gap:4px}
+.heat-col{display:flex;flex-direction:column;gap:4px}
+.heat-dot{width:13px;height:13px;border-radius:4px;flex:0 0 auto;
+  background:color-mix(in srgb,var(--accent) 7%,var(--inset));
+  border:1px solid color-mix(in srgb,var(--line) 60%,transparent);transition:transform .12s ease}
+/* deeper shade = more archives that day (分颜色深浅) */
+.heat-dot.lvl-1{background:color-mix(in srgb,var(--accent) 28%,var(--inset));border-color:transparent}
+.heat-dot.lvl-2{background:color-mix(in srgb,var(--accent) 50%,var(--inset));border-color:transparent}
+.heat-dot.lvl-3{background:color-mix(in srgb,var(--accent) 74%,var(--inset));border-color:transparent}
+.heat-dot.lvl-4{background:linear-gradient(135deg,var(--accent),var(--accent-2));border-color:transparent;
+  box-shadow:0 0 7px color-mix(in srgb,var(--accent) 45%,transparent)}
+.heat-dot.is-today{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--accent)}
+.heat-dot.is-future{background:transparent;border-color:transparent}
+.heat-legend{display:flex;align-items:center;gap:6px;align-self:flex-end;color:var(--muted)}
+.heat-legend .heat-dot{width:12px;height:12px;transition:none}
+.heat-legend-cap{font-size:11.5px}
+
+/* ---- responsive: phone -> fixed bottom tab bar + single column ---- */
 @media (max-width:720px){
   .diff-controls{grid-template-columns:1fr}
   .diff-tuning{grid-template-columns:1fr}
@@ -729,46 +775,61 @@ textarea.field{resize:vertical}
 
   .topbar{padding:calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) 18px 14px}
   .brand-tag{display:none}
-  .view{padding:14px 16px calc(var(--keyboard-inset) + 26px)}
+  /* reserve room for the fixed bottom bar (+ its safe-area inset) so the last card clears it */
+  .view{padding:14px 16px calc(var(--keyboard-inset) + var(--tabbar-h)
+    + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 18px)}
   .view-head h1{font-size:26px}
   .subpage-head h1{font-size:26px}
 
+  /* ---- HyperOS-style bottom tab bar (restored to the bottom in v1.4.1) ----
+     The desktop pill dissolves into the bar (.nav-group → display:contents) and CSS
+     `order` interleaves the create FAB into the center:
+     时间线 · 现实对比 · [+] · 回滚 · 分支决策 */
   .nav{
-    position:sticky;top:calc(62px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-    bottom:auto;left:auto;right:auto;margin:0 auto;max-width:760px;
-    border:none;border-bottom:1px solid var(--line);border-radius:0;
-    background:linear-gradient(to bottom,
-      color-mix(in srgb,var(--bg) 92%,transparent),
-      color-mix(in srgb,var(--bg) 72%,transparent));
-    backdrop-filter:saturate(1.5) blur(18px);-webkit-backdrop-filter:saturate(1.5) blur(18px);
-    box-shadow:none;gap:8px;justify-content:flex-start;align-items:center;overflow-x:auto;z-index:19;
-    padding:6px 16px 10px;scrollbar-width:none;transition:none;
+    position:fixed;top:auto;bottom:0;left:0;right:0;margin:0;max-width:none;display:flex;
+    border-radius:0;border:none;border-top:1px solid var(--line);
+    background:color-mix(in srgb,var(--card) 86%,transparent);
+    backdrop-filter:saturate(1.6) blur(20px);-webkit-backdrop-filter:saturate(1.6) blur(20px);
+    box-shadow:0 -6px 24px rgba(0,0,0,.10);
+    gap:0;justify-content:space-around;align-items:flex-start;overflow:visible;z-index:40;
+    padding:8px 6px;padding-bottom:calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    transition:transform .24s cubic-bezier(.22,.61,.36,1);
   }
-  .nav::-webkit-scrollbar{display:none}
-  body.native .nav{position:static}
-  .nav-group{display:flex;gap:6px;padding:0;background:transparent;border:none;border-radius:0;box-shadow:none;overflow:visible;min-width:max-content}
-  .nav-btn{flex:0 0 auto;flex-direction:row;gap:5px;justify-content:center;align-items:center;
-    padding:8px 11px;border-radius:999px;font-size:12px;line-height:1.1;white-space:nowrap;min-width:0;font-weight:700}
-  .nav-ic{font-size:17px;transition:.18s}
-  .nav-btn.active{color:var(--on-accent);background:linear-gradient(135deg,var(--accent),var(--accent-2));
-    box-shadow:0 4px 12px rgba(61,125,255,.30)}
-  .nav-btn.active .nav-ic{transform:none;filter:none}
-  .nav-btn-create{margin-left:auto;gap:6px;padding:8px 12px;align-self:center;border-radius:999px;
-    color:var(--on-accent);background:linear-gradient(135deg,var(--accent),var(--accent-2));
-    box-shadow:0 5px 15px rgba(61,125,255,.35)}
-  .nav-btn-create .nav-label{display:inline}
-  .nav-btn-create .nav-ic{width:auto;height:auto;border-radius:0;color:var(--on-accent);
-    display:inline-flex;background:transparent;box-shadow:none}
+  body.native .nav{position:fixed}
+  .nav-group{display:contents}
+  .nav-btn[data-route="timeline"]{order:1}
+  .nav-btn[data-route="diff"]{order:2}
+  .nav-btn[data-route="rollback"]{order:4}
+  .nav-btn[data-route="branch"]{order:5}
+  /* hide the bottom bar while typing so it never floats over the keyboard */
+  body.kb-open .nav{transform:translateY(120%)}
+  .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
+    padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;
+    font-weight:600;color:var(--muted);background:transparent;box-shadow:none}
+  .nav-ic{width:23px;height:23px;display:inline-flex;align-items:center;justify-content:center;transition:.18s}
+  .nav-ic svg{width:23px;height:23px}
+  .nav-btn.active{background:transparent;color:var(--accent);box-shadow:none}
+  .nav-btn.active .nav-ic{transform:translateY(-1px);filter:drop-shadow(0 4px 8px color-mix(in srgb,var(--accent) 50%,transparent))}
+  /* center create button: a flat, simple HyperOS-style "+" inside the bar (no protruding FAB) */
+  .nav-btn-create{order:3;margin:0;gap:0;padding:4px 2px;align-self:center;
+    background:transparent;box-shadow:none;border-radius:15px}
+  .nav-btn-create .nav-label{display:none}
+  .nav-btn-create .nav-ic{width:44px;height:44px;border-radius:14px;color:var(--on-accent);
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    box-shadow:0 4px 12px -5px color-mix(in srgb,var(--accent) 75%,transparent);transition:transform .16s ease}
   .nav-btn-create .nav-ic svg circle{display:none}
-  .nav-btn-create .nav-ic svg{width:1.15em;height:1.15em;stroke-width:2.4}
-  .nav-btn-create.active .nav-ic{transform:none}
-  .nav-btn-create:active .nav-ic{transform:scale(.95)}
-  .date-head{top:112px}
+  .nav-btn-create .nav-ic svg{width:26px;height:26px;stroke-width:2.4}
+  .nav-btn-create.active .nav-ic{transform:scale(1.04)}
+  .nav-btn-create:active .nav-ic{transform:scale(.9)}
+
+  .date-head{top:calc(60px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}
 
   .field{font-size:16px}            /* avoid iOS focus-zoom */
   .field,.choice-trigger,.photo-drop{scroll-margin-bottom:calc(var(--keyboard-inset) + 28px)}
   .btn.tiny{padding:10px 14px;font-size:13.5px}
   .commit-actions .btn{flex:1 1 auto}
   .form-actions .btn{flex:1}
-  .toast{bottom:24px}
+  /* keep toasts above the bottom bar */
+  .toast{bottom:calc(var(--tabbar-h) + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 16px)}
 }

@@ -125,6 +125,10 @@
     { id: 'dinner',    emoji: '🍽️', zh: '晚餐',     en: 'Dinner',          group: 'meal' },
     { id: 'latenight', emoji: '🌙', zh: '夜宵',     en: 'Late-night',      group: 'meal' },
     { id: 'snack',     emoji: '🧋', zh: '零食饮品', en: 'Snacks & drinks', group: 'meal' },
+    /* 票据 / 票根 — 购物小票、电影票、车票、发票等 */
+    { id: 'ticket',  emoji: '🎫', zh: '票根票券', en: 'Tickets',    group: 'ticket' },
+    { id: 'receipt', emoji: '🧾', zh: '购物小票', en: 'Receipts',   group: 'ticket' },
+    { id: 'invoice', emoji: '📃', zh: '发票账单', en: 'Invoices',   group: 'ticket' },
     { id: 'other',   emoji: '📦', zh: '其他',     en: 'Other',      group: 'item' }
   ];
 

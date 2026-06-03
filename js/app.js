@@ -48,7 +48,13 @@
       branch_pending: '等待复盘', branch_reviewed: '已复盘',
       would_repeat_yes: '👍 下次还这么选', would_repeat_no: '👎 下次换个选择',
       parent: '基于', root: '初始存档', commits_in: '个存档',
-      group_meal: '饮食', group_item: '物品场景', meals_count: '餐',
+      group_meal: '饮食', group_item: '物品场景', group_ticket: '票据', meals_count: '餐',
+      stats_title: '存档热力图', stats_open: '存档热力图 / 日历',
+      stats_total: '总存档', stats_active_days: '活跃天数', stats_streak: '连续天数',
+      stats_busiest: '单日最多', stats_legend_less: '少', stats_legend_more: '多',
+      stats_empty: '还没有存档，先去记录第一笔吧。', stats_archives_unit: '个存档',
+      stats_range_year: '近一年', stats_range_6m: '近半年', stats_range_3m: '近三月',
+      stats_weekday: ['日', '一', '二', '三', '四', '五', '六'],
       meal_placeholder: '例如：午饭 黄焖鸡 + 一杯奶茶',
       ate_what: '吃了什么', add_meal: '＋ 添加食物 / 备注（可选）',
       choose_option: '请选择', choice_title: '选择一个选项', choice_close: '取消',
@@ -120,7 +126,13 @@
       branch_pending: 'Awaiting review', branch_reviewed: 'Reviewed',
       would_repeat_yes: '👍 Would repeat', would_repeat_no: '👎 Would change',
       parent: 'based on', root: 'initial commit', commits_in: 'commits',
-      group_meal: 'Meals', group_item: 'Things', meals_count: 'meals',
+      group_meal: 'Meals', group_item: 'Things', group_ticket: 'Tickets', meals_count: 'meals',
+      stats_title: 'Archive heatmap', stats_open: 'Archive heatmap / calendar',
+      stats_total: 'Archives', stats_active_days: 'Active days', stats_streak: 'Streak',
+      stats_busiest: 'Busiest day', stats_legend_less: 'Less', stats_legend_more: 'More',
+      stats_empty: 'No archives yet — go log your first one.', stats_archives_unit: 'archives',
+      stats_range_year: '1 year', stats_range_6m: '6 months', stats_range_3m: '3 months',
+      stats_weekday: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
       meal_placeholder: 'e.g. Lunch — braised chicken rice + milk tea',
       ate_what: 'What you ate', add_meal: '＋ Add food / notes (optional)',
       choose_option: 'Choose', choice_title: 'Choose an option', choice_close: 'Cancel',
@@ -435,10 +447,10 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats'];
   var current = 'timeline';
   // nav depth drives the open/back slide direction (deeper route = slide in from right)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, 'branch-detail': 1, commit: 1, detail: 1, settings: 1, changelog: 2 };
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, 'branch-detail': 1, commit: 1, detail: 1, settings: 1, changelog: 2, stats: 1 };
   var prevDepth = 0;
 
   function go(route) {
@@ -493,7 +505,11 @@
       lunch: s('<path d="M3.5 11a8.5 8.5 0 0 0 17 0z"/><path d="M3 11h18"/><path d="M9 4c-.7.7-.7 1.8 0 2.5M13 4c-.7.7-.7 1.8 0 2.5"/>'),
       dinner: s('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/>'),
       latenight: s('<path d="M19 14.8A7.5 7.5 0 1 1 9.2 5a6 6 0 0 0 9.8 9.8z"/>'),
-      snack: s('<path d="M7 8h10l-1 11a2 2 0 0 1-2 1.8H10A2 2 0 0 1 8 19z"/><path d="M6 8h12"/><path d="M14 8 16 3"/>')
+      snack: s('<path d="M7 8h10l-1 11a2 2 0 0 1-2 1.8H10A2 2 0 0 1 8 19z"/><path d="M6 8h12"/><path d="M14 8 16 3"/>'),
+      /* 票据 / 票根 */
+      ticket: s('<path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h13A1.5 1.5 0 0 1 20 8.5v2a1.8 1.8 0 0 0 0 3.4v2A1.5 1.5 0 0 1 18.5 17h-13A1.5 1.5 0 0 1 4 15.5v-2a1.8 1.8 0 0 0 0-3.4z"/><path d="M14 7v10" stroke-dasharray="1.6 2"/>'),
+      receipt: s('<path d="M6 3.5h12v17l-2.2-1.5-2 1.5-1.8-1.5-1.8 1.5-2-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h4"/>'),
+      invoice: s('<path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/><path d="M9 13h6M9 16.5h4"/>')
     };
   })();
   function sceneIconSVG(id) { return SCENE_ICONS[id] || SCENE_ICONS.other; }
@@ -569,6 +585,7 @@
     else if (current === 'branch-detail') renderBranchDetail(v);
     else if (current === 'settings') renderSettings(v);
     else if (current === 'changelog') renderChangelog(v);
+    else if (current === 'stats') renderStats(v);
     else if (current === 'detail') renderDetail(v);
     // directional entrance animation: push (deeper), pop (back), or fade (sibling tab)
     var d = ROUTE_DEPTH[current] || 0;
@@ -712,8 +729,8 @@
           headRight.unshift(el('span', { class: 'date-meals', text: '🍽 ' + mealCount + ' ' + t('meals_count') }));
         }
         sec.appendChild(el('div', { class: 'date-head' }, [
-          el('span', { class: 'date-label', text: g.label }),
-          el('span', { class: 'date-head-right' }, headRight)
+          el('span', { class: 'date-pill date-label', text: g.label }),
+          el('span', { class: 'date-pill date-head-right' }, headRight)
         ]));
         var rail = el('div', { class: 'commit-rail' });
         g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
@@ -1004,7 +1021,7 @@
     function renderScenePicker() {
       scenePicker.innerHTML = '';
       var switcher = el('div', { class: 'scene-kind-switch', role: 'tablist' });
-      [['meal', '🍽', t('group_meal')], ['item', '📦', t('group_item')]].forEach(function (it) {
+      [['meal', '🍽', t('group_meal')], ['item', '📦', t('group_item')], ['ticket', '🎫', t('group_ticket')]].forEach(function (it) {
         var group = it[0];
         switcher.appendChild(el('button', {
           type: 'button', role: 'tab', 'aria-selected': group === selectedGroup ? 'true' : 'false',
@@ -1158,22 +1175,30 @@
         toast(lang === 'zh' ? '请直接按 Ctrl+V 粘贴' : 'Press Ctrl+V to paste');
       }
     }
-    function openPhotoSource() {
+    // the menu drops from the exact tap point (点哪弹哪), falling back to the dropzone
+    function tapAnchor(e) {
+      var x = e && e.clientX, y = e && e.clientY;
+      if (x == null || (x === 0 && y === 0)) return preview;
+      return { getBoundingClientRect: function () {
+        return { left: x, right: x, top: y, bottom: y, width: 0, height: 0 }; } };
+    }
+    function openPhotoSource(e) {
       var Cap = window.Capacitor;
       var native = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.Camera);
       var L = lang === 'zh';
+      var anchor = tapAnchor(e);
       if (native) {
         actionSheet(L ? '添加照片' : 'Add photo', [
           { icon: UI_ICONS.camera, label: L ? '拍照' : 'Take photo', onClick: function () { nativeCamera('CAMERA'); } },
           { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: nativePickMulti }
-        ]);
+        ], anchor);
       } else {
         var acts = [{ icon: UI_ICONS.file, label: L ? '选择图片（可多选）' : 'Choose images (multi)', onClick: function () { fileInput.click(); } }];
         if (window.electronAPI && window.electronAPI.captureScreen) {
           acts.push({ icon: UI_ICONS.screenshot, label: L ? '截取当前屏幕' : 'Capture screen', onClick: desktopScreenshot });
         }
         acts.push({ icon: UI_ICONS.paste, label: L ? '从剪贴板粘贴' : 'Paste from clipboard', onClick: pasteImageFromClipboard });
-        actionSheet(L ? '添加照片' : 'Add photo', acts);
+        actionSheet(L ? '添加照片' : 'Add photo', acts, anchor);
       }
     }
     function openMultiPhotoPicker() {
@@ -1456,68 +1481,112 @@
     return root;
   }
 
-  function openChoiceSheet(select) {
-    var old = $('.choice-sheet-mask');
-    if (old) old.remove();
-    var mask = el('div', { class: 'choice-sheet-mask' });
-    var sheet = el('section', { class: 'choice-sheet', role: 'dialog', 'aria-modal': 'true' }, [
-      el('div', { class: 'choice-sheet-head' }, [
-        el('strong', { text: t('choice_title') }),
-        el('button', { type: 'button', class: 'choice-sheet-close', text: t('choice_close') })
-      ])
-    ]);
-    select._choices.forEach(function (it) {
-      var active = it.value === select.getValue();
-      sheet.appendChild(el('button', {
-        type: 'button', role: 'option', 'aria-selected': active ? 'true' : 'false',
-        class: 'choice-option' + (active ? ' active' : ''),
-        onclick: function () { select.setValue(it.value, true); close(); }
-      }, [
-        el('span', { class: 'choice-option-text', text: it.text }),
-        el('span', { class: 'choice-check', text: active ? '✓' : '' })
-      ]));
-    });
-    function close() {
-      mask.classList.remove('open');
-      setTimeout(function () { if (mask.parentNode) mask.remove(); }, 180);
+  /* Close any open anchored menu. */
+  function closePopover() {
+    var old = $('.popover-mask');
+    if (old && !old._closing) {
+      old._closing = true;
+      old.classList.remove('open');
+      setTimeout(function () { if (old.parentNode) old.remove(); }, 150);
     }
-    $('.choice-sheet-close', sheet).addEventListener('click', close);
-    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
-    mask.appendChild(sheet);
-    document.body.appendChild(mask);
-    requestAnimationFrame(function () { mask.classList.add('open'); });
   }
 
-  /* App-owned action sheet (same frosted bottom-sheet look as the choice sheet).
-     `actions` = [{ icon (svg html), label, onClick }]. Used for the photo source
-     picker so 拍照/相册/截图/粘贴 match the rest of the app instead of the bare
-     native OS sheet. */
-  function actionSheet(title, actions) {
-    var old = $('.choice-sheet-mask');
-    if (old) old.remove();
-    var mask = el('div', { class: 'choice-sheet-mask' });
-    var sheet = el('section', { class: 'choice-sheet action-sheet', role: 'dialog', 'aria-modal': 'true' }, [
-      el('div', { class: 'choice-sheet-head' }, [
-        el('strong', { text: title }),
-        el('button', { type: 'button', class: 'choice-sheet-close', text: t('choice_close') })
-      ])
-    ]);
+  /* ---- Anchored dropdown menu (replaces the old bottom sheet) ----
+     Pops a floating panel right at the trigger you tapped — drops below it, or flips
+     above when there's no room — instead of always sliding up from the screen bottom
+     (which felt 不符合直觉). Used by the app-owned <select> and the photo-source picker.
+     opts: { title, options:[{value,text,active}], onPick(value) }  // select-style
+        or { title, actions:[{icon,label,onClick}] }                // action menu
+     `anchor` is the element to position against (null → centered fallback). */
+  function openAnchoredMenu(anchor, opts) {
+    closePopover();
+    opts = opts || {};
+    var mask = el('div', { class: 'popover-mask' });
+    var panel = el('div', { class: 'popover-menu', role: 'menu' });
+    if (opts.title) panel.appendChild(el('div', { class: 'popover-title', text: opts.title }));
+    var listWrap = el('div', { class: 'popover-list' });
+    panel.appendChild(listWrap);
+
     function close() {
       mask.classList.remove('open');
-      setTimeout(function () { if (mask.parentNode) mask.remove(); }, 180);
+      setTimeout(function () { if (mask.parentNode) mask.remove(); }, 150);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
     }
-    actions.forEach(function (a) {
-      var ic = el('span', { class: 'action-ic' }); ic.innerHTML = a.icon || '';
-      var row = el('button', { type: 'button', class: 'choice-option action-option' },
-        [ic, el('span', { class: 'choice-option-text', text: a.label })]);
-      row.addEventListener('click', function () { close(); setTimeout(a.onClick, 170); });
-      sheet.appendChild(row);
+
+    (opts.options || []).forEach(function (it) {
+      var row = el('button', {
+        type: 'button', role: 'menuitemradio', 'aria-checked': it.active ? 'true' : 'false',
+        class: 'popover-option' + (it.active ? ' active' : '')
+      }, [
+        el('span', { class: 'popover-option-text', text: it.text }),
+        el('span', { class: 'popover-check', text: it.active ? '✓' : '' })
+      ]);
+      row.addEventListener('click', function () { close(); if (opts.onPick) opts.onPick(it.value); });
+      listWrap.appendChild(row);
     });
-    $('.choice-sheet-close', sheet).addEventListener('click', close);
+    (opts.actions || []).forEach(function (a) {
+      var ic = el('span', { class: 'popover-ic' }); ic.innerHTML = a.icon || '';
+      var row = el('button', { type: 'button', role: 'menuitem', class: 'popover-option popover-action' },
+        [ic, el('span', { class: 'popover-option-text', text: a.label })]);
+      row.addEventListener('click', function () { close(); setTimeout(a.onClick, 130); });
+      listWrap.appendChild(row);
+    });
+
     mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
-    mask.appendChild(sheet);
+    mask.appendChild(panel);
     document.body.appendChild(mask);
-    requestAnimationFrame(function () { mask.classList.add('open'); });
+
+    function place() {
+      panel.style.maxHeight = '';
+      var vw = window.innerWidth, vh = window.innerHeight, margin = 10, gap = 6;
+      var aRect = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+      var minW = aRect ? aRect.width : 240;
+      panel.style.maxWidth = Math.min(vw - margin * 2, 440) + 'px';
+      panel.style.minWidth = Math.max(190, Math.min(minW, vw - margin * 2)) + 'px';
+      var pw = panel.offsetWidth, ph = panel.offsetHeight, left, top, origin;
+      if (!aRect) {
+        left = (vw - pw) / 2; top = (vh - ph) / 2; origin = 'center';
+      } else {
+        left = Math.max(margin, Math.min(aRect.left, vw - margin - pw));
+        var spaceBelow = vh - aRect.bottom - gap - margin;
+        var spaceAbove = aRect.top - gap - margin;
+        if (ph <= spaceBelow || spaceBelow >= spaceAbove) {
+          top = aRect.bottom + gap; origin = 'top';
+          if (ph > spaceBelow) panel.style.maxHeight = Math.max(120, spaceBelow) + 'px';
+        } else {
+          if (ph > spaceAbove) panel.style.maxHeight = Math.max(120, spaceAbove) + 'px';
+          top = Math.max(margin, aRect.top - gap - Math.min(ph, spaceAbove)); origin = 'bottom';
+        }
+      }
+      panel.style.left = Math.round(left) + 'px';
+      panel.style.top = Math.round(top) + 'px';
+      panel.style.transformOrigin = origin === 'bottom' ? 'left bottom'
+        : (origin === 'center' ? 'center' : 'left top');
+    }
+    place();
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    requestAnimationFrame(function () { mask.classList.add('open'); place(); });
+    return { close: close };
+  }
+
+  function openChoiceSheet(select) {
+    var anchor = (select.querySelector && select.querySelector('.choice-trigger')) || select;
+    openAnchoredMenu(anchor, {
+      title: t('choice_title'),
+      options: select._choices.map(function (it) {
+        return { value: it.value, text: it.text, active: it.value === select.getValue() };
+      }),
+      onPick: function (val) { select.setValue(val, true); }
+    });
+  }
+
+  /* App-owned action menu. `actions` = [{ icon (svg html), label, onClick }]. Used for
+     the photo source picker so 拍照/相册/截图/粘贴 match the rest of the app instead of
+     the bare native OS sheet; anchored to whatever element opened it. */
+  function actionSheet(title, actions, anchor) {
+    openAnchoredMenu(anchor || null, { title: title, actions: actions });
   }
 
   /* ---------------- Reality Diff ---------------- */
@@ -2635,6 +2704,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.4.1', '2026-06-04', '底栏归位 + 锚定下拉 + 时间线美化 + 票据存档 + 日历热力图',
+      'Bottom bar restored, anchored menus, prettier timeline, ticket archives, and a calendar heatmap',
+      ['导航栏移回底部（中间是扁平加号），不再占用顶部空间；输入时底栏自动隐藏，避免挡住键盘。',
+       '所有选项弹框（场景、版本等）改为「锚定下拉菜单」：点哪儿就在哪儿展开，不再从屏幕底部弹出。',
+       '日期标题改为轻盈的悬浮胶囊，吸顶时不再突兀，日期之间的交接更顺滑。',
+       '左侧时间线重新美化：渐变主线带柔光、两端淡出，节点是带高光的渐变圆点，更精致。',
+       '新增「票据」场景分组：票根票券、购物小票、发票账单，方便归档电影票、车票、小票等。',
+       '新增「存档热力图」：点击顶栏左侧的九宫格按钮，按日历用圆点深浅展示每天的存档数量，并附总数 / 活跃天数 / 连续天数 / 单日最多等统计。'],
+      ['Move the navigation bar back to the bottom (with a flat centered create button); it hides while typing so it never covers the keyboard.',
+       'All option popups (scene, version, etc.) are now anchored dropdowns that open right at the control you tapped instead of sliding up from the screen bottom.',
+       'Date headers are now light floating pills — less abrupt when pinned, with a smoother day-to-day handoff while scrolling.',
+       'Repolish the left timeline: a softer glowing gradient spine that fades at both ends, and glossy gradient commit dots.',
+       'Add a Tickets scene group (ticket stubs, shopping receipts, invoices) for logging movie/transit tickets and receipts.',
+       'Add an Archive heatmap: tap the grid button in the top bar to see daily archive counts as a calendar of shaded dots, plus total / active-days / streak / busiest-day stats.']],
     ['1.4.0', '2026-06-03', '顶部导航 + 连续时间轴 + 现实对比增强',
       'Top tabs, connected timeline, and Reality Diff upgrades',
       ['新建存档的原生照片来源只保留「拍照 / 相册」，相册默认多选；额外「选择多张图片」入口会在选中封面后才出现。',
@@ -2847,6 +2930,139 @@
       list.appendChild(details);
     });
     v.appendChild(list);
+  }
+
+  /* ---------------- Stats: calendar dot-matrix (GitHub-contribution style) ----
+     A heatmap of how many archives land on each day. Dots get darker the more you
+     logged that day (分颜色深浅), laid out as a real calendar (7 weekday rows ×
+     week columns). Reached from the topbar grid button, left of the settings gear. */
+  var statsRange = 26; // weeks shown; toggled by the range segmented control
+  function dayCountMap() {
+    var map = {};
+    Store.commits().filter(notPlanned).forEach(function (c) {
+      var k = dayKey(c.createdAt);
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  }
+  function heatLevel(n) {
+    if (!n) return 0;
+    if (n >= 6) return 4;
+    if (n >= 4) return 3;
+    if (n >= 2) return 2;
+    return 1;
+  }
+  function renderStats(v) {
+    var L = lang === 'zh';
+    var back = el('button', {
+      type: 'button', class: 'subpage-back', text: '‹ ' + t('nav_timeline'),
+      onclick: function () { window.history.back(); }
+    });
+    v.appendChild(el('div', { class: 'subpage-head' }, [back, el('h1', { text: t('stats_title') })]));
+
+    var counts = dayCountMap();
+    var keys = Object.keys(counts);
+    if (!keys.length) {
+      v.appendChild(el('div', { class: 'tl-empty' }, [
+        el('div', { class: 'tl-empty-ic', text: '📅' }),
+        el('div', { text: t('stats_empty') })
+      ]));
+      return;
+    }
+
+    // ---- summary tiles: total / active days / current streak / busiest day ----
+    var total = 0, busiest = 0;
+    keys.forEach(function (k) { total += counts[k]; if (counts[k] > busiest) busiest = counts[k]; });
+    var activeDays = keys.length;
+    // current streak: consecutive days (ending today or yesterday) with >=1 archive
+    var streak = 0;
+    (function () {
+      var d = new Date(); d.setHours(0, 0, 0, 0);
+      if (!counts[dayKey(d.getTime())]) d.setDate(d.getDate() - 1); // allow "yesterday" to keep a streak alive
+      while (counts[dayKey(d.getTime())]) { streak++; d.setDate(d.getDate() - 1); }
+    })();
+    function tile(label, value) {
+      return el('div', { class: 'stat-tile' }, [
+        el('span', { class: 'stat-tile-val', text: String(value) }),
+        el('span', { class: 'stat-tile-label', text: label })
+      ]);
+    }
+    v.appendChild(el('div', { class: 'stat-tiles' }, [
+      tile(t('stats_total'), total),
+      tile(t('stats_active_days'), activeDays),
+      tile(t('stats_streak'), streak),
+      tile(t('stats_busiest'), busiest)
+    ]));
+
+    // ---- range switch ----
+    var card = el('section', { class: 'set-card heat-card' });
+    card.appendChild(segmented([
+      ['13', t('stats_range_3m')], ['26', t('stats_range_6m')], ['53', t('stats_range_year')]
+    ], String(statsRange), function (val) { statsRange = parseInt(val, 10); drawGrid(); }));
+
+    var gridWrap = el('div', { class: 'heat-grid-wrap' });
+    card.appendChild(gridWrap);
+
+    // legend: 少 ▢▢▢▢▢ 多
+    var legend = el('div', { class: 'heat-legend' });
+    legend.appendChild(el('span', { class: 'heat-legend-cap', text: t('stats_legend_less') }));
+    for (var lv = 0; lv <= 4; lv++) legend.appendChild(el('span', { class: 'heat-dot lvl-' + lv }));
+    legend.appendChild(el('span', { class: 'heat-legend-cap', text: t('stats_legend_more') }));
+    card.appendChild(legend);
+    v.appendChild(card);
+
+    function drawGrid() {
+      gridWrap.innerHTML = '';
+      var weeks = statsRange;
+      var end = new Date(); end.setHours(0, 0, 0, 0);
+      // start = Sunday of the week, (weeks-1) weeks back, so the last column is the current week
+      var start = new Date(end);
+      start.setDate(start.getDate() - start.getDay() - (weeks - 1) * 7);
+
+      var monthsZh = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+      var monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var months = L ? monthsZh : monthsEn;
+
+      var grid = el('div', { class: 'heat-grid' });
+      // weekday labels column (show Mon/Wed/Fri to stay compact)
+      var wdCol = el('div', { class: 'heat-weekdays' });
+      [1, 3, 5].forEach(function (wd) {
+        wdCol.appendChild(el('span', { class: 'heat-wd', style: 'grid-row:' + (wd + 2), text: t('stats_weekday')[wd] }));
+      });
+
+      var cols = el('div', { class: 'heat-cols' });
+      var monthRow = el('div', { class: 'heat-months' });
+      var lastMonth = -1;
+      var cursor = new Date(start);
+      var todayKeyStr = dayKey(end.getTime());
+      for (var w = 0; w < weeks; w++) {
+        var col = el('div', { class: 'heat-col' });
+        var colMonth = cursor.getMonth();
+        // a month label appears above the column where a new month first starts
+        if (colMonth !== lastMonth) {
+          monthRow.appendChild(el('span', { class: 'heat-month', style: 'grid-column:' + (w + 1), text: months[colMonth] }));
+          lastMonth = colMonth;
+        }
+        for (var dRow = 0; dRow < 7; dRow++) {
+          var k = dayKey(cursor.getTime());
+          var future = cursor.getTime() > end.getTime();
+          var n = counts[k] || 0;
+          var cls = 'heat-dot lvl-' + heatLevel(n) + (future ? ' is-future' : '') + (k === todayKeyStr ? ' is-today' : '');
+          var title = (cursor.getFullYear() + '-' + (colMonth + 1) + '-' + cursor.getDate())
+            + (future ? '' : ' · ' + n + ' ' + t('stats_archives_unit'));
+          col.appendChild(el('span', { class: cls, title: title }));
+          cursor.setDate(cursor.getDate() + 1);
+        }
+        cols.appendChild(col);
+      }
+      grid.appendChild(wdCol);
+      var right = el('div', { class: 'heat-right' }, [monthRow, cols]);
+      grid.appendChild(right);
+      gridWrap.appendChild(grid);
+      // newest weeks are on the right — scroll there by default
+      gridWrap.scrollLeft = gridWrap.scrollWidth;
+    }
+    drawGrid();
   }
 
   function segmented(options, currentVal, onPick) {
@@ -3167,7 +3383,7 @@
     var App = Cap.Plugins && Cap.Plugins.App;
     if (!App || !App.addListener) return;
     var PARENT = { settings: 'timeline', changelog: 'settings', detail: 'timeline', 'branch-detail': 'branch',
-      commit: 'timeline', diff: 'timeline', rollback: 'timeline', branch: 'timeline' };
+      commit: 'timeline', diff: 'timeline', rollback: 'timeline', branch: 'timeline', stats: 'timeline' };
     App.addListener('backButton', function () {
       if (current !== 'timeline' && PARENT[current]) go(PARENT[current]);
       else App.exitApp();
@@ -3180,6 +3396,8 @@
     var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     var _set = document.getElementById('settings-btn');
     if (_set) _set.addEventListener('click', function () { go('settings'); });
+    var _stats = document.getElementById('stats-btn');
+    if (_stats) _stats.addEventListener('click', function () { go('stats'); });
     initNative();
     initKeyboard();
     initBackButton();

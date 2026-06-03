@@ -11,25 +11,58 @@ Life Archive 桌面版用 **electron-updater + GitHub Releases** 做云端自动
 3. 在 GitHub 生成一个有 `repo` 权限的 Personal Access Token
    （Settings → Developer settings → Tokens）。
 
-## ⭐ 铁律：每次发版都必须写「更新说明」
+## ⭐⭐ 发版铁律（强制 · 任何人发版都必须照做）
 
-每发一个版本，**都要写一段详细的更新说明**（这次改了什么、修了什么、注意事项），并且：
-1. 在 [CHANGELOG.md](CHANGELOG.md) 顶部新增一节（版本号 + 日期 + 条目）；
-2. 把同样的内容写到该版本的 GitHub Release 说明里。
+> 这一节是**硬性规范**。少做任何一条，都算「发版未完成」，必须补齐后才能宣布发布。
+> 顺序不能跳：先改全版本号 → 写说明 → 构建两端 → 发布并设置说明 → 自检。
 
-设置 Release 说明的命令（把内容写进一个文件再传）：
+### 铁律 1：版本号必须**同步**改这 5 处（缺一不可）
+
+版本号只在一处对、别处忘了改，会导致自动更新不触发、缓存不刷新、应用内显示错版本。
+每次发版务必把新版本号同时写进：
+
+1. `package.json` 的 `"version"`
+2. `js/version.js` 的 `window.APP_VERSION`
+3. `index.html` 里 `version.js?v=<版本>` 的查询串（缓存刷新用，必须一起改）
+4. `js/app.js` 顶部 `RELEASE_NOTES` 数组**新增一条**（应用内「更新日志」页读取它）
+5. `CHANGELOG.md` 顶部**新增一节**
+
+> 版本号必须**严格大于**上一版（语义化版本），否则 electron-updater 不会推送更新。
+
+### 铁律 2：必须写**详细**的更新说明（中文为主，逐条列出改动 / 修复 / 注意事项）
+
+- 内容要具体：改了什么、修了什么、影响哪些平台、有什么注意事项（如 appId 变更会断更）。
+- `CHANGELOG.md`、应用内 `RELEASE_NOTES`、GitHub Release 三处内容必须**一致**。
+- **GitHub Release 的标题只能是纯版本号**（例如 `1.4.1`，不带 `v`、不带描述）——所有细节只放在正文。
+
+设置 Release 说明的命令（先把正文写进一个 UTF-8 文件再传）：
 
 ```powershell
-gh release edit v1.0.2 --repo ChristoGoodrich/LifeArchive `
-  --title "v1.0.2 · 一句话标题" --notes-file 你的说明.md
+gh release edit v1.4.1 --repo ChristoGoodrich/LifeArchive `
+  --title "1.4.1" --notes-file 你的说明.md
 ```
 
-> 双击 `发布新版本.bat` 发版时，它会**自动弹出记事本让你写本次更新说明**，写完保存关闭即可，脚本会把它设到 Release 上。
+### 铁律 3：两个平台都要出包并发布
+
+- **Windows**：`electron-builder --win --publish always`（产出并上传 `*.exe` / `latest.yml` / `*.blockmap`）。
+- **安卓 APK**：跑 `android.yml` 工作流，下载 `LifeArchive-debug.apk` 并 `gh release upload` 到同一个 Release。
+- 只发一端 = 发版未完成。
+
+### 铁律 4：发布后自检清单（逐条打勾）
+
+- [ ] 5 处版本号都已改、且 `git grep` 不到旧版本号
+- [ ] `CHANGELOG.md` / `RELEASE_NOTES` / GitHub Release 三处说明一致
+- [ ] GitHub Release 标题是纯版本号，正文非空且详细
+- [ ] Release 里同时挂着 Windows 安装包 + portable + `latest.yml` + `*.blockmap` + 安卓 `LifeArchive-debug.apk`
+- [ ] 已在安卓真机装新包，验证本次改动涉及的交互（尤其是输入框 / 键盘 / 导航相关改动）
+
+> 双击 `发布新版本.bat` 发版时，它会**自动弹出记事本让你写本次更新说明**，写完保存关闭即可，脚本会把它设到 Release 上。但 `.bat` 不会替你改 `js/version.js` / `index.html` / `RELEASE_NOTES` / `CHANGELOG.md`——这几处仍需按铁律 1、2 手动同步。
 
 ## 每次发版（重复这几步）
 
-1. 改完代码后，把 `package.json` 里的 `version` 往上加一位
-   （例如 `1.0.1` → `1.0.2`）。**版本号必须比上一版高，自动更新才会触发。**
+1. 改完代码后，按上面**铁律 1** 把新版本号同步改到那 5 处（`package.json`、`js/version.js`、
+   `index.html?v=`、`js/app.js` 的 `RELEASE_NOTES`、`CHANGELOG.md`）。
+   **版本号必须比上一版高，自动更新才会触发。**
 2. 在项目目录执行（PowerShell）：
 
    ```powershell
