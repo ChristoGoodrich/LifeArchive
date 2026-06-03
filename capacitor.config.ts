@@ -10,10 +10,12 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // Let the IME shrink the WebView so the focused field stays visible.
-    // Pairs with Android's Activity windowSoftInputMode="adjustResize"
-    // (scripts/set-android-version.mjs); 'native' resizes the whole web view.
-    Keyboard: { resize: 'native' as any }
+    // resize:'none' — do NOT let the plugin resize the web view. This app is
+    // edge-to-edge (safe-area plugin), and Android ignores native adjustResize in
+    // edge-to-edge, so we handle the IME at the web layer instead: the viewport meta
+    // interactive-widget=resizes-content (index.html) shrinks the layout viewport and
+    // keeps the focused field visible. The plugin just emits show/hide events.
+    Keyboard: { resize: 'none' as any }
   }
 };
 

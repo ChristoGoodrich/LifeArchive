@@ -109,6 +109,17 @@ body{
 .view-head h1{font-size:30px;margin:0;font-weight:800;letter-spacing:-.4px}
 .head-actions{display:flex;gap:8px}
 
+/* route transitions: silky push (deeper) / pop (back) / fade (sibling tab) */
+.view.anim-push{animation:rgPush .30s cubic-bezier(.22,.61,.36,1)}
+.view.anim-pop{animation:rgPop .30s cubic-bezier(.22,.61,.36,1)}
+.view.anim-fade{animation:rgFade .22s ease}
+@keyframes rgPush{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+@keyframes rgPop{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
+@keyframes rgFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){
+  .view.anim-push,.view.anim-pop,.view.anim-fade{animation:none}
+}
+
 /* ---- buttons ---- */
 .btn{border:1px solid var(--line);background:var(--card);color:var(--text);
   padding:12px 20px;border-radius:14px;cursor:pointer;font-size:15px;font-weight:700;
@@ -494,14 +505,22 @@ textarea.field{resize:vertical}
   .nav-ic{font-size:23px;transition:.18s}
   .nav-btn.active{background:transparent;color:var(--accent);box-shadow:none}
   .nav-btn.active .nav-ic{transform:translateY(-1px);filter:drop-shadow(0 4px 8px color-mix(in srgb,var(--accent) 50%,transparent))}
-  .nav-btn-create{margin-top:-30px}
-  .nav-btn-create .nav-ic{width:58px;height:58px;border:5px solid var(--bg);border-radius:50%;
-    background:linear-gradient(135deg,var(--accent),var(--accent-2));color:var(--on-accent);
-    box-shadow:0 8px 18px rgba(52,130,255,.34);font-size:30px}
-  .nav-btn-create .nav-ic svg{width:28px;height:28px}
-  .nav-btn-create.active .nav-ic{transform:translateY(-2px) scale(1.03);
-    filter:none;box-shadow:0 10px 24px rgba(52,130,255,.46)}
-  .nav-btn-create:active .nav-ic{transform:scale(.93)}
+  /* center create button: icon-only floating "+" FAB with a glassy sheen */
+  .nav-btn-create{margin-top:-26px;gap:0}
+  .nav-btn-create .nav-ic{position:relative;overflow:hidden;width:60px;height:60px;
+    border:4px solid var(--bg);border-radius:50%;color:var(--on-accent);font-size:33px;
+    background:linear-gradient(140deg,var(--accent),var(--accent-2));
+    box-shadow:0 10px 22px rgba(52,130,255,.42),
+      inset 0 2px 6px rgba(255,255,255,.5), inset 0 -3px 9px rgba(40,70,180,.35);
+    transition:transform .18s ease, box-shadow .18s ease}
+  /* specular highlight across the top — the "liquid glass" gloss */
+  .nav-btn-create .nav-ic::after{content:"";position:absolute;left:15%;right:15%;top:7%;height:42%;
+    border-radius:50%;pointer-events:none;
+    background:linear-gradient(to bottom,rgba(255,255,255,.6),rgba(255,255,255,0))}
+  .nav-btn-create .nav-ic svg{position:relative;z-index:1;width:30px;height:30px}
+  .nav-btn-create.active .nav-ic{transform:translateY(-2px) scale(1.04);
+    box-shadow:0 14px 28px rgba(52,130,255,.5),inset 0 2px 6px rgba(255,255,255,.55)}
+  .nav-btn-create:active .nav-ic{transform:scale(.92)}
 
   .field{font-size:16px}            /* avoid iOS focus-zoom */
   .btn.tiny{padding:10px 14px;font-size:13.5px}

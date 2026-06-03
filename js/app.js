@@ -324,6 +324,9 @@
   /* ---------------- routing ---------------- */
   var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings', 'changelog', 'detail'];
   var current = 'timeline';
+  // nav depth drives the open/back slide direction (deeper route = slide in from right)
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, commit: 1, detail: 1, settings: 1, changelog: 2 };
+  var prevDepth = 0;
 
   function go(route) {
     current = route;
@@ -400,11 +403,14 @@
     items.forEach(function (it) {
       var icon = el('span', { class: 'nav-ic' });
       icon.innerHTML = NAV_ICONS[it[0]];
+      var isCreate = it[0] === 'commit';
+      // the center create button is icon-only (no label) — a floating "+" FAB
+      var kids = isCreate ? [icon] : [icon, el('span', { text: it[1] })];
       nav.appendChild(el('button', {
-        class: 'nav-btn' + (it[0] === 'commit' ? ' nav-btn-create' : '') + (current === it[0] ? ' active' : ''),
-        'data-route': it[0],
+        class: 'nav-btn' + (isCreate ? ' nav-btn-create' : '') + (current === it[0] ? ' active' : ''),
+        'data-route': it[0], 'aria-label': it[1], title: it[1],
         onclick: function () { go(it[0]); }
-      }, [icon, el('span', { text: it[1] })]));
+      }, kids));
     });
   }
 
@@ -423,6 +429,13 @@
     else if (current === 'settings') renderSettings(v);
     else if (current === 'changelog') renderChangelog(v);
     else if (current === 'detail') renderDetail(v);
+    // directional entrance animation: push (deeper), pop (back), or fade (sibling tab)
+    var d = ROUTE_DEPTH[current] || 0;
+    var anim = d > prevDepth ? 'anim-push' : (d < prevDepth ? 'anim-pop' : 'anim-fade');
+    prevDepth = d;
+    v.classList.remove('anim-push', 'anim-pop', 'anim-fade');
+    void v.offsetWidth; // restart the CSS animation
+    v.classList.add(anim);
   }
 
   /* ---------------- Timeline ---------------- */
@@ -1434,6 +1447,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.2.1', '2026-06-03', '键盘根因修复 + 液态玻璃图标 + 侧滑返回与动效',
+      'Root-cause keyboard fix, liquid-glass icon, back-swipe + page transitions',
+      ['从根因修复安卓聚焦输入框顶飞整页：edge-to-edge 下系统会忽略 adjustResize，改用网页层 interactive-widget=resizes-content + 有界兜底。',
+       '图标换回卡片堆造型并加入液态玻璃光影，配色更通透。',
+       '底栏「新建」按钮去掉文字，改为悬浮玻璃「＋」。',
+       '设置 / 更新日志 / 详情等二级页支持系统侧滑返回，并加入进入/返回的丝滑动效。'],
+      ['Fix (at the root) the Android page being shoved off-screen on input focus — edge-to-edge ignores native adjustResize, so we now use the web-layer interactive-widget=resizes-content with a bounded safety net.',
+       'Switch the icon back to the card-stack shape with a liquid-glass finish and a more luminous palette.',
+       'Make the center create button an icon-only floating glass "+".',
+       'Add system back-swipe for subpages (settings / release notes / detail) plus silky open/back transitions.']],
     ['1.2.0', '2026-06-03', '时间线搜索 + 照片存储升级 + 安卓键盘修复 + 全新档案图标',
       'Timeline search, IndexedDB photo storage, Android keyboard fix, and a new archive icon',
       ['时间线新增搜索框和场景筛选，存档多了也能快速找到。',
@@ -1750,26 +1773,44 @@
       .addEventListener('change', function () { if (getTheme() === 'system') initNative(); });
   } catch (e) {}
 
-  /* ---------------- native: keyboard (Android) ----------------
-     The Activity uses windowSoftInputMode="adjustResize" + @capacitor/keyboard
-     resize:'native' (scripts/set-android-version.mjs, capacitor.config.ts), so the
-     system shrinks the WebView when the IME opens and Chromium keeps the focused
-     field visible on its own. We ONLY toggle a class to hide the bottom tab bar (it
-     would otherwise float right above the keyboard) and flatten the frosted topbar.
-     The old "adjustNothing + manual scrollBy" lift over-scrolled the entire page
-     off-screen on high-DPI devices — removed. */
+  /* ---------------- native: keyboard (Android, edge-to-edge safe) ----------------
+     ROOT CAUSE of the recurring "focusing an input shoves the whole page off-screen":
+     this app is edge-to-edge (for @capacitor-community/safe-area insets), and Android
+     IGNORES windowSoftInputMode adjustResize/adjustNothing in edge-to-edge mode — it
+     falls back to adjustPan and pans the whole window (top bar and all) up behind the
+     keyboard. So no native soft-input mode could fix it.
+
+     Fix at the WEB layer: the viewport meta sets interactive-widget=resizes-content
+     (index.html), so the IME shrinks the LAYOUT viewport — the page reflows, the sticky
+     top bar stays put, and the browser keeps the focused field visible. @capacitor/keyboard
+     is resize:'none' so it doesn't fight this. Here we only (1) hide the bottom tab bar and
+     (2) as a safety net, nudge the focused field into the visual viewport — BOUNDED, via
+     window.visualViewport (true CSS px), so it can NEVER fling the page off-screen. */
+  function isTextField(n) { return !!(n && n.tagName && /^(INPUT|TEXTAREA)$/.test(n.tagName)); }
+  function ensureFieldVisible() {
+    var vv = window.visualViewport, el = document.activeElement;
+    if (!vv || !isTextField(el)) return;
+    var r = el.getBoundingClientRect();
+    var over = r.bottom - (vv.offsetTop + vv.height - 12); // px the field sits below the visible area
+    if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'smooth' });
+  }
   function initKeyboard() {
+    var vv = window.visualViewport;
+    if (vv) vv.addEventListener('resize', function () { setTimeout(ensureFieldVisible, 60); });
+    document.addEventListener('focusin', function (e) {
+      if (isTextField(e.target)) setTimeout(ensureFieldVisible, 120);
+    });
     try {
       var Cap = window.Capacitor;
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      function shown() { document.body.classList.add('kb-open'); }
-      function hidden() { document.body.classList.remove('kb-open'); }
-      KB.addListener('keyboardWillShow', shown);
-      KB.addListener('keyboardDidShow', shown);
-      KB.addListener('keyboardWillHide', hidden);
-      KB.addListener('keyboardDidHide', hidden);
+      var show = function () { document.body.classList.add('kb-open'); };
+      var hide = function () { document.body.classList.remove('kb-open'); };
+      KB.addListener('keyboardWillShow', show);
+      KB.addListener('keyboardDidShow', show);
+      KB.addListener('keyboardWillHide', hide);
+      KB.addListener('keyboardDidHide', hide);
     } catch (e) {}
   }
 
@@ -1784,6 +1825,23 @@
     renderNav(); render();
   }
 
+  /* ---------------- native: Android hardware / gesture back ----------------
+     Make the system back button + edge-swipe pop a subpage to its parent (instead of
+     exiting or doing nothing). Needs @capacitor/app. go(parent) re-renders with the
+     "pop" slide because the parent route has a lower depth. */
+  function initBackButton() {
+    var Cap = window.Capacitor;
+    if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+    var App = Cap.Plugins && Cap.Plugins.App;
+    if (!App || !App.addListener) return;
+    var PARENT = { settings: 'timeline', changelog: 'settings', detail: 'timeline',
+      commit: 'timeline', diff: 'timeline', rollback: 'timeline', branch: 'timeline' };
+    App.addListener('backButton', function () {
+      if (current !== 'timeline' && PARENT[current]) go(PARENT[current]);
+      else App.exitApp();
+    });
+  }
+
   /* ---------------- boot ---------------- */
   document.addEventListener('DOMContentLoaded', function () {
     $('#tagline').textContent = t('tagline');
@@ -1792,6 +1850,7 @@
     if (_set) _set.addEventListener('click', function () { go('settings'); });
     initNative();
     initKeyboard();
+    initBackButton();
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();

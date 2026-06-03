@@ -15,6 +15,10 @@ __pycache__/
 Thumbs.db
 .DS_Store
 
+# scratch files (commit messages / release notes written for gh)
+*.tmp
+.relnotes.tmp.md
+
 # local Claude session data
 .claude/
 memory/
