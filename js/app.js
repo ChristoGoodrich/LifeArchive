@@ -703,6 +703,7 @@
         if (!map[k]) { map[k] = { label: dayLabel(c.createdAt), items: [] }; groups.push(map[k]); }
         map[k].items.push(c);
       });
+      var stream = el('div', { class: 'timeline-stream' });
       groups.forEach(function (g) {
         var sec = el('section', { class: 'date-group' });
         var mealCount = g.items.filter(function (c) { return Store.isMealScene(c.scene); }).length;
@@ -717,8 +718,9 @@
         var rail = el('div', { class: 'commit-rail' });
         g.items.forEach(function (c) { rail.appendChild(commitCard(c)); });
         sec.appendChild(rail);
-        listWrap.appendChild(sec);
+        stream.appendChild(sec);
       });
+      if (groups.length) listWrap.appendChild(stream);
       if (realList.length > shown.length) {
         listWrap.appendChild(el('button', { class: 'btn ghost load-more', text: t('load_more') + ' · ' + shown.length + ' / ' + realList.length,
           onclick: function () { tlVisible += TL_PAGE_SIZE; renderList(); } }));
@@ -838,6 +840,9 @@
 
   /* ---------------- Commit detail ---------------- */
   var pendingDetail = null;
+  function previousCommitFor(c) {
+    return c && c.parentId ? Store.getCommit(c.parentId) : null;
+  }
   function renderDetail(v) {
     var c = pendingDetail ? Store.getCommit(pendingDetail) : null;
     if (!c) { go('timeline'); return; }
@@ -944,11 +949,16 @@
       return;
     }
 
+    var previous = previousCommitFor(c);
     v.appendChild(el('div', { class: 'detail-actions' }, [
       el('button', { class: 'btn primary', text: '✏️ ' + (L ? '编辑' : 'Edit'),
         onclick: function () { pendingEdit = c.id; go('commit'); } }),
-      el('button', { class: 'btn', text: '🔍 ' + t('nav_diff'),
-        onclick: function () { go('diff'); } }),
+      previous ? el('button', { class: 'btn', text: L ? '🔍 与上一版对比' : 'Compare previous',
+        onclick: function () {
+          pendingDiff = { sceneId: c.scene, commitId: c.id, baseId: previous.id };
+          go('diff');
+        } }) : el('button', { class: 'btn', text: '🔍 ' + t('nav_diff'),
+        onclick: function () { pendingDiff = { sceneId: c.scene, commitId: c.id }; go('diff'); } }),
       el('button', { class: 'btn', text: '⏮️ ' + t('nav_rollback'),
         onclick: function () { pendingRollback = c.id; go('rollback'); } }),
       el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
@@ -1032,6 +1042,10 @@
     var preview = el('div', { class: 'photo-drop' }, [
       el('span', { class: 'photo-hint', text: '📷 ' + t('photo') })
     ]);
+    var photoTools = null;
+    function syncPhotoTools() {
+      if (photoTools) photoTools.classList.toggle('is-hidden', !draftPhoto);
+    }
     function setPhoto(dataUrl) {
       draftPhoto = dataUrl;
       preview.innerHTML = '';
@@ -1040,6 +1054,7 @@
       // to fit, matching how the timeline now displays photos
       preview.appendChild(el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' }));
       preview.classList.add('has-photo');
+      syncPhotoTools();
     }
     function imageEntryFromFile(file) {
       return downscale(file).then(function (data) {
@@ -1150,8 +1165,7 @@
       if (native) {
         actionSheet(L ? '添加照片' : 'Add photo', [
           { icon: UI_ICONS.camera, label: L ? '拍照' : 'Take photo', onClick: function () { nativeCamera('CAMERA'); } },
-          { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: function () { nativeCamera('PHOTOS'); } },
-          { icon: UI_ICONS.album, label: t('album_multi'), onClick: nativePickMulti }
+          { icon: UI_ICONS.album, label: L ? '从相册选择' : 'Choose from album', onClick: nativePickMulti }
         ]);
       } else {
         var acts = [{ icon: UI_ICONS.file, label: L ? '选择图片（可多选）' : 'Choose images (multi)', onClick: function () { fileInput.click(); } }];
@@ -1360,16 +1374,17 @@
       go('timeline');
     }
 
+    photoTools = el('div', { class: 'photo-tools' }, [
+      el('button', { class: 'btn tiny ghost photo-extra-btn', type: 'button',
+        text: '＋ ' + t('pick_multi'), onclick: openMultiPhotoPicker })
+    ]);
+    syncPhotoTools();
+
     var form = el('div', { class: 'form-card' }, [
       // NOT a <label> (a file input inside a label fires twice -> re-opens picker)
       el('div', { class: 'labeled' }, [
         el('span', { class: 'label-text', text: '📷 ' + t('photo') }),
-        el('div', {}, [preview, fileInput,
-          el('div', { class: 'photo-tools' }, [
-            el('button', { class: 'btn tiny ghost photo-extra-btn', type: 'button',
-              text: '＋ ' + t('pick_multi'), onclick: openMultiPhotoPicker })
-          ]),
-          aiBtn])
+        el('div', {}, [preview, fileInput, photoTools, aiBtn])
       ]),
       labeled(t('message'), msgInput),
       labeledBlock(t('scene'), scenePicker),
@@ -1506,6 +1521,7 @@
   }
 
   /* ---------------- Reality Diff ---------------- */
+  var pendingDiff = null;
   function renderDiff(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_diff') })]));
     var commits = Store.commits().filter(notPlanned);
@@ -1519,9 +1535,18 @@
       return realCommitsForScene(s.id).length >= 2;
     });
     if (!scenesWith2.length) { v.appendChild(noticeCard(t('need_two'))); return; }
+    var L = lang === 'zh';
+    var diffContext = pendingDiff;
+    pendingDiff = null;
+    var initialScene = (diffContext && scenesWith2.some(function (s) { return s.id === diffContext.sceneId; }))
+      ? diffContext.sceneId : scenesWith2[0].id;
+    var diffMode = 'heat';
+    var diffThreshold = 38;
+    var diffRunId = 0;
+
     var sceneSel = choiceSelect(scenesWith2.map(function (s) {
       return { value: s.id, text: sceneLabel(s) };
-    }));
+    }), initialScene);
     var baseSel = choiceSelect([]);
     var compSel = choiceSelect([]);
 
@@ -1530,12 +1555,20 @@
       var choices = list.map(function (c) {
         return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
       });
+      var compDefault = choices[0] && choices[0].value;
+      var baseDefault = choices[Math.min(1, choices.length - 1)] && choices[Math.min(1, choices.length - 1)].value;
+      if (diffContext && diffContext.sceneId === sceneSel.getValue()) {
+        var wantedComp = diffContext.commitId;
+        var wantedBase = diffContext.baseId || (Store.getCommit(wantedComp) || {}).parentId;
+        if (choices.some(function (x) { return x.value === wantedComp; })) compDefault = wantedComp;
+        if (choices.some(function (x) { return x.value === wantedBase; })) baseDefault = wantedBase;
+      }
       // default: base = older (second item), compare = newest
-      compSel.setOptions(choices, choices[0] && choices[0].value);
-      baseSel.setOptions(choices, choices[Math.min(1, choices.length - 1)] && choices[Math.min(1, choices.length - 1)].value);
+      compSel.setOptions(choices, compDefault);
+      baseSel.setOptions(choices, baseDefault);
     }
     fillVersionSelects();
-    sceneSel.onChange(function () { fillVersionSelects(); runDiff(); });
+    sceneSel.onChange(function () { diffContext = null; fillVersionSelects(); runDiff(); });
 
     var controls = el('div', { class: 'diff-controls' }, [
       labeledBlock(t('scene'), sceneSel),
@@ -1545,47 +1578,112 @@
     ]);
     v.appendChild(controls);
 
+    var modeControl = segmented([
+      ['heat', L ? '热力图' : 'Heatmap'],
+      ['slider', L ? '左右滑块' : 'Slider'],
+      ['blink', L ? '淡入闪烁' : 'Blink']
+    ], diffMode, function (m) { diffMode = m; runDiff(); });
+    var thresholdValue = el('span', { class: 'diff-threshold-value', text: String(diffThreshold) });
+    var thresholdInput = el('input', { class: 'diff-threshold', type: 'range', min: '18', max: '90', value: String(diffThreshold) });
+    var thresholdTimer = null;
+    thresholdInput.addEventListener('input', function () {
+      diffThreshold = parseInt(thresholdInput.value, 10) || 38;
+      thresholdValue.textContent = String(diffThreshold);
+      clearTimeout(thresholdTimer);
+      thresholdTimer = setTimeout(runDiff, 80);
+    });
+    v.appendChild(el('div', { class: 'diff-tuning' }, [
+      labeledBlock(L ? '显示模式' : 'View mode', modeControl),
+      labeledBlock(L ? '敏感度' : 'Sensitivity', el('div', { class: 'diff-threshold-row' }, [
+        thresholdInput,
+        thresholdValue
+      ]))
+    ]));
+
     var result = el('div', { class: 'diff-result' });
     v.appendChild(result);
 
     baseSel.onChange(runDiff);
     compSel.onChange(runDiff);
 
+    function bgStyle(src) {
+      return 'background-image:url(' + src + ')';
+    }
+    function sliderCompare(base, comp) {
+      var afterLayer = el('div', { class: 'diff-slider-layer diff-slider-after', style: bgStyle(comp.photo) + ';clip-path:inset(0 50% 0 0)' });
+      var handle = el('div', { class: 'diff-slider-handle', style: 'left:50%' });
+      var range = el('input', { class: 'diff-slider-range', type: 'range', min: '0', max: '100', value: '50' });
+      range.addEventListener('input', function () {
+        afterLayer.style.clipPath = 'inset(0 ' + (100 - parseInt(range.value, 10)) + '% 0 0)';
+        handle.style.left = range.value + '%';
+      });
+      return el('div', { class: 'heat-wrap diff-mode-card' }, [
+        el('div', { class: 'heat-title', text: L ? '↔ 左右滑块对比' : '↔ Before / after slider' }),
+        el('div', { class: 'diff-slider-frame' }, [
+          el('img', { class: 'diff-slider-spacer', src: comp.photo, alt: '' }),
+          el('div', { class: 'diff-slider-layer', style: bgStyle(base.photo) }),
+          afterLayer,
+          handle
+        ]),
+        range,
+        el('div', { class: 'diff-mode-hint', text: L ? '拖动滑杆查看旧版与新版的边界。' : 'Drag to reveal the boundary between base and compare.' })
+      ]);
+    }
+    function blinkCompare(base, comp) {
+      return el('div', { class: 'heat-wrap diff-mode-card' }, [
+        el('div', { class: 'heat-title', text: L ? '✨ 淡入闪烁对比' : '✨ Fade / blink compare' }),
+        el('div', { class: 'diff-blink-frame' }, [
+          el('img', { class: 'diff-slider-spacer', src: comp.photo, alt: '' }),
+          el('div', { class: 'diff-slider-layer', style: bgStyle(base.photo) }),
+          el('div', { class: 'diff-slider-layer diff-blink-after', style: bgStyle(comp.photo) })
+        ]),
+        el('div', { class: 'diff-mode-hint', text: L ? '新版会定时淡入淡出，最适合快速看出物体增减。' : 'The compare image pulses over the base image so added or removed objects stand out.' })
+      ]);
+    }
+
     function runDiff() {
       var base = Store.getCommit(baseSel.getValue());
       var comp = Store.getCommit(compSel.getValue());
       if (!base || !comp) return;
+      var thisRun = ++diffRunId;
       result.innerHTML = '';
 
-      // ----- visual heatmap -----
+      // ----- visual compare -----
       var photos = el('div', { class: 'diff-photos' }, [
         photoCol(t('base'), base),
         photoCol(t('compare'), comp)
       ]);
-      var heatCanvas = el('canvas', { class: 'heat-canvas' });
-      var heatWrap = el('div', { class: 'heat-wrap' }, [
-        el('div', { class: 'heat-title', text: '🔥 ' + t('changed') }),
-        heatCanvas,
-        el('div', { class: 'heat-stats', id: 'heat-stats' })
-      ]);
 
       result.appendChild(photos);
       if (base.photo && comp.photo) {
-        result.appendChild(heatWrap);
-        Diff.imageDiff(base.photo, comp.photo, heatCanvas, {}).then(function (r) {
-          var stats = $('#heat-stats');
-          if (!r.ok) { stats.textContent = t('no_photo'); return; }
-          stats.innerHTML = '';
-          stats.appendChild(el('span', { class: 'big-pct',
-            text: r.changedPct.toFixed(1) + '% ' + t('changed') }));
-          if (r.blocks.length) {
-            var zones = r.blocks.map(function (b) {
-              return lang === 'zh' ? b.zoneZh : b.zone;
-            }).join(' · ');
-            stats.appendChild(el('span', { class: 'heat-zones',
-              text: t('heat_hint') + '：' + zones }));
-          }
-        });
+        if (diffMode === 'slider') {
+          result.appendChild(sliderCompare(base, comp));
+        } else if (diffMode === 'blink') {
+          result.appendChild(blinkCompare(base, comp));
+        } else {
+          var heatCanvas = el('canvas', { class: 'heat-canvas' });
+          var heatWrap = el('div', { class: 'heat-wrap' }, [
+            el('div', { class: 'heat-title', text: '🔥 ' + t('changed') }),
+            heatCanvas,
+            el('div', { class: 'heat-stats', id: 'heat-stats' })
+          ]);
+          result.appendChild(heatWrap);
+          Diff.imageDiff(base.photo, comp.photo, heatCanvas, { threshold: diffThreshold }).then(function (r) {
+            if (thisRun !== diffRunId) return;
+            var stats = $('#heat-stats');
+            if (!r.ok) { stats.textContent = t('no_photo'); return; }
+            stats.innerHTML = '';
+            stats.appendChild(el('span', { class: 'big-pct',
+              text: r.changedPct.toFixed(1) + '% ' + t('changed') }));
+            if (r.blocks.length) {
+              var zones = r.blocks.map(function (b) {
+                return lang === 'zh' ? b.zoneZh : b.zone;
+              }).join(' · ');
+              stats.appendChild(el('span', { class: 'heat-zones',
+                text: t('heat_hint') + '：' + zones }));
+            }
+          });
+        }
       }
 
       // ----- semantic item diff -----
@@ -2537,6 +2635,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.4.0', '2026-06-03', '顶部导航 + 连续时间轴 + 现实对比增强',
+      'Top tabs, connected timeline, and Reality Diff upgrades',
+      ['新建存档的原生照片来源只保留「拍照 / 相册」，相册默认多选；额外「选择多张图片」入口会在选中封面后才出现。',
+       '移动端导航从底部移到顶部粘性标签栏，避免和键盘/手势区域冲突；顶部毛玻璃在键盘打开时保持可见。',
+       '时间线改为连续左侧主线，日期标题粘顶并随日期段自然替换，滚动时始终知道当前存档日期。',
+       '输入框聚焦兜底继续加固：即使 WebView 已经 resize，也会用当前滚动容器把焦点字段带回可见区。',
+       '现实对比支持详情页「与上一版对比」入口，并新增热力图、左右滑块、淡入闪烁三种视觉模式。',
+       '热力图敏感度可调，清单对比会归一化大小写、全半角和尾随数量/单位，减少「牛奶」和「牛奶1盒」这类误报。'],
+      ['Native photo source now keeps only Take photo / Album; Album defaults to multi-select, and the extra multi-image control appears after a cover exists.',
+       'Move mobile navigation from the bottom to a sticky top tab rail, avoiding keyboard and gesture-area conflicts while preserving the frosted top bar.',
+       'Make the timeline rail continuous across day groups; sticky date headers hand off naturally while scrolling.',
+       'Harden input focus again by nudging the active field inside the real scroll container even when the WebView already resized.',
+       'Reality Diff now has a detail-page Compare previous entry plus heatmap, before/after slider, and fade/blink visual modes.',
+       'Add an adjustable heatmap sensitivity slider and normalize item names so casing, full/half-width forms, and trailing quantities/units do not create noisy diffs.']],
     ['1.3.2', '2026-06-03', '时间线瀑布流 + 多图存档 + 饮食计划 + 输入框再加固',
       'Timeline waterfall, multi-image commits, meal plans, and keyboard hardening',
       ['时间线卡片统一为图片在上、内容在下的单列瀑布流；左侧日期节点、连接短线和竖向轨道更清晰。',
@@ -2738,11 +2850,18 @@
   }
 
   function segmented(options, currentVal, onPick) {
-    return el('div', { class: 'seg' }, options.map(function (o) {
-      var b = el('button', { class: 'seg-btn' + (o[0] === currentVal ? ' active' : ''), text: o[1] });
-      b.addEventListener('click', function () { onPick(o[0]); });
+    var root = el('div', { class: 'seg' }, options.map(function (o) {
+      var b = el('button', { class: 'seg-btn' + (o[0] === currentVal ? ' active' : ''),
+        text: o[1], 'data-value': o[0] });
+      b.addEventListener('click', function () {
+        root.querySelectorAll('.seg-btn').forEach(function (x) {
+          x.classList.toggle('active', x === b);
+        });
+        onPick(o[0]);
+      });
       return b;
     }));
+    return root;
   }
 
   function accountCard() {
@@ -2967,19 +3086,34 @@
     clearTimeout(kbEnsureTimer);
     kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 0);
   }
+  function scheduleEnsureFieldVisibleBurst() {
+    scheduleEnsureFieldVisible(0);
+    setTimeout(ensureFieldVisible, 90);
+    setTimeout(ensureFieldVisible, 240);
+  }
+  function fieldScrollHost(node) {
+    if (!node || !node.closest) return null;
+    var sheet = node.closest('.choice-sheet');
+    if (sheet) return sheet;
+    if (document.body.classList.contains('native')) return document.getElementById('view');
+    return null;
+  }
   function ensureFieldVisible() {
     var vv = window.visualViewport, node = document.activeElement;
     if (!vv || !isTextField(node)) return;
-    if (kbOverlayPx() < 120) return;          // layout shrank (or no kb) -> browser handles it
     var r = node.getBoundingClientRect();
-    var visibleBottom = vv.offsetTop + vv.height;
-    var over = r.bottom - (visibleBottom - 16);
-    if (over <= 4) return;
+    var visibleTop = vv.offsetTop + 12;
+    var visibleBottom = vv.offsetTop + vv.height - 18;
+    var delta = 0;
+    if (r.bottom > visibleBottom) delta = r.bottom - visibleBottom;
+    else if (r.top < visibleTop) delta = r.top - visibleTop;
+    if (Math.abs(delta) <= 4) return;
     // native shell locks the document (overflow:hidden), so the scroller is .view;
     // elsewhere the document itself scrolls. Either way the nudge stays bounded.
-    var sc = document.body.classList.contains('native') ? document.getElementById('view') : null;
-    if (sc) sc.scrollTop += Math.min(over, 600);
-    else window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'auto' });
+    var nudge = Math.max(-600, Math.min(600, delta));
+    var sc = fieldScrollHost(node);
+    if (sc) sc.scrollTop += nudge;
+    else window.scrollBy({ top: nudge, behavior: 'auto' });
   }
   // Reconcile inset + nav-hide from the visual viewport. Inset comes from the REAL
   // overlap, never the raw keyboardHeight, so it can't double-count the shrink.
@@ -2987,7 +3121,7 @@
     var overlap = kbOverlayPx();
     setKeyboardInset(overlap);
     document.body.classList.toggle('kb-open', overlap > 80);
-    scheduleEnsureFieldVisible(0);
+    scheduleEnsureFieldVisibleBurst();
   }
   function initKeyboard() {
     var vv = window.visualViewport;
@@ -2996,7 +3130,7 @@
       vv.addEventListener('scroll', function () { scheduleEnsureFieldVisible(0); });
     }
     document.addEventListener('focusin', function (e) {
-      if (isTextField(e.target)) scheduleEnsureFieldVisible(150);
+      if (isTextField(e.target)) scheduleEnsureFieldVisibleBurst();
     });
     try {
       var Cap = window.Capacitor;
@@ -3005,7 +3139,7 @@
       if (!KB || !KB.addListener) return;
       // Native events only toggle the nav-hide promptly (snappier than waiting for the
       // vv.resize); the inset itself is still reconciled from the visual viewport.
-      KB.addListener('keyboardWillShow', function () { document.body.classList.add('kb-open'); scheduleEnsureFieldVisible(60); });
+      KB.addListener('keyboardWillShow', function () { document.body.classList.add('kb-open'); scheduleEnsureFieldVisibleBurst(); });
       KB.addListener('keyboardDidShow', syncKeyboardState);
       KB.addListener('keyboardWillHide', function () { document.body.classList.remove('kb-open'); });
       KB.addListener('keyboardDidHide', function () { setKeyboardInset(0); document.body.classList.remove('kb-open'); });

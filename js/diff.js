@@ -32,7 +32,7 @@
   function imageDiff(srcA, srcB, outCanvas, opts) {
     opts = opts || {};
     var W = opts.width || 480;
-    var threshold = opts.threshold || 38; // per-channel sensitivity
+    var threshold = Math.max(1, Math.min(120, opts.threshold || 38)); // per-channel sensitivity
 
     return Promise.all([loadImage(srcA), loadImage(srcB)]).then(function (imgs) {
       var a = imgs[0], b = imgs[1];
@@ -113,26 +113,54 @@
 
     Object.keys(after).forEach(function (name) {
       if (!before[name]) {
-        added.push({ name: name, qty: after[name] });
-      } else if (before[name] !== after[name]) {
-        changed.push({ name: name, from: before[name], to: after[name] });
+        added.push({ name: after[name].name, qty: after[name].qty });
+      } else if (before[name].qty !== after[name].qty) {
+        changed.push({ name: after[name].name, from: before[name].qty, to: after[name].qty });
       } else {
-        kept.push({ name: name, qty: after[name] });
+        kept.push({ name: after[name].name, qty: after[name].qty });
       }
     });
     Object.keys(before).forEach(function (name) {
-      if (!after[name]) removed.push({ name: name, qty: before[name] });
+      if (!after[name]) removed.push({ name: before[name].name, qty: before[name].qty });
     });
 
     return { added: added, removed: removed, changed: changed, kept: kept };
   }
 
+  function nfkc(s) {
+    s = String(s || '').trim();
+    return s.normalize ? s.normalize('NFKC') : s;
+  }
+
+  function trailingQty(raw) {
+    var s = nfkc(raw);
+    var m = s.match(/(?:^|[\s xX*×])(\d+(?:\.\d+)?)\s*(?:个|件|盒|瓶|袋|包|杯|罐|支|本|张|片|条|份|碗|盘|只|双|套|根|块|枚|pcs?|pieces?|boxes?|bags?|bottles?)?$/i);
+    return m ? parseFloat(m[1]) : null;
+  }
+
+  function cleanDisplayName(raw) {
+    var s = nfkc(raw);
+    s = s.replace(/[，,;；、]+/g, ' ');
+    s = s.replace(/\s*[xX*×]\s*\d+(?:\.\d+)?\s*$/i, '');
+    s = s.replace(/\s*\d+(?:\.\d+)?\s*(?:个|件|盒|瓶|袋|包|杯|罐|支|本|张|片|条|份|碗|盘|只|双|套|根|块|枚|pcs?|pieces?|boxes?|bags?|bottles?)?\s*$/i, '');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeItemName(raw) {
+    return cleanDisplayName(raw).toLowerCase();
+  }
+
   function indexItems(items) {
     var map = {};
     (items || []).forEach(function (it) {
-      var name = (it.name || '').trim();
-      if (!name) return;
-      map[name] = (map[name] || 0) + (it.qty || 1);
+      var key = normalizeItemName(it.name);
+      if (!key) return;
+      var name = cleanDisplayName(it.name) || key;
+      var explicitQty = parseFloat(it.qty);
+      var embeddedQty = trailingQty(it.name);
+      var qty = (!isNaN(explicitQty) && explicitQty > 1) ? explicitQty : (embeddedQty || explicitQty || 1);
+      if (!map[key]) map[key] = { name: name, qty: 0 };
+      map[key].qty += qty;
     });
     return map;
   }
