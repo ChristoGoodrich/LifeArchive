@@ -4,7 +4,7 @@
    2. Keep the IME on adjustResize; @capacitor/keyboard resizeOnFullScreen and
       the web-layer keyboardHeight fallback cover edge-to-edge WebViews that
       still refuse to resize normally. */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -12,6 +12,7 @@ const version = pkg.version; // "1.0.5"
 const [maj, min, pat] = version.split('.').map(Number);
 const code = maj * 10000 + min * 100 + pat;                              // 1.0.5 -> 10005
 const appId = 'com.lifearchive.app';
+const appIdPath = appId.replace(/\./g, '/');
 const gradlePath = 'android/app/build.gradle';
 let g = readFileSync(gradlePath, 'utf8');
 g = g.replace(/versionCode\s+\d+/, 'versionCode ' + code)
@@ -40,6 +41,22 @@ if (!g.includes('signingConfigs')) {
 }
 writeFileSync(gradlePath, g);
 console.log(`Android appId "${appId}", versionName "${version}", versionCode ${code}; debug signingConfig -> committed keystore`);
+
+// --- Java package + Android string resources ---
+const mainActivityPath = `android/app/src/main/java/${appIdPath}/MainActivity.java`;
+mkdirSync(`android/app/src/main/java/${appIdPath}`, { recursive: true });
+writeFileSync(mainActivityPath,
+  `package ${appId};\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n`);
+if (existsSync('android/app/src/main/java/com/realitygit')) {
+  rmSync('android/app/src/main/java/com/realitygit', { recursive: true, force: true });
+}
+
+const stringsPath = 'android/app/src/main/res/values/strings.xml';
+let strings = readFileSync(stringsPath, 'utf8');
+strings = strings.replace(/<string name="package_name">[^<]*<\/string>/, `<string name="package_name">${appId}</string>`)
+                 .replace(/<string name="custom_url_scheme">[^<]*<\/string>/, `<string name="custom_url_scheme">${appId}</string>`);
+writeFileSync(stringsPath, strings);
+console.log(`Android Java package + string resources -> "${appId}"`);
 
 // --- Android manifest: camera permission + stable IME viewport ---
 const manifestPath = 'android/app/src/main/AndroidManifest.xml';

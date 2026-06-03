@@ -51,7 +51,21 @@
       group_meal: '饮食', group_item: '物品场景', meals_count: '餐',
       meal_placeholder: '例如：午饭 黄焖鸡 + 一杯奶茶',
       ate_what: '吃了什么', add_meal: '＋ 添加食物 / 备注（可选）',
-      choose_option: '请选择', choice_title: '选择一个选项', choice_close: '取消'
+      choose_option: '请选择', choice_title: '选择一个选项', choice_close: '取消',
+      branch_due_at: '复盘到期日', branch_no_due: '不设到期',
+      branch_confidence: '决策把握', confidence_low: '低', confidence_mid: '中', confidence_high: '高',
+      branch_tags: '标签', branch_tags_ph: '例如：学习 健康 预算',
+      branch_search_ph: '搜索问题 / 选项 / 标签 / 复盘…',
+      branch_all: '全部', branch_unselected: '未选择', branch_pending: '待复盘',
+      branch_due: '已到期', branch_reviewed_chip: '已复盘',
+      branch_insights: '洞察', branch_total: '总数', branch_avg_rating: '平均评分',
+      branch_repeat_rate: '会重选率', branch_hit_rate: '预测命中率',
+      branch_detail: '分支详情', context_commit: '关联存档',
+      no_context: '不关联存档', actual_result: '实际结果',
+      predicted_vs_actual: '预测 vs 实际', hit: '命中', miss: '未命中',
+      extra_actual: '补充实际结果（每行一条）', merge_to_commit: '生成复盘存档',
+      merged_commit: '已生成存档', from_branch: '来自分支',
+      load_more: '加载更多', open_detail: '查看详情'
     },
     en: {
       brand: 'Life Archive',
@@ -97,7 +111,21 @@
       group_meal: 'Meals', group_item: 'Things', meals_count: 'meals',
       meal_placeholder: 'e.g. Lunch — braised chicken rice + milk tea',
       ate_what: 'What you ate', add_meal: '＋ Add food / notes (optional)',
-      choose_option: 'Choose', choice_title: 'Choose an option', choice_close: 'Cancel'
+      choose_option: 'Choose', choice_title: 'Choose an option', choice_close: 'Cancel',
+      branch_due_at: 'Review due date', branch_no_due: 'No due date',
+      branch_confidence: 'Confidence', confidence_low: 'Low', confidence_mid: 'Medium', confidence_high: 'High',
+      branch_tags: 'Tags', branch_tags_ph: 'e.g. study health budget',
+      branch_search_ph: 'Search question / options / tags / review…',
+      branch_all: 'All', branch_unselected: 'Unchosen', branch_pending: 'To review',
+      branch_due: 'Overdue', branch_reviewed_chip: 'Reviewed',
+      branch_insights: 'Insights', branch_total: 'Total', branch_avg_rating: 'Avg rating',
+      branch_repeat_rate: 'Repeat rate', branch_hit_rate: 'Prediction hit rate',
+      branch_detail: 'Branch detail', context_commit: 'Context commit',
+      no_context: 'No context commit', actual_result: 'Actual result',
+      predicted_vs_actual: 'Predicted vs actual', hit: 'Hit', miss: 'Miss',
+      extra_actual: 'Extra actual results (one per line)', merge_to_commit: 'Create review commit',
+      merged_commit: 'Merged commit', from_branch: 'From branch',
+      load_more: 'Load more', open_detail: 'Open detail'
     }
   };
 
@@ -142,6 +170,17 @@
     if (n < 1024) return n + ' B';
     if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
     return (n / 1048576).toFixed(1) + ' MB';
+  }
+  function pct(n, d) { return d ? Math.round((n / d) * 100) + '%' : '—'; }
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function fmtDateOnly(s) {
+    if (!s) return '';
+    var p = String(s).split('-');
+    if (p.length < 3) return String(s);
+    return lang === 'zh' ? (p[0] + '年' + Number(p[1]) + '月' + Number(p[2]) + '日') : (p[1] + '/' + p[2] + '/' + p[0]);
   }
   function shortId(id) { return (id || '').split('_').pop().slice(0, 6); }
   function isImageFile(f) { return !!(f && /^image\//.test(f.type || '') && f.data); }
@@ -341,10 +380,10 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'settings', 'changelog', 'detail'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail'];
   var current = 'timeline';
   // nav depth drives the open/back slide direction (deeper route = slide in from right)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, commit: 1, detail: 1, settings: 1, changelog: 2 };
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, 'branch-detail': 1, commit: 1, detail: 1, settings: 1, changelog: 2 };
   var prevDepth = 0;
 
   function go(route) {
@@ -428,12 +467,17 @@
   function navButton(route, label, isCreate) {
     var icon = el('span', { class: 'nav-ic' });
     icon.innerHTML = NAV_ICONS[route];
+    var kids = [icon, el('span', { class: 'nav-label', text: label })];
+    if (route === 'branch') {
+      var pending = branchPendingCount();
+      if (pending > 0) kids.push(el('span', { class: 'nav-badge', text: pending > 9 ? '9+' : String(pending) }));
+    }
     // the label is always in the DOM; CSS hides it for the mobile "+" FAB
     return el('button', {
       class: 'nav-btn' + (isCreate ? ' nav-btn-create' : '') + (current === route ? ' active' : ''),
       'data-route': route, 'aria-label': label, title: label,
       onclick: function () { go(route); }
-    }, [icon, el('span', { class: 'nav-label', text: label })]);
+    }, kids);
   }
 
   function renderNav() {
@@ -467,6 +511,7 @@
     else if (current === 'diff') renderDiff(v);
     else if (current === 'rollback') renderRollback(v);
     else if (current === 'branch') renderBranch(v);
+    else if (current === 'branch-detail') renderBranchDetail(v);
     else if (current === 'settings') renderSettings(v);
     else if (current === 'changelog') renderChangelog(v);
     else if (current === 'detail') renderDetail(v);
@@ -482,6 +527,8 @@
   /* ---------------- Timeline ---------------- */
   var tlQuery = '';     // timeline search text (persists across renders this session)
   var tlScene = null;   // timeline scene filter (null = all scenes)
+  var TL_PAGE_SIZE = 24;
+  var tlVisible = TL_PAGE_SIZE;
   function commitMatches(c, q) {
     if (!q) return true;
     q = q.toLowerCase();
@@ -520,7 +567,7 @@
     var searchInput = el('input', { class: 'field tl-search-input', type: 'search',
       placeholder: lang === 'zh' ? '搜索描述 / 物品 / 备注…' : 'Search message / items / notes…' });
     searchInput.value = tlQuery;
-    searchInput.addEventListener('input', function () { tlQuery = searchInput.value; renderList(); });
+    searchInput.addEventListener('input', function () { tlQuery = searchInput.value; tlVisible = TL_PAGE_SIZE; renderList(); });
 
     var chipsRow = el('div', { class: 'tl-chips' });
     function chipBtn(id, label, withIcon) {
@@ -529,7 +576,7 @@
       if (withIcon) { var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(id); kids.push(ic); }
       kids.push(el('span', { text: label }));
       var b = el('button', { type: 'button', class: 'tl-chip' + (on ? ' active' : '') }, kids);
-      b.addEventListener('click', function () { tlScene = id; renderChips(); renderList(); });
+      b.addEventListener('click', function () { tlScene = id; tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
       return b;
     }
     function renderChips() {
@@ -556,9 +603,10 @@
         ]));
         return;
       }
+      var shown = filtered.slice(0, tlVisible);
       // group by day, newest first (commits already sorted desc)
       var groups = [], map = {};
-      filtered.forEach(function (c) {
+      shown.forEach(function (c) {
         var k = dayKey(c.createdAt);
         if (!map[k]) { map[k] = { label: dayLabel(c.createdAt), items: [] }; groups.push(map[k]); }
         map[k].items.push(c);
@@ -579,6 +627,10 @@
         sec.appendChild(rail);
         listWrap.appendChild(sec);
       });
+      if (filtered.length > shown.length) {
+        listWrap.appendChild(el('button', { class: 'btn ghost load-more', text: t('load_more') + ' · ' + shown.length + ' / ' + filtered.length,
+          onclick: function () { tlVisible += TL_PAGE_SIZE; renderList(); } }));
+      }
     }
     renderList();
   }
@@ -626,6 +678,7 @@
 
     var chips = el('div', { class: 'commit-chips' });
     if (isRoot) chips.appendChild(el('span', { class: 'chip root', text: t('root') }));
+    if (c.fromBranchId) chips.appendChild(el('span', { class: 'chip branch-link', text: t('from_branch') + ' ' + shortId(c.fromBranchId) }));
     (c.items || []).slice(0, 6).forEach(function (it) {
       chips.appendChild(el('span', { class: 'chip',
         text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') }));
@@ -675,12 +728,20 @@
       });
       card.appendChild(list);
     }
+    if (c.fromBranchId) {
+      var linkedBranch = Store.getBranch(c.fromBranchId);
+      if (linkedBranch) {
+        card.appendChild(el('div', { class: 'detail-section-title', text: t('from_branch') }));
+        card.appendChild(el('button', { class: 'btn ghost detail-link-btn', text: '🔀 ' + linkedBranch.question,
+          onclick: function () { pendingBranchDetail = linkedBranch.id; go('branch-detail'); } }));
+      }
+    }
     if (c.files && c.files.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
       var imgs = (c.files || []).filter(isImageFile);
       if (imgs.length) {
         var gallery = el('div', { class: 'detail-gallery' });
-        imgs.forEach(function (f) {
+        imgs.slice(0, 12).forEach(function (f) {
           gallery.appendChild(el('a', {
             class: 'detail-image',
             href: f.data,
@@ -689,6 +750,8 @@
             title: f.name
           }));
         });
+        if (imgs.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more',
+          text: '+' + (imgs.length - 12) }));
         card.appendChild(gallery);
       }
       var fl = el('div', { class: 'detail-files' });
@@ -1400,13 +1463,124 @@
 
   /* ---------------- Branch (decisions) ---------------- */
   var branchEditingId = null;
+  var pendingBranchDetail = null;
+  var branchQuery = '';
+  var branchStatusFilter = 'all';
+  var branchTagFilter = null;
+  var BRANCH_PAGE_SIZE = 18;
+  var branchVisible = BRANCH_PAGE_SIZE;
   var BRANCH_LETTERS = ['A', 'B', 'C', 'D'];
   function branchLabel(idx) { return BRANCH_LETTERS[idx] || String(idx + 1); }
   function branchTone(idx) { return ['a', 'b', 'c', 'd'][idx] || 'a'; }
   function normalizedBranches(b) {
     var list = (b && b.branches && b.branches.length ? b.branches : []).slice(0, 4);
     while (list.length < 2) list.push({ name: '', predicted: [] });
-    return list;
+    return list.map(function (br, idx) {
+      return {
+        name: br && br.name || ((lang === 'zh' ? '选项 ' : 'Option ') + branchLabel(idx)),
+        predicted: (br && br.predicted || []).slice()
+      };
+    });
+  }
+  function splitLines(s) {
+    return (s || '').split('\n').map(function (x) { return x.trim(); })
+      .filter(function (x) { return x; });
+  }
+  function parseTags(s) {
+    var seen = {};
+    return (s || '').split(/[,\s，、#]+/).map(function (x) { return x.trim(); })
+      .filter(function (x) {
+        var k = x.toLowerCase();
+        if (!x || seen[k]) return false;
+        seen[k] = true; return true;
+      }).slice(0, 8);
+  }
+  function branchStatusKey(b) {
+    if (b && b.followup) return 'reviewed';
+    if (!b || b.chosenIndex == null) return 'unselected';
+    if (b.dueAt && String(b.dueAt) <= todayKey()) return 'due';
+    return 'pending';
+  }
+  function branchStatusText(key) {
+    return {
+      all: t('branch_all'),
+      unselected: t('branch_unselected'),
+      pending: t('branch_pending'),
+      due: t('branch_due'),
+      reviewed: t('branch_reviewed_chip')
+    }[key] || key;
+  }
+  function branchPendingCount() {
+    try {
+      return Store.branches().filter(function (b) {
+        var s = branchStatusKey(b);
+        return s === 'pending' || s === 'due';
+      }).length;
+    } catch (e) { return 0; }
+  }
+  function branchConfidenceText(c) {
+    return ({ low: t('confidence_low'), medium: t('confidence_mid'), high: t('confidence_high') })[c || ''] || '—';
+  }
+  function branchActual(b) {
+    return (b && b.followup && b.followup.actual) || (b && b.actual) || [];
+  }
+  function branchHits(b) {
+    return (b && b.followup && b.followup.hits) || (b && b.hits) || [];
+  }
+  function branchHitText(b) {
+    var hits = branchHits(b);
+    if (!hits.length) return '—';
+    var ok = hits.filter(Boolean).length;
+    return ok + '/' + hits.length;
+  }
+  function branchContextCommit(b) {
+    return b && b.contextCommitId ? Store.getCommit(b.contextCommitId) : null;
+  }
+  function branchMatches(b, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    var parts = [b.question || '', b.dueAt || '', branchStatusText(branchStatusKey(b)), branchConfidenceText(b.confidence)]
+      .concat(b.tags || [])
+      .concat(branchActual(b))
+      .concat(b.followup && b.followup.note ? [b.followup.note] : []);
+    normalizedBranches(b).forEach(function (br) {
+      parts.push(br.name || '');
+      parts = parts.concat(br.predicted || []);
+    });
+    var ctx = branchContextCommit(b);
+    if (ctx) parts.push(ctx.message || '', shortId(ctx.id));
+    return parts.join(' ').toLowerCase().indexOf(q) >= 0;
+  }
+  function allBranchTags(list) {
+    var seen = {}, out = [];
+    list.forEach(function (b) {
+      (b.tags || []).forEach(function (tag) {
+        var k = tag.toLowerCase();
+        if (!seen[k]) { seen[k] = true; out.push(tag); }
+      });
+    });
+    return out.slice(0, 12);
+  }
+  function branchStats(list) {
+    var reviewed = list.filter(function (b) { return !!b.followup; });
+    var pending = list.filter(function (b) {
+      var s = branchStatusKey(b);
+      return s === 'pending' || s === 'due';
+    });
+    var ratingSum = 0, repeat = 0, hitOk = 0, hitTotal = 0;
+    reviewed.forEach(function (b) {
+      ratingSum += parseInt(b.followup.rating, 10) || 0;
+      if (b.followup.wouldRepeat) repeat++;
+      branchHits(b).forEach(function (h) { hitTotal++; if (h) hitOk++; });
+    });
+    return {
+      total: list.length,
+      pending: pending.length,
+      reviewed: reviewed.length,
+      avgRating: reviewed.length ? (ratingSum / reviewed.length).toFixed(1) : '—',
+      repeatRate: pct(repeat, reviewed.length),
+      hitRate: pct(hitOk, hitTotal)
+    };
   }
 
   function renderBranch(v) {
@@ -1417,7 +1591,87 @@
 
     var list = Store.branches();
     if (!list.length) { v.appendChild(noticeCard(t('branch_empty'))); return; }
-    list.forEach(function (b) { v.appendChild(branchCard(b)); });
+    v.appendChild(branchInsights(list));
+
+    var searchInput = el('input', { class: 'field tl-search-input', type: 'search',
+      placeholder: t('branch_search_ph') });
+    searchInput.value = branchQuery;
+    var chipsRow = el('div', { class: 'tl-chips branch-filter-chips' });
+    var listWrap = el('div', { class: 'branch-list' });
+
+    searchInput.addEventListener('input', function () {
+      branchQuery = searchInput.value;
+      branchVisible = BRANCH_PAGE_SIZE;
+      renderBranchList();
+    });
+    v.appendChild(el('div', { class: 'tl-search branch-search' }, [searchInput, chipsRow]));
+    v.appendChild(listWrap);
+
+    function chip(key, label, tag) {
+      var on = tag ? branchTagFilter === tag : branchStatusFilter === key;
+      var b = el('button', { type: 'button', class: 'tl-chip' + (on ? ' active' : ''), text: label });
+      b.addEventListener('click', function () {
+        if (tag) branchTagFilter = branchTagFilter === tag ? null : tag;
+        else branchStatusFilter = key;
+        branchVisible = BRANCH_PAGE_SIZE;
+        renderBranchChips(); renderBranchList();
+      });
+      return b;
+    }
+    function renderBranchChips() {
+      chipsRow.innerHTML = '';
+      ['all', 'unselected', 'pending', 'due', 'reviewed'].forEach(function (s) {
+        chipsRow.appendChild(chip(s, branchStatusText(s)));
+      });
+      allBranchTags(list).forEach(function (tag) {
+        chipsRow.appendChild(chip('tag', '#' + tag, tag));
+      });
+    }
+    function activeBranches() {
+      return list.filter(function (b) {
+        var statusOk = branchStatusFilter === 'all' || branchStatusKey(b) === branchStatusFilter;
+        var tagOk = !branchTagFilter || (b.tags || []).some(function (tag) { return tag.toLowerCase() === branchTagFilter.toLowerCase(); });
+        return statusOk && tagOk && branchMatches(b, branchQuery);
+      });
+    }
+    function renderBranchList() {
+      listWrap.innerHTML = '';
+      var filtered = activeBranches();
+      if (!filtered.length) {
+        listWrap.appendChild(el('div', { class: 'tl-empty' }, [
+          el('div', { class: 'tl-empty-ic', text: '🔍' }),
+          el('div', { text: lang === 'zh' ? '没有匹配的分支' : 'No matching branches' })
+        ]));
+        return;
+      }
+      var shown = filtered.slice(0, branchVisible);
+      shown.forEach(function (b) { listWrap.appendChild(branchCard(b)); });
+      if (filtered.length > shown.length) {
+        listWrap.appendChild(el('button', { class: 'btn ghost load-more', text: t('load_more') + ' · ' + shown.length + ' / ' + filtered.length,
+          onclick: function () { branchVisible += BRANCH_PAGE_SIZE; renderBranchList(); } }));
+      }
+    }
+    renderBranchChips();
+    renderBranchList();
+  }
+
+  function branchInsights(list) {
+    var s = branchStats(list);
+    var cards = [
+      [t('branch_total'), s.total],
+      [t('branch_pending'), s.pending],
+      [t('branch_reviewed_chip'), s.reviewed],
+      [t('branch_avg_rating'), s.avgRating],
+      [t('branch_repeat_rate'), s.repeatRate],
+      [t('branch_hit_rate'), s.hitRate]
+    ];
+    return el('section', { class: 'branch-insights', 'aria-label': t('branch_insights') },
+      cards.map(function (c) {
+        return el('div', { class: 'branch-insight' }, [
+          el('span', { class: 'branch-insight-label', text: c[0] }),
+          el('strong', { text: String(c[1]) })
+        ]);
+      }));
   }
 
   function branchForm(editing) {
@@ -1429,6 +1683,19 @@
 
     var qInput = el('input', { class: 'field', type: 'text', placeholder: t('branch_q_ph'),
       value: (editing && editing.question) || '' });
+    var dueInput = el('input', { class: 'field', type: 'date', value: (editing && editing.dueAt) || '' });
+    var confSel = choiceSelect([
+      { value: '', text: '—' },
+      { value: 'low', text: t('confidence_low') },
+      { value: 'medium', text: t('confidence_mid') },
+      { value: 'high', text: t('confidence_high') }
+    ], (editing && editing.confidence) || '', 'tiny-choice');
+    var tagsInput = el('input', { class: 'field', type: 'text', placeholder: t('branch_tags_ph'),
+      value: (editing && editing.tags || []).join(' ') });
+    var contextChoices = [{ value: '', text: t('no_context') }].concat(Store.commits().slice(0, 80).map(function (c) {
+      return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
+    }));
+    var contextSel = choiceSelect(contextChoices, (editing && editing.contextCommitId) || '');
     var optionRows = el('div', { class: 'branch-options' });
     var branches = normalizedBranches(editing);
 
@@ -1471,6 +1738,12 @@
     renumberOptions();
 
     details.appendChild(labeled(t('branch_q'), qInput));
+    details.appendChild(el('div', { class: 'branch-meta-grid' }, [
+      labeled(t('branch_due_at'), dueInput),
+      labeledBlock(t('branch_confidence'), confSel),
+      labeled(t('branch_tags'), tagsInput),
+      labeledBlock(t('context_commit'), contextSel)
+    ]));
     details.appendChild(optionRows);
     details.appendChild(el('div', { class: 'form-actions branch-form-actions' }, [
       addBtn,
@@ -1485,41 +1758,140 @@
             predicted: splitLines(row._out.value)
           };
         }).slice(0, 4);
-        var patch = { question: qInput.value.trim(), branches: nextBranches };
+        var patch = {
+          question: qInput.value.trim(),
+          branches: nextBranches,
+          dueAt: dueInput.value || null,
+          confidence: confSel.getValue() || '',
+          tags: parseTags(tagsInput.value),
+          contextCommitId: contextSel.getValue() || null
+        };
         if (isEdit) {
-          if (editing.chosenIndex != null && editing.chosenIndex >= nextBranches.length) patch.chosenIndex = null;
+          if (editing.chosenIndex != null && editing.chosenIndex >= nextBranches.length) {
+            patch.chosenIndex = null; patch.followup = null; patch.actual = []; patch.hits = [];
+          }
           Store.updateBranch(editing.id, patch);
           branchEditingId = null;
           toast('✅ ' + t('save_branch'));
         } else {
-          Store.addBranch({ question: patch.question, branches: patch.branches, chosenIndex: null, followup: null });
+          Store.addBranch({
+            question: patch.question, branches: patch.branches, dueAt: patch.dueAt,
+            confidence: patch.confidence, tags: patch.tags, contextCommitId: patch.contextCommitId,
+            chosenIndex: null, followup: null, actual: [], hits: []
+          });
           toast('✅ ' + t('create_branch'));
         }
+        renderNav();
         render();
       } })
     ]));
     return details;
   }
 
-  function splitLines(s) {
-    return (s || '').split('\n').map(function (x) { return x.trim(); })
-      .filter(function (x) { return x; });
+  function branchStatusBadge(b) {
+    var s = branchStatusKey(b);
+    return el('span', { class: 'branch-status ' + s, text: branchStatusText(s) });
   }
 
   function branchCard(b) {
-    var head = el('div', { class: 'branch-head' }, [
-      el('span', { class: 'branch-q', text: '🔀 ' + b.question }),
-      el('span', { class: 'branch-status ' + (b.followup ? 'reviewed' : 'pending'),
-        text: b.followup ? t('branch_reviewed') : t('branch_pending') })
-    ]);
+    var ctx = branchContextCommit(b);
+    var chosen = b.chosenIndex != null ? normalizedBranches(b)[b.chosenIndex] : null;
+    var chips = el('div', { class: 'branch-mini-meta' }, [
+      b.dueAt ? el('span', { class: 'branch-mini-chip due', text: fmtDateOnly(b.dueAt) }) : null,
+      b.confidence ? el('span', { class: 'branch-mini-chip', text: t('branch_confidence') + ' ' + branchConfidenceText(b.confidence) }) : null,
+      b.followup ? el('span', { class: 'branch-mini-chip', text: t('branch_hit_rate') + ' ' + branchHitText(b) }) : null,
+      b.mergedCommitId ? el('span', { class: 'branch-mini-chip merged', text: t('merged_commit') }) : null
+    ].concat((b.tags || []).map(function (tag) { return el('span', { class: 'branch-mini-chip tag', text: '#' + tag }); })));
+    var children = [
+      el('div', { class: 'branch-head' }, [
+        el('span', { class: 'branch-q', text: '🔀 ' + b.question }),
+        branchStatusBadge(b)
+      ]),
+      chips,
+      chosen ? el('div', { class: 'branch-chosen-line', text: '✓ ' + t('chosen') + ' · ' + chosen.name }) :
+        el('div', { class: 'branch-chosen-line muted', text: t('branch_unselected') }),
+      ctx ? el('div', { class: 'branch-context-mini' }, [
+        el('span', { class: 'commit-hash', text: t('context_commit') }),
+        el('span', { text: ctx.message || shortId(ctx.id) })
+      ]) : null
+    ];
+    var card = el('div', { class: 'branch-card slim tappable', role: 'button', tabindex: '0' }, children);
+    function open() { pendingBranchDetail = b.id; go('branch-detail'); }
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    return card;
+  }
 
-    var cols = el('div', { class: 'branch-cols' });
+  function renderBranchDetail(v) {
+    var b = pendingBranchDetail ? Store.getBranch(pendingBranchDetail) : null;
+    if (!b) { go('branch'); return; }
+    var L = lang === 'zh';
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '分支' : 'Branches'),
+      onclick: function () { go('branch'); } });
+    v.appendChild(el('div', { class: 'view-head' }, [back]));
+
+    var card = el('div', { class: 'detail-card branch-detail-card' });
+    card.appendChild(el('div', { class: 'branch-detail-top' }, [
+      el('div', {}, [
+        el('div', { class: 'detail-title', text: b.question }),
+        el('div', { class: 'detail-sub' }, [
+          el('span', { text: fmtDate(b.createdAt || Date.now()) }),
+          el('span', { class: 'commit-dot', text: '·' }),
+          el('span', { class: 'commit-hash', text: shortId(b.id) })
+        ])
+      ]),
+      branchStatusBadge(b)
+    ]));
+    card.appendChild(branchMetaRows(b));
+    card.appendChild(branchOptionsDetail(b));
+    card.appendChild(branchFollowupBlock(b));
+    card.appendChild(branchMergeBlock(b));
+    v.appendChild(card);
+
+    v.appendChild(el('div', { class: 'detail-actions' }, [
+      el('button', { class: 'btn primary', text: '✏️ ' + t('edit_branch'), onclick: function () {
+        branchEditingId = b.id; go('branch');
+      } }),
+      el('button', { class: 'btn danger', text: '🗑 ' + t('delete'), onclick: function () {
+        if (confirm(t('confirm_delete_branch'))) { Store.deleteBranch(b.id); pendingBranchDetail = null; renderNav(); go('branch'); }
+      } })
+    ]));
+  }
+
+  function branchMetaRows(b) {
+    var ctx = branchContextCommit(b);
+    var rows = el('div', { class: 'branch-meta-rows' });
+    rows.appendChild(el('div', { class: 'branch-meta-row' }, [
+      el('span', { text: t('branch_due_at') }),
+      el('strong', { text: b.dueAt ? fmtDateOnly(b.dueAt) : t('branch_no_due') })
+    ]));
+    rows.appendChild(el('div', { class: 'branch-meta-row' }, [
+      el('span', { text: t('branch_confidence') }),
+      el('strong', { text: branchConfidenceText(b.confidence) })
+    ]));
+    if (b.tags && b.tags.length) rows.appendChild(el('div', { class: 'branch-meta-row' }, [
+      el('span', { text: t('branch_tags') }),
+      el('strong', { text: b.tags.map(function (x) { return '#' + x; }).join(' ') })
+    ]));
+    if (ctx) {
+      rows.appendChild(el('button', { class: 'branch-meta-row as-button', onclick: function () {
+        pendingDetail = ctx.id; go('detail');
+      } }, [
+        el('span', { text: t('context_commit') }),
+        el('strong', { text: ctx.message || shortId(ctx.id) })
+      ]));
+    }
+    return rows;
+  }
+
+  function branchOptionsDetail(b) {
+    var cols = el('div', { class: 'branch-cols detail-branch-cols' });
     normalizedBranches(b).forEach(function (br, idx) {
       var chosen = b.chosenIndex === idx;
       var preds = el('ul', { class: 'pred-ul' });
       (br.predicted || []).forEach(function (p) { preds.appendChild(el('li', { text: p })); });
       if (!preds.children.length) preds.appendChild(el('li', { text: lang === 'zh' ? '未填写预期结果' : 'No predicted outcome yet' }));
-      var col = el('div', { class: 'branch-col ' + branchTone(idx) + (chosen ? ' chosen' : '') }, [
+      cols.appendChild(el('div', { class: 'branch-col ' + branchTone(idx) + (chosen ? ' chosen' : '') }, [
         el('div', { class: 'branch-col-head' }, [
           el('span', { class: 'branch-tag', text: branchLabel(idx) }),
           el('span', { class: 'branch-name', text: br.name })
@@ -1527,60 +1899,155 @@
         preds,
         b.chosenIndex == null
           ? el('button', { class: 'btn tiny primary', text: t('choose'), onclick: function () {
-              Store.updateBranch(b.id, { chosenIndex: idx }); render();
+              Store.updateBranch(b.id, { chosenIndex: idx, chosenAt: Date.now() });
+              renderNav(); render();
             } })
           : (chosen ? el('span', { class: 'chosen-badge', text: '✓ ' + t('chosen') }) : null)
-      ]);
-      cols.appendChild(col);
+      ]));
     });
+    return el('section', {}, [
+      el('div', { class: 'detail-section-title', text: t('nav_branch') }),
+      cols
+    ]);
+  }
 
-    var children = [head, cols];
-
-    // follow-up / review block (only once chosen)
-    if (b.chosenIndex != null) {
-      if (b.followup) {
-        children.push(el('div', { class: 'followup-done' }, [
+  function branchFollowupBlock(b) {
+    if (b.chosenIndex == null) return noticeCard(lang === 'zh' ? '先选择一条分支，再回来复盘。' : 'Choose a branch first, then review it.');
+    if (b.followup) {
+      return el('section', { class: 'branch-review' }, [
+        el('div', { class: 'detail-section-title', text: t('followup') }),
+        el('div', { class: 'followup-done' }, [
           el('span', { class: 'rating', text: '⭐ ' + b.followup.rating + '/5' }),
           el('span', { class: 'repeat ' + (b.followup.wouldRepeat ? 'yes' : 'no'),
             text: b.followup.wouldRepeat ? t('would_repeat_yes') : t('would_repeat_no') }),
           b.followup.note ? el('span', { class: 'fu-note', text: '“' + b.followup.note + '”' }) : null
-        ]));
-      } else {
-        var rate = choiceSelect([5, 4, 3, 2, 1].map(function (n) {
-          return { value: n, text: '⭐ ' + n };
-        }), '5', 'tiny-choice');
-        var note = el('input', { class: 'field', type: 'text', placeholder: t('followup') });
-        var rep = choiceSelect([
-          { value: '1', text: t('yes') }, { value: '0', text: t('no') }
-        ], '1', 'tiny-choice');
-        children.push(el('div', { class: 'followup-form' }, [
-          el('div', { class: 'fu-title', text: '📋 ' + t('followup') }),
-          el('div', { class: 'fu-row' }, [
-            labeledBlock(t('rate'), rate), labeledBlock(t('repeat'), rep), labeled(t('notes'), note)
-          ]),
-          el('button', { class: 'btn tiny primary', text: t('save_followup'), onclick: function () {
-            Store.updateBranch(b.id, { followup: {
-              rating: parseInt(rate.getValue(), 10),
-              wouldRepeat: rep.getValue() === '1',
-              note: note.value.trim(),
-              recordedAt: Date.now()
-            } });
-            render();
-          } })
-        ]));
-      }
+        ]),
+        branchPredictionReview(b)
+      ]);
     }
 
-    children.push(el('div', { class: 'branch-card-actions' }, [
-      el('button', { class: 'btn tiny ghost', text: t('edit_branch'), onclick: function () {
-        branchEditingId = b.id; render();
-      } }),
-      el('button', { class: 'btn tiny danger-ghost', text: t('delete'), onclick: function () {
-        if (confirm(t('confirm_delete_branch'))) { Store.deleteBranch(b.id); render(); }
+    var chosen = normalizedBranches(b)[b.chosenIndex];
+    var predicted = (chosen.predicted && chosen.predicted.length ? chosen.predicted : [chosen.name]);
+    var rows = [];
+    var reviewRows = el('div', { class: 'review-rows' });
+    predicted.forEach(function (p) {
+      var cb = el('input', { type: 'checkbox' });
+      var actual = el('input', { class: 'field tiny-field', type: 'text', placeholder: t('actual_result'), value: p });
+      rows.push({ predicted: p, hit: cb, actual: actual });
+      reviewRows.appendChild(el('label', { class: 'review-row' }, [
+        cb,
+        el('span', { class: 'review-pred', text: p }),
+        actual
+      ]));
+    });
+    var extra = el('textarea', { class: 'field', rows: '2', placeholder: t('extra_actual') });
+    var rate = choiceSelect([5, 4, 3, 2, 1].map(function (n) {
+      return { value: n, text: '⭐ ' + n };
+    }), '5', 'tiny-choice');
+    var note = el('input', { class: 'field', type: 'text', placeholder: t('followup') });
+    var rep = choiceSelect([
+      { value: '1', text: t('yes') }, { value: '0', text: t('no') }
+    ], '1', 'tiny-choice');
+    return el('div', { class: 'followup-form' }, [
+      el('div', { class: 'fu-title', text: '📋 ' + t('followup') }),
+      el('div', { class: 'fu-row' }, [
+        labeledBlock(t('rate'), rate), labeledBlock(t('repeat'), rep), labeled(t('notes'), note)
+      ]),
+      el('div', { class: 'detail-section-title', text: t('predicted_vs_actual') }),
+      reviewRows,
+      labeled(t('actual_result'), extra),
+      el('button', { class: 'btn tiny primary', text: t('save_followup'), onclick: function () {
+        var actual = [], hits = [];
+        rows.forEach(function (row) {
+          actual.push(row.actual.value.trim() || row.predicted);
+          hits.push(!!row.hit.checked);
+        });
+        actual = actual.concat(splitLines(extra.value));
+        Store.updateBranch(b.id, {
+          actual: actual,
+          hits: hits,
+          followup: {
+            rating: parseInt(rate.getValue(), 10),
+            wouldRepeat: rep.getValue() === '1',
+            note: note.value.trim(),
+            actual: actual,
+            hits: hits,
+            recordedAt: Date.now()
+          }
+        });
+        renderNav(); render();
       } })
-    ]));
+    ]);
+  }
 
-    return el('div', { class: 'branch-card' }, children);
+  function branchPredictionReview(b) {
+    var chosen = normalizedBranches(b)[b.chosenIndex] || {};
+    var predicted = chosen.predicted && chosen.predicted.length ? chosen.predicted : [chosen.name || ''];
+    var actual = branchActual(b);
+    var hits = branchHits(b);
+    if (!actual.length && !hits.length) return null;
+    var rows = el('div', { class: 'prediction-review' });
+    predicted.forEach(function (p, idx) {
+      rows.appendChild(el('div', { class: 'prediction-row' }, [
+        el('span', { class: 'prediction-pred', text: p }),
+        el('span', { class: 'prediction-actual', text: actual[idx] || '—' }),
+        el('span', { class: 'prediction-hit ' + (hits[idx] ? 'yes' : 'no'),
+          text: hits[idx] ? t('hit') : t('miss') })
+      ]));
+    });
+    if (actual.length > predicted.length) {
+      actual.slice(predicted.length).forEach(function (a) {
+        rows.appendChild(el('div', { class: 'prediction-row extra' }, [
+          el('span', { class: 'prediction-pred', text: '—' }),
+          el('span', { class: 'prediction-actual', text: a }),
+          el('span', { class: 'prediction-hit', text: '' })
+        ]));
+      });
+    }
+    return el('div', {}, [
+      el('div', { class: 'detail-section-title', text: t('predicted_vs_actual') + ' · ' + branchHitText(b) }),
+      rows
+    ]);
+  }
+
+  function branchMergeBlock(b) {
+    if (!b.followup) return el('span', {});
+    if (b.mergedCommitId) {
+      var existing = Store.getCommit(b.mergedCommitId);
+      return el('div', { class: 'branch-merge-box' }, [
+        el('span', { text: t('merged_commit') + (existing ? ' · ' + (existing.message || shortId(existing.id)) : '') }),
+        existing ? el('button', { class: 'btn tiny ghost', text: t('open_detail'), onclick: function () {
+          pendingDetail = existing.id; go('detail');
+        } }) : null
+      ]);
+    }
+    return el('div', { class: 'branch-merge-box' }, [
+      el('span', { text: lang === 'zh' ? '把这次复盘写入时间线，形成一条 commit。' : 'Write this review into the timeline as a commit.' }),
+      el('button', { class: 'btn tiny primary', text: t('merge_to_commit'), onclick: function () { createMergedCommit(b); } })
+    ]);
+  }
+
+  function createMergedCommit(b) {
+    var ctx = branchContextCommit(b);
+    var chosen = normalizedBranches(b)[b.chosenIndex] || {};
+    var actual = branchActual(b);
+    var lines = actual.length ? actual : (chosen.predicted && chosen.predicted.length ? chosen.predicted : [chosen.name]);
+    var commit = Store.addCommit({
+      scene: ctx ? ctx.scene : 'other',
+      message: (lang === 'zh' ? '分支复盘：' : 'Branch review: ') + b.question,
+      items: lines.slice(0, 20).map(function (line) { return { name: line, qty: 1 }; }),
+      notes: [
+        (lang === 'zh' ? '选择：' : 'Chosen: ') + (chosen.name || ''),
+        (lang === 'zh' ? '评分：' : 'Rating: ') + (b.followup && b.followup.rating || '—') + '/5',
+        b.followup && b.followup.note ? b.followup.note : ''
+      ].filter(Boolean).join('\n'),
+      fromBranchId: b.id
+    });
+    if (!commit) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足' : 'Storage full')); return; }
+    Store.updateBranch(b.id, { mergedCommitId: commit.id });
+    pendingDetail = commit.id;
+    renderNav();
+    go('detail');
   }
 
   /* ---------------- shared bits ---------------- */
@@ -1702,7 +2169,15 @@
           lang === 'zh' ? '两边都不落空' : 'Both sides get some time',
           lang === 'zh' ? '需要严格看时间' : 'Needs a hard time limit',
           lang === 'zh' ? '明天压力适中' : 'Moderate stress tomorrow'] }
-      ], chosenIndex: null, followup: null
+      ],
+      dueAt: new Date(now + 2 * day).toISOString().slice(0, 10),
+      confidence: 'medium',
+      tags: lang === 'zh' ? ['学习', '时间'] : ['study', 'time'],
+      contextCommitId: null,
+      chosenIndex: null,
+      followup: null,
+      actual: [],
+      hits: []
     });
     toast(t('seed_done'));
   }
@@ -1746,6 +2221,22 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.3.0', '2026-06-03', '移动端卡死修复 + 分支复盘闭环升级',
+      'Mobile freeze fixes and branch review loop upgrades',
+      ['修复大数据手机端卡死风险：存储用量不再同步 JSON.stringify 全部照片/附件，时间线和分支列表改为分段渲染，详情页图片预览限制首屏解码数量。',
+       '键盘兜底滚动改为节流且非平滑，避免 Android 键盘事件连续触发时排队滚动、拖慢 WebView 主线程。',
+       '分支支持复盘到期日、待复盘角标、未选择/待复盘/已到期/已复盘状态、决策把握和标签。',
+       '分支页新增搜索、状态/标签筛选和洞察卡，可查看总数、待复盘、已复盘、平均评分、会重选率和预测命中率。',
+       '新增分支详情页：选择、复盘、编辑、删除都进入二级页；复盘可逐条记录预测命中和实际结果。',
+       '复盘后的分支可以生成一条时间线存档，并在分支与存档详情之间双向跳转。',
+       'Android 打包同步更完整：Java MainActivity 包路径、string resources、Gradle appId/version 和 manifest 行为统一到 com.lifearchive.app。'],
+      ['Fix mobile freeze risks: Settings no longer synchronously stringifies all photos/files, timeline and branch lists render in pages, and detail image previews limit first-pass decoding.',
+       'Throttle keyboard visibility nudges and switch them away from smooth scrolling to avoid queued Android WebView scroll work.',
+       'Branches now support review due dates, pending badges, unchosen/to-review/overdue/reviewed states, confidence, and tags.',
+       'Add branch search, status/tag filters, and insight cards for totals, pending/reviewed counts, average rating, repeat rate, and prediction hit rate.',
+       'Add a branch detail page: choice, review, edit, and delete live on the second-level page, with per-prediction actuals and hit tracking.',
+       'Reviewed branches can create timeline commits, with two-way links between branch and commit details.',
+       'Harden Android packaging by syncing MainActivity Java package, string resources, Gradle appId/version, and manifest behavior to com.lifearchive.app.']],
     ['1.2.3', '2026-06-03', '移动端版本同步 + 多图附件 + 分支决策增强',
       'Android version sync, multi-image attachments, and branch upgrades',
       ['修复 Android 原生工程里残留旧 appId/版本信息的风险，打包脚本会同步 appId、versionName、versionCode 和 www 资源。',
@@ -2125,6 +2616,11 @@
   function setKeyboardInset(px) {
     document.documentElement.style.setProperty('--keyboard-inset', Math.max(0, px || 0) + 'px');
   }
+  var kbEnsureTimer = null;
+  function scheduleEnsureFieldVisible(ms) {
+    clearTimeout(kbEnsureTimer);
+    kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 60);
+  }
   function ensureFieldVisible() {
     var vv = window.visualViewport, node = document.activeElement;
     if (!vv || !isTextField(node)) return;
@@ -2133,13 +2629,13 @@
     var r = node.getBoundingClientRect();
     var visibleBottom = Math.min(vv.offsetTop + vv.height, window.innerHeight - inset);
     var over = r.bottom - (visibleBottom - 16);
-    if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'smooth' });
+    if (over > 4) window.scrollBy({ top: Math.min(over, Math.max(0, r.top - 8)), behavior: 'auto' });
   }
   function initKeyboard() {
     var vv = window.visualViewport;
-    if (vv) vv.addEventListener('resize', function () { setTimeout(ensureFieldVisible, 60); });
+    if (vv) vv.addEventListener('resize', function () { scheduleEnsureFieldVisible(70); });
     document.addEventListener('focusin', function (e) {
-      if (isTextField(e.target)) setTimeout(ensureFieldVisible, 120);
+      if (isTextField(e.target)) scheduleEnsureFieldVisible(120);
     });
     try {
       var Cap = window.Capacitor;
@@ -2149,7 +2645,7 @@
       var show = function (info) {
         document.body.classList.add('kb-open');
         setKeyboardInset(info && info.keyboardHeight ? info.keyboardHeight : kbOverlayPx());
-        setTimeout(ensureFieldVisible, 80);
+        scheduleEnsureFieldVisible(80);
       };
       var hide = function () {
         document.body.classList.remove('kb-open');
@@ -2182,7 +2678,7 @@
     if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
     var App = Cap.Plugins && Cap.Plugins.App;
     if (!App || !App.addListener) return;
-    var PARENT = { settings: 'timeline', changelog: 'settings', detail: 'timeline',
+    var PARENT = { settings: 'timeline', changelog: 'settings', detail: 'timeline', 'branch-detail': 'branch',
       commit: 'timeline', diff: 'timeline', rollback: 'timeline', branch: 'timeline' };
     App.addListener('backButton', function () {
       if (current !== 'timeline' && PARENT[current]) go(PARENT[current]);

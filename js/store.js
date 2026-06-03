@@ -69,6 +69,40 @@
       Math.random().toString(36).slice(2, 7);
   }
 
+  function strBytes(s) { return s ? String(s).length : 0; }
+  function itemBytes(it) {
+    if (!it) return 0;
+    return strBytes(it.name) + 8;
+  }
+  function fileBytes(f) {
+    if (!f) return 0;
+    return strBytes(f.name) + strBytes(f.type) + 16 + (f.size || strBytes(f.data));
+  }
+  function commitBytes(c) {
+    if (!c) return 0;
+    var n = 96 + strBytes(c.id) + strBytes(c.parentId) + strBytes(c.scene) +
+      strBytes(c.message) + strBytes(c.notes) + strBytes(c.photo) + strBytes(c.fromBranchId);
+    (c.items || []).forEach(function (it) { n += itemBytes(it); });
+    (c.files || []).forEach(function (f) { n += fileBytes(f); });
+    return n;
+  }
+  function branchBytes(b) {
+    if (!b) return 0;
+    var n = 96 + strBytes(b.id) + strBytes(b.question) + strBytes(b.dueAt) +
+      strBytes(b.confidence) + strBytes(b.contextCommitId) + strBytes(b.mergedCommitId);
+    (b.tags || []).forEach(function (tag) { n += strBytes(tag); });
+    (b.actual || []).forEach(function (line) { n += strBytes(line); });
+    (b.branches || []).forEach(function (br) {
+      n += strBytes(br && br.name);
+      ((br && br.predicted) || []).forEach(function (line) { n += strBytes(line); });
+    });
+    if (b.followup) {
+      n += strBytes(b.followup.note) + 32;
+      (b.followup.actual || []).forEach(function (line) { n += strBytes(line); });
+    }
+    return n;
+  }
+
   /* ---- Scenes: the preset "repos" a commit can belong to ----
      group 'meal' = 饭迹/饮食 records, 'item' = the original物品场景.
      IMPORTANT: keep 'other' as the LAST element — sceneById() falls back to it. */
@@ -235,9 +269,16 @@
 
     exportJSON: function () { return JSON.stringify(this.exportRaw(), null, 2); },
 
-    /* approx bytes used by the archive (photos dominate) + which backend is active */
+    /* approx bytes used by the archive (photos dominate) + which backend is active.
+       Keep this linear and non-JSON-stringifying: on phones, stringifying a large
+       photo/file archive just to open Settings can monopolize the WebView thread. */
     usage: function () {
-      try { return JSON.stringify(cache.commits).length + JSON.stringify(cache.branches).length; }
+      try {
+        var n = 0;
+        cache.commits.forEach(function (c) { n += commitBytes(c); });
+        cache.branches.forEach(function (b) { n += branchBytes(b); });
+        return n;
+      }
       catch (e) { return 0; }
     },
     backend: function () { return idb ? 'indexeddb' : 'localstorage'; },
