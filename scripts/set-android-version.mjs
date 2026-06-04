@@ -1,8 +1,8 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Keep the manifest on adjustResize for compatible WebViews, while the web
-      layer owns keyboard avoidance via interactive-widget + visualViewport. */
+   2. Keep the manifest on adjustResize; capacitor.config.ts enables Keyboard
+      resizeOnFullScreen, and the web layer has a bounded fallback. */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
@@ -70,7 +70,7 @@ if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustResize"');
 }
 writeFileSync(manifestPath, m);
-console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize"');
+console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize" (pairs with Keyboard.resizeOnFullScreen)');
 
 // Status-bar overlap is handled at runtime by @capacitor-community/safe-area
 // (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

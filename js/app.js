@@ -18,7 +18,7 @@
       scene: '场景', message: 'Commit message（一句话说明）', photo: '拍照 / 上传照片',
       items: '物品 / 清单', notes: '备注', files: '文件 / 图片',
       add_item: '+ 添加一项', item_name: '物品名', item_qty: '数量',
-      save_commit: '提交存档', cancel: '取消',
+      save_commit: '存档', cancel: '取消',
       commit_placeholder: '例如：出门去学校前，带电脑和充电器',
       latest: '最新', base: '旧版本 (base)', compare: '新版本 (compare)',
       run_diff: '对比', changed: '画面变化', heat_hint: '变化最明显的区域',
@@ -48,11 +48,12 @@
       branch_pending: '等待复盘', branch_reviewed: '已复盘',
       would_repeat_yes: '👍 下次还这么选', would_repeat_no: '👎 下次换个选择',
       parent: '基于', root: '初始存档', commits_in: '个存档',
-      group_meal: '饮食', group_item: '物品场景', group_ticket: '票据', meals_count: '餐',
+      group_meal: '饮食', group_item: '物品', group_ticket: '票据', meals_count: '餐',
       stats_title: '存档热力图', stats_open: '存档热力图 / 日历',
       stats_total: '总存档', stats_active_days: '活跃天数', stats_streak: '连续天数',
       stats_busiest: '单日最多', stats_legend_less: '少', stats_legend_more: '多',
       stats_empty: '还没有存档，先去记录第一笔吧。', stats_archives_unit: '个存档',
+      stats_starred: '星标存档', stats_no_starred: '这天没有星标存档', stats_pick_month: '切换月份 / 年份',
       stats_range_year: '近一年', stats_range_6m: '近半年', stats_range_3m: '近三月',
       stats_weekday: ['日', '一', '二', '三', '四', '五', '六'],
       meal_placeholder: '例如：午饭 黄焖鸡 + 一杯奶茶',
@@ -75,14 +76,14 @@
       star: '标记重要', unstar: '取消标记', starred_filter: '重要',
       star_added: '已标记为重要', star_removed: '已取消标记',
       detail_star: '☆ 标记重要', detail_starred: '★ 已标记重要',
-      planned_save: '存为计划', planned_badge: '计划', planned_section: '计划中',
-      planned_section_sub: '还没真正发生 · 完成后会转为正式存档',
-      planned_saved: '已存为计划，完成后记得标记', planned_empty: '没有匹配的计划',
-      mark_done: '完成', mark_done_full: '✅ 标记为已完成（转为正式存档）',
-      planned_done: '已完成 · 已转为正式存档', planned_tag: '📌 这是一条计划（预存档）',
+      planned_save: '预存档', planned_badge: '预存档', planned_section: '预存档',
+      planned_section_sub: '还没真正发生 · 存档后会转为正式存档',
+      planned_saved: '已存为预存档，完成后记得标记', planned_empty: '没有匹配的预存档',
+      mark_done: '存档', mark_done_full: '✅ 标记为已完成（转为正式存档）',
+      planned_done: '已完成 · 已转为正式存档', planned_tag: '📌 这是一条预存档',
       replicate: '照着再记一笔', replicate_now: '立即记一笔',
-      replicate_meal_hint: '饮食记录无需回滚。你可以照着这一餐，快速再记一笔，或先存为计划（想吃／要点的），真正吃到后再标记完成。',
-      replicate_item_hint: '也可以照着这个版本，把要补齐的东西先存为一条计划，备齐后再标记完成。',
+      replicate_meal_hint: '饮食记录无需回滚。你可以照着这一餐，快速再记一笔，或先存一条预存档（想吃／要点的），真正吃到后再标记完成。',
+      replicate_item_hint: '也可以照着这个版本，把要补齐的东西先存成一条预存档，备齐后再标记完成。',
       pick_multi: '选择多张图片', album_multi: '从相册选择多张', photos_added: '已添加 {n} 张图片'
     },
     en: {
@@ -131,6 +132,7 @@
       stats_total: 'Archives', stats_active_days: 'Active days', stats_streak: 'Streak',
       stats_busiest: 'Busiest day', stats_legend_less: 'Less', stats_legend_more: 'More',
       stats_empty: 'No archives yet — go log your first one.', stats_archives_unit: 'archives',
+      stats_starred: 'Starred', stats_no_starred: 'No starred archives this day', stats_pick_month: 'Pick month / year',
       stats_range_year: '1 year', stats_range_6m: '6 months', stats_range_3m: '3 months',
       stats_weekday: ['S', 'M', 'T', 'W', 'T', 'F', 'S'],
       meal_placeholder: 'e.g. Lunch — braised chicken rice + milk tea',
@@ -153,11 +155,11 @@
       star: 'Star', unstar: 'Unstar', starred_filter: 'Starred',
       star_added: 'Marked important', star_removed: 'Unmarked',
       detail_star: '☆ Star', detail_starred: '★ Starred',
-      planned_save: 'Save as plan', planned_badge: 'Plan', planned_section: 'Planned',
-      planned_section_sub: 'Not yet — mark done to turn into a real commit',
-      planned_saved: 'Saved as a plan — mark it done later', planned_empty: 'No matching plans',
-      mark_done: 'Done', mark_done_full: '✅ Mark as done (turn into a real commit)',
-      planned_done: 'Done · archived', planned_tag: '📌 This is a plan (draft)',
+      planned_save: 'Pre-save', planned_badge: 'Draft', planned_section: 'Drafts',
+      planned_section_sub: 'Not yet — archive it to turn into a real commit',
+      planned_saved: 'Saved as a draft — mark it done later', planned_empty: 'No matching drafts',
+      mark_done: 'Archive', mark_done_full: '✅ Mark as done (turn into a real commit)',
+      planned_done: 'Done · archived', planned_tag: '📌 This is a draft (pre-saved)',
       replicate: 'Log it again', replicate_now: 'Log now',
       replicate_meal_hint: 'Meals don’t need a rollback. Log this one again, or save it as a plan (what you want / will order) and mark it done once you actually have it.',
       replicate_item_hint: 'You can also save this version as a plan for what to restock, then mark it done once everything is back.',
@@ -316,6 +318,37 @@
         if (!m) throw new Error('返回无法解析：' + txt.slice(0, 80));
         return JSON.parse(m[0]);
       });
+    },
+    _b64: function (u) { return u && u.indexOf(',') > -1 ? u.split(',')[1] : u; },
+    _chat: function (content) {
+      var key = this.getKey();
+      if (!key) return Promise.reject(new Error('NO_KEY'));
+      var body = { model: this.MODEL, temperature: 0.2, messages: [{ role: 'user', content: content }] };
+      return apiPost(this.ENDPOINT, { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body).then(function (j) {
+        if (!j) throw new Error('无返回');
+        if (j.error) throw new Error(j.error.message || JSON.stringify(j.error));
+        var txt = (((j.choices || [])[0] || {}).message || {}).content || '';
+        var m = txt.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('返回无法解析：' + txt.slice(0, 80));
+        return JSON.parse(m[0]);
+      });
+    },
+    // Phase 3 — send BOTH photos (旧版 + 新版) and get a natural-language reading of what
+    // changed, plus structured added / removed / moved lists.
+    analyzeDiff: function (baseUrl, compUrl) {
+      return this._chat([
+        { type: 'image_url', image_url: { url: this._b64(baseUrl) } },
+        { type: 'image_url', image_url: { url: this._b64(compUrl) } },
+        { type: 'text', text: '这是同一个场景的两张照片：第一张是【旧版/之前】，第二张是【新版/之后】。对比两张图，找出发生了什么变化。严格只返回 JSON，不要解释、不要 markdown。格式：{"summary":"一句话中文总结变化，30字内，例如：书桌上少了水杯，多了一本书，台灯挪到了右侧","added":["新增/多出来的物品"],"removed":["消失/少了的物品"],"moved":["位置发生移动的物品"]}。数组里只放物品名，没有变化就给空数组。' }
+      ]).then(function (r) {
+        return { summary: r.summary || '', added: r.added || [], removed: r.removed || [], moved: r.moved || [] };
+      });
+    },
+    // Phase 4 (饮食专属，可选) — rough calorie / nutrition estimate from a food-name list.
+    nutrition: function (foods) {
+      return this._chat([
+        { type: 'text', text: '估算这一餐的总热量和营养，食物清单：' + foods.join('、') + '。严格只返回 JSON，不要解释：{"kcal":整数总热量大卡,"note":"一句话营养点评，25字内"}。' }
+      ]).then(function (r) { return { kcal: parseInt(r.kcal, 10) || 0, note: r.note || '' }; });
     }
   };
 
@@ -449,21 +482,71 @@
   /* ---------------- routing ---------------- */
   var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats'];
   var current = 'timeline';
-  // nav depth drives the open/back slide direction (deeper route = slide in from right)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, rollback: 0, branch: 0, 'branch-detail': 1, commit: 1, detail: 1, settings: 1, changelog: 2, stats: 1 };
+  // Bottom-nav routes are real peer tabs. Switching among them replaces the current
+  // browser history entry, so Android edge-back does not treat Timeline as their parent.
+  var TAB_ROUTES = ['timeline', 'diff', 'commit', 'rollback', 'branch'];
+  function isTabRoute(route) { return TAB_ROUTES.indexOf(route) >= 0; }
+  // nav depth drives page animation (tabs fade; subpages push/pop)
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1 };
   var prevDepth = 0;
+  // Subpage return stack for hardware/gesture back. Tabs never go here; they are peers.
+  var navStack = [];
+  var NAV_STACK_MAX = 16;
+  var routeWriteLock = false;
 
-  function go(route) {
+  function writeRouteHash(route, replace) {
+    var hash = '#' + route;
+    if (location.hash === hash) return;
+    routeWriteLock = true;
+    if (replace && window.history && window.history.replaceState) {
+      window.history.replaceState({ route: route }, '', hash);
+    } else if (window.history && window.history.pushState) {
+      window.history.pushState({ route: route }, '', hash);
+    } else {
+      location.hash = route;
+    }
+    routeWriteLock = false;
+  }
+
+  function go(route, viaBack) {
+    if (route === current) return;          // already here — don't re-push or re-render
+    closePopover();
+    var toTab = isTabRoute(route);
+    if (!viaBack && toTab) {
+      navStack = [];
+    } else if (!viaBack && !isTabRoute(route) && navStack[navStack.length - 1] !== current) {
+      navStack.push(current);
+      if (navStack.length > NAV_STACK_MAX) navStack.shift();
+    }
     current = route;
-    location.hash = route;
+    writeRouteHash(route, viaBack || toTab);
     renderNav();
     render();
   }
 
-  window.addEventListener('hashchange', function () {
+  // Pop history until we reach a route we're not already on. Returns false when there's
+  // nothing to go back to (so the caller can exit the app). Drives the Android back button.
+  function goBack() {
+    if (isTabRoute(current)) return false;
+    while (navStack.length) {
+      var prev = navStack.pop();
+      if (prev !== current) { go(prev, true); return true; }
+    }
+    return false;
+  }
+
+  function syncRouteFromLocation() {
+    if (routeWriteLock) return;
     var r = location.hash.slice(1);
-    if (routes.indexOf(r) >= 0 && r !== current) { current = r; renderNav(); render(); }
-  });
+    if (routes.indexOf(r) >= 0 && r !== current) {
+      current = r;
+      if (isTabRoute(r)) navStack = [];
+      renderNav();
+      render();
+    }
+  }
+  window.addEventListener('hashchange', syncRouteFromLocation);
+  window.addEventListener('popstate', syncRouteFromLocation);
 
   /* flat line icons (inherit currentColor, tint to accent when active) */
   var NAV_ICONS = (function () {
@@ -631,7 +714,7 @@
           el('button', { class: 'btn primary', text: t('empty_cta'),
             onclick: function () { go('commit'); } }),
           el('button', { class: 'btn ghost', text: t('empty_seed'),
-            onclick: function () { seedDemo(); go('timeline'); } })
+            onclick: function () { seedDemo(); renderNav(); render(); } })
         ])
       ]));
       return;
@@ -866,7 +949,7 @@
     var L = lang === 'zh';
 
     var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
-    back.addEventListener('click', function () { go('timeline'); });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
     var starToggle = el('button', { class: 'btn tiny star-toggle' + (c.starred ? ' starred' : ''),
       text: c.starred ? t('detail_starred') : t('detail_star') });
     starToggle.addEventListener('click', function () {
@@ -999,7 +1082,7 @@
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
     if (template) v.appendChild(el('div', { class: 'form-template-hint',
-      text: '↩︎ ' + (lang === 'zh' ? '已照着上一条带入内容，可改后「提交存档」或「存为计划」。' : 'Copied from a previous entry — edit, then Commit or Save as plan.') }));
+      text: '↩︎ ' + (lang === 'zh' ? '已照着上一条带入内容，可改后「存档」或「预存档」。' : 'Copied from a previous entry — edit, then Archive or Pre-save.') }));
 
     var selectedScene = (src && src.scene) || Store.SCENES[0].id;
     var scenePicker = el('div', { class: 'scene-picker' });
@@ -1417,7 +1500,7 @@
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
           onclick: function () { go('timeline'); } }),
-        // "存为计划" only for NEW commits — it saves a 预存档/draft to fulfill later
+        // "预存档" only for NEW commits — it saves a 预存档/draft to fulfill later
         editing ? null : el('button', { class: 'btn plan-btn', text: '📌 ' + t('planned_save'),
           onclick: function () { doSave(true); } }),
         el('button', { class: 'btn primary', text: t('save_commit'),
@@ -1506,6 +1589,8 @@
     if (opts.title) panel.appendChild(el('div', { class: 'popover-title', text: opts.title }));
     var listWrap = el('div', { class: 'popover-list' });
     panel.appendChild(listWrap);
+    // custom content (e.g. the calendar day-detail panel): an arbitrary node, no options
+    if (opts.content) listWrap.appendChild(opts.content);
 
     function close() {
       mask.classList.remove('open');
@@ -1589,29 +1674,159 @@
     openAnchoredMenu(anchor || null, { title: title, actions: actions });
   }
 
+  /* ---------------- Reality Diff helpers (Phase 3/4/5) ---------------- */
+
+  // Light, always-on "AI-ish" item matching (Phase 3): treat a removed + added pair whose
+  // names overlap (一个名字包含另一个，如 可乐/可口可乐) as the SAME item renamed, instead
+  // of one disappearing and a different one appearing.
+  function namesSimilar(a, b) {
+    a = String(a || '').toLowerCase().trim(); b = String(b || '').toLowerCase().trim();
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return (a.length >= 2 && b.length >= 2 && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0));
+  }
+  function reconcileFuzzy(d) {
+    var removed = d.removed.slice(), added = d.added.slice(), renamed = [];
+    for (var i = removed.length - 1; i >= 0; i--) {
+      for (var j = added.length - 1; j >= 0; j--) {
+        if (namesSimilar(removed[i].name, added[j].name)) {
+          renamed.push({ from: removed[i].name, to: added[j].name });
+          removed.splice(i, 1); added.splice(j, 1); break;
+        }
+      }
+    }
+    return { added: added, removed: removed, changed: d.changed, kept: d.kept, renamed: renamed };
+  }
+
+  // Phase 4 — a scene's history as a churn timeline + which items vanish vs. stay.
+  function sceneTrend(sceneId) {
+    var list = realCommitsForScene(sceneId).slice().reverse(); // oldest → newest
+    var steps = [], disappear = {}, stable = {}, appear = {};
+    for (var i = 1; i < list.length; i++) {
+      var dd = Diff.itemDiff(list[i - 1].items, list[i].items);
+      steps.push({ ts: list[i].createdAt, churn: dd.added.length + dd.removed.length + dd.changed.length,
+        base: list[i - 1], comp: list[i], changedPct: null });
+      dd.removed.forEach(function (x) { disappear[x.name] = (disappear[x.name] || 0) + 1; });
+      dd.added.forEach(function (x) { appear[x.name] = (appear[x.name] || 0) + 1; });
+      dd.kept.forEach(function (x) { stable[x.name] = (stable[x.name] || 0) + 1; });
+    }
+    function top(map) {
+      return Object.keys(map).map(function (k) { return { name: k, count: map[k] }; })
+        .sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
+    }
+    return { steps: steps, count: list.length, mostDisappeared: top(disappear), mostStable: top(stable), mostAdded: top(appear) };
+  }
+
+  // Phase 5 — a plain-text diff summary for "复制文本 / 贴到聊天里".
+  function diffShareText(base, comp, d, changedPct) {
+    var L = lang === 'zh';
+    var lines = [L ? 'Life Archive · 现实对比' : 'Life Archive · Reality diff'];
+    lines.push((L ? '旧：' : 'Base: ') + fmtDate(base.createdAt) + ' ' + (base.message || ''));
+    lines.push((L ? '新：' : 'Compare: ') + fmtDate(comp.createdAt) + ' ' + (comp.message || ''));
+    if (changedPct != null) lines.push((L ? '画面变化：' : 'Pixels changed: ') + changedPct.toFixed(1) + '%');
+    function join(arr) { return arr.map(function (x) { return x.name + (x.qty > 1 ? '×' + x.qty : ''); }).join('、'); }
+    if (d.removed.length) lines.push((L ? '少了：' : 'Removed: ') + join(d.removed));
+    if (d.added.length) lines.push((L ? '多了：' : 'Added: ') + join(d.added));
+    if (d.changed.length) lines.push((L ? '数量变化：' : 'Qty: ') + d.changed.map(function (x) { return x.name + ' ' + x.from + '→' + x.to; }).join('、'));
+    if (d.renamed && d.renamed.length) lines.push((L ? '可能同一物品：' : 'Likely same item: ')
+      + d.renamed.map(function (x) { return x.from + '≈' + x.to; }).join('、'));
+    return lines.join('\n');
+  }
+
+  function loadImgEl(src) {
+    return new Promise(function (resolve) {
+      if (!src) { resolve(null); return; }
+      var im = new Image(); im.onload = function () { resolve(im); }; im.onerror = function () { resolve(null); }; im.src = src;
+    });
+  }
+  function drawContain(ctx, img, x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = '#0d1426'; ctx.fillRect(x, y, w, h);
+    if (img) {
+      var r = Math.min(w / img.width, h / img.height);
+      var dw = img.width * r, dh = img.height * r;
+      ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+    }
+    ctx.restore();
+  }
+  // Compose a before/after share card (Phase 5): two photos + change list + change %.
+  function buildDiffCardCanvas(base, comp, d, changedPct) {
+    var L = lang === 'zh';
+    return Promise.all([loadImgEl(base.photo), loadImgEl(comp.photo)]).then(function (imgs) {
+      var W = 1080, pad = 48, gap = 28, imgW = (W - pad * 2 - gap) / 2, imgH = Math.round(imgW * 0.75);
+      var lines = [];
+      function push(label, arr) { if (arr.length) lines.push(label + arr.map(function (x) { return x.name + (x.qty > 1 ? '×' + x.qty : ''); }).join('、')); }
+      push(L ? '少了：' : 'Removed: ', d.removed);
+      push(L ? '多了：' : 'Added: ', d.added);
+      if (d.changed.length) lines.push((L ? '数量变化：' : 'Qty: ') + d.changed.map(function (x) { return x.name + ' ' + x.from + '→' + x.to; }).join('、'));
+      if (d.renamed && d.renamed.length) lines.push((L ? '可能同一物品：' : 'Likely same item: ')
+        + d.renamed.map(function (x) { return x.from + '≈' + x.to; }).join('、'));
+      var listTop = pad + 70 + imgH + 40 + 84;
+      var H = listTop + Math.max(1, lines.length) * 46 + pad;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+      // header
+      ctx.fillStyle = '#8ea2ff'; ctx.font = '700 30px sans-serif'; ctx.textBaseline = 'top';
+      ctx.fillText('Life Archive · ' + (L ? '现实对比' : 'Reality diff'), pad, pad);
+      ctx.fillStyle = '#9aa6c4'; ctx.font = '400 22px sans-serif';
+      ctx.fillText(fmtDate(base.createdAt) + '  →  ' + fmtDate(comp.createdAt), pad, pad + 38);
+      // photos
+      var iy = pad + 70;
+      drawContain(ctx, imgs[0], pad, iy, imgW, imgH);
+      drawContain(ctx, imgs[1], pad + imgW + gap, iy, imgW, imgH);
+      ctx.fillStyle = '#cdd6f4'; ctx.font = '600 22px sans-serif';
+      ctx.fillText(L ? '旧版' : 'Base', pad + 6, iy + 8);
+      ctx.fillText(L ? '新版' : 'Compare', pad + imgW + gap + 6, iy + 8);
+      // big change %
+      var by = iy + imgH + 36;
+      ctx.fillStyle = '#ff5a7a'; ctx.font = '800 56px sans-serif';
+      ctx.fillText((changedPct != null ? changedPct.toFixed(1) : '—') + '%', pad, by);
+      ctx.fillStyle = '#9aa6c4'; ctx.font = '400 24px sans-serif';
+      ctx.fillText(L ? '画面变化' : 'pixels changed', pad + 200, by + 22);
+      // change list
+      ctx.font = '500 26px sans-serif';
+      if (!lines.length) { ctx.fillStyle = '#7fd6a0'; ctx.fillText(L ? '两个版本几乎一致 👍' : 'Nearly identical 👍', pad, listTop); }
+      else lines.forEach(function (ln, i) { ctx.fillStyle = '#e6e9f5'; ctx.fillText(ln, pad, listTop + i * 46); });
+      return cv;
+    });
+  }
+  // Show a generated image with save options (works on desktop + long-press on mobile).
+  function showImageModal(dataUrl) {
+    var L = lang === 'zh';
+    closePopover();
+    var mask = el('div', { class: 'img-modal' });
+    var img = el('img', { class: 'img-modal-img', src: dataUrl, alt: '' });
+    var dl = el('a', { class: 'btn primary tiny', text: L ? '下载图片' : 'Download',
+      href: dataUrl, download: 'life-archive-diff.png' });
+    var hint = el('div', { class: 'img-modal-hint', text: L ? '长按图片可保存 / 分享' : 'Long-press the image to save / share' });
+    var closeB = el('button', { type: 'button', class: 'img-modal-close', text: '✕', onclick: function () { mask.remove(); } });
+    mask.addEventListener('click', function (e) { if (e.target === mask) mask.remove(); });
+    mask.appendChild(closeB);
+    mask.appendChild(el('div', { class: 'img-modal-body' }, [img, el('div', { class: 'img-modal-actions' }, [dl]), hint]));
+    document.body.appendChild(mask);
+    requestAnimationFrame(function () { mask.classList.add('open'); });
+  }
+
   /* ---------------- Reality Diff ---------------- */
   var pendingDiff = null;
   function renderDiff(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_diff') })]));
-    var commits = Store.commits().filter(notPlanned);
-    if (commits.length < 2) {
-      v.appendChild(noticeCard(t('need_two')));
-      return;
-    }
+    var allReal = Store.commits().filter(notPlanned);
+    if (allReal.length < 2) { v.appendChild(noticeCard(t('need_two'))); return; }
 
-    // scene picker, defaulting to a scene with >=2 (real) commits
-    var scenesWith2 = Store.SCENES.filter(function (s) {
-      return realCommitsForScene(s.id).length >= 2;
-    });
-    if (!scenesWith2.length) { v.appendChild(noticeCard(t('need_two'))); return; }
+    var scenesWith2 = Store.SCENES.filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
     var L = lang === 'zh';
     var diffContext = pendingDiff;
     pendingDiff = null;
     var initialScene = (diffContext && scenesWith2.some(function (s) { return s.id === diffContext.sceneId; }))
-      ? diffContext.sceneId : scenesWith2[0].id;
+      ? diffContext.sceneId : (scenesWith2[0] && scenesWith2[0].id);
+    var crossScene = !initialScene;   // no same-scene pair → start in cross-scene mode
     var diffMode = 'heat';
     var diffThreshold = 38;
     var diffRunId = 0;
+    var trendRunId = 0;
+    var lastDiff = null;              // {base, comp, d, changedPct} reused by AI / export
 
     var sceneSel = choiceSelect(scenesWith2.map(function (s) {
       return { value: s.id, text: sceneLabel(s) };
@@ -1620,13 +1835,15 @@
     var compSel = choiceSelect([]);
 
     function fillVersionSelects() {
-      var list = realCommitsForScene(sceneSel.getValue()); // newest first, real only
+      // same-scene: that scene's real commits; cross-scene: every real commit (Phase 4)
+      var list = crossScene ? allReal : realCommitsForScene(sceneSel.getValue());
       var choices = list.map(function (c) {
-        return { value: c.id, text: fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
+        var sc = Store.sceneById(c.scene);
+        return { value: c.id, text: (crossScene ? sc.emoji + ' ' : '') + fmtDate(c.createdAt) + ' · ' + (c.message || shortId(c.id)) };
       });
       var compDefault = choices[0] && choices[0].value;
       var baseDefault = choices[Math.min(1, choices.length - 1)] && choices[Math.min(1, choices.length - 1)].value;
-      if (diffContext && diffContext.sceneId === sceneSel.getValue()) {
+      if (!crossScene && diffContext && diffContext.sceneId === sceneSel.getValue()) {
         var wantedComp = diffContext.commitId;
         var wantedBase = diffContext.baseId || (Store.getCommit(wantedComp) || {}).parentId;
         if (choices.some(function (x) { return x.value === wantedComp; })) compDefault = wantedComp;
@@ -1636,11 +1853,26 @@
       compSel.setOptions(choices, compDefault);
       baseSel.setOptions(choices, baseDefault);
     }
-    fillVersionSelects();
-    sceneSel.onChange(function () { diffContext = null; fillVersionSelects(); runDiff(); });
 
+    var sceneBlock = labeledBlock(t('scene'), sceneSel);
+    // Phase 4 — 同场景 / 跨场景 任意两版对比 (lifts the "must be same scene" restriction)
+    var scopeToggle = segmented([
+      ['scene', L ? '同场景' : 'Same scene'],
+      ['cross', L ? '跨场景' : 'Cross-scene']
+    ], crossScene ? 'cross' : 'scene', function (m) {
+      crossScene = (m === 'cross'); diffContext = null;
+      sceneBlock.style.display = crossScene ? 'none' : '';
+      fillVersionSelects(); runDiff(); renderTrend();
+    });
+    sceneBlock.style.display = crossScene ? 'none' : '';
+    fillVersionSelects();
+    sceneSel.onChange(function () { diffContext = null; fillVersionSelects(); runDiff(); renderTrend(); });
+
+    v.appendChild(el('div', { class: 'diff-scope' }, [
+      el('span', { class: 'diff-scope-label', text: L ? '对比范围' : 'Scope' }), scopeToggle
+    ]));
     var controls = el('div', { class: 'diff-controls' }, [
-      labeledBlock(t('scene'), sceneSel),
+      sceneBlock,
       labeledBlock(t('base'), baseSel),
       labeledBlock(t('compare'), compSel),
       el('button', { class: 'btn primary', text: '🔍 ' + t('run_diff'), onclick: function () { runDiff(); } })
@@ -1659,7 +1891,7 @@
       diffThreshold = parseInt(thresholdInput.value, 10) || 38;
       thresholdValue.textContent = String(diffThreshold);
       clearTimeout(thresholdTimer);
-      thresholdTimer = setTimeout(runDiff, 80);
+      thresholdTimer = setTimeout(function () { runDiff(); renderTrend(); }, 80);
     });
     v.appendChild(el('div', { class: 'diff-tuning' }, [
       labeledBlock(L ? '显示模式' : 'View mode', modeControl),
@@ -1669,11 +1901,183 @@
       ]))
     ]));
 
+    // Phase 3 AI reading + Phase 5 export / share
+    v.appendChild(el('div', { class: 'diff-action-bar' }, [
+      el('button', { class: 'btn ai-diff-btn', text: '✨ ' + (L ? 'AI 解读变化' : 'AI read changes'),
+        onclick: function () { runAIDiff(); } }),
+      el('button', { class: 'btn tiny ghost', text: '🖼 ' + (L ? '导出对比卡片' : 'Export card'),
+        onclick: function () { exportCard(); } }),
+      el('button', { class: 'btn tiny ghost', text: '📋 ' + (L ? '复制文本' : 'Copy text'),
+        onclick: function () { copyDiffText(); } })
+    ]));
+
+    var aiResult = el('div', { class: 'diff-ai-result' });
+    v.appendChild(aiResult);
     var result = el('div', { class: 'diff-result' });
     v.appendChild(result);
+    var trendWrap = el('div', { class: 'diff-trend' });
+    v.appendChild(trendWrap);
 
-    baseSel.onChange(runDiff);
-    compSel.onChange(runDiff);
+    baseSel.onChange(function () { runDiff(); });
+    compSel.onChange(function () { runDiff(); });
+
+    function qtyLabel(x) { return x.name + (x.qty > 1 ? ' ×' + x.qty : ''); }
+
+    // Phase 4 — meal scenes: foods that appear in BOTH meals + optional AI calorie estimate
+    function mealExtras(base, comp, d) {
+      var box = el('div', { class: 'meal-repeat' });
+      if (d.kept && d.kept.length) {
+        box.appendChild(el('div', { class: 'meal-repeat-head', text: '🔁 ' + (L ? '两餐都有' : 'In both meals') }));
+        var chips = el('div', { class: 'meal-chips' });
+        d.kept.forEach(function (x) { chips.appendChild(el('span', { class: 'meal-chip', text: x.name })); });
+        box.appendChild(chips);
+      }
+      var foods = (comp.items || []).map(function (it) { return it.name; }).filter(Boolean);
+      if (foods.length) {
+        var nutBtn = el('button', { class: 'btn tiny ghost', text: '🔥 ' + (L ? 'AI 估算这餐热量' : 'AI estimate calories') });
+        var nutOut = el('span', { class: 'meal-nut' });
+        nutBtn.addEventListener('click', function () {
+          if (!AI.getKey()) { toast(L ? '请先在设置里填入免费 AI key' : 'Add your free AI key in Settings'); return; }
+          nutBtn.disabled = true; var o = nutBtn.textContent; nutBtn.textContent = L ? '估算中…' : 'estimating…';
+          AI.nutrition(foods).then(function (r) { nutOut.textContent = '≈ ' + r.kcal + ' kcal · ' + (r.note || ''); })
+            .catch(function (e) { toast('⚠ ' + (e && e.message || e)); })
+            .then(function () { nutBtn.disabled = false; nutBtn.textContent = o; });
+        });
+        box.appendChild(el('div', { class: 'meal-nut-row' }, [nutBtn, nutOut]));
+      }
+      return box;
+    }
+
+    // Phase 3 — AI reads BOTH photos and explains the change in natural language.
+    function runAIDiff() {
+      var base = Store.getCommit(baseSel.getValue());
+      var comp = Store.getCommit(compSel.getValue());
+      aiResult.innerHTML = '';
+      if (!base || !comp) return;
+      if (!base.photo || !comp.photo) { toast(L ? '两个版本都要有照片，AI 才能解读' : 'Both versions need a photo'); return; }
+      if (!AI.getKey()) {
+        aiResult.appendChild(noticeCard(L
+          ? '先在「设置」里填入你自己的免费 AI key（智谱 GLM-4V）即可用 AI 解读；没有 key 时下面的本地对比照常可用。'
+          : 'Add your own free AI key (Zhipu GLM-4V) in Settings to use AI reading. The local diff below works without it.'));
+        return;
+      }
+      function head() { return el('div', { class: 'ai-card-head', text: '✨ ' + (L ? 'AI 解读变化' : 'AI reading') }); }
+      var card = el('div', { class: 'ai-card' }, [head(),
+        el('div', { class: 'ai-loading', text: L ? 'AI 正在对比两张照片…' : 'AI is comparing the two photos…' })]);
+      aiResult.appendChild(card);
+      AI.analyzeDiff(base.photo, comp.photo).then(function (r) {
+        card.innerHTML = ''; card.appendChild(head());
+        if (r.summary) card.appendChild(el('p', { class: 'ai-summary', text: r.summary }));
+        function chipRow(label, arr, kind) {
+          if (!arr.length) return;
+          var row = el('div', { class: 'ai-chips ' + kind }, [el('span', { class: 'ai-chip-label', text: label })]);
+          arr.forEach(function (n) { row.appendChild(el('span', { class: 'ai-chip', text: n })); });
+          card.appendChild(row);
+        }
+        chipRow(L ? '多了' : 'Added', r.added, 'added');
+        chipRow(L ? '少了' : 'Removed', r.removed, 'removed');
+        chipRow(L ? '移动' : 'Moved', r.moved, 'moved');
+        if (!r.summary && !r.added.length && !r.removed.length && !r.moved.length)
+          card.appendChild(el('p', { class: 'ai-summary', text: L ? 'AI 没看出明显变化。' : 'AI saw no clear change.' }));
+      }).catch(function (e) {
+        card.innerHTML = ''; card.appendChild(head());
+        card.appendChild(el('p', { class: 'ai-error', text: '⚠ ' + (e && e.message || e) }));
+      });
+    }
+
+    // Phase 5 — compose a before/after share card, or copy a plain-text summary.
+    function exportCard() {
+      var base = lastDiff && lastDiff.base, comp = lastDiff && lastDiff.comp;
+      if (!base || !comp) return;
+      var d = lastDiff.d || Diff.itemDiff(base.items, comp.items);
+      function make(pct) { buildDiffCardCanvas(base, comp, d, pct).then(function (cv) { showImageModal(cv.toDataURL('image/png')); }); }
+      if (lastDiff.changedPct != null || !(base.photo && comp.photo)) make(lastDiff.changedPct);
+      else Diff.imageDiff(base.photo, comp.photo, document.createElement('canvas'), { threshold: diffThreshold })
+        .then(function (r) { make(r.ok ? r.changedPct : null); });
+    }
+    function copyDiffText() {
+      var base = lastDiff && lastDiff.base, comp = lastDiff && lastDiff.comp;
+      if (!base || !comp) return;
+      var d = lastDiff.d || Diff.itemDiff(base.items, comp.items);
+      var txt = diffShareText(base, comp, d, lastDiff.changedPct);
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        navigator.clipboard.writeText(txt).then(function () { toast(L ? '已复制对比文本' : 'Copied'); }).catch(function () { showTextModal(txt); });
+      else showTextModal(txt);
+    }
+    function showTextModal(txt) {
+      closePopover();
+      var mask = el('div', { class: 'img-modal' });
+      var ta = el('textarea', { class: 'text-modal-area' }); ta.value = txt; ta.readOnly = true;
+      mask.addEventListener('click', function (e) { if (e.target === mask) mask.remove(); });
+      mask.appendChild(el('button', { type: 'button', class: 'img-modal-close', text: '✕', onclick: function () { mask.remove(); } }));
+      mask.appendChild(el('div', { class: 'img-modal-body' }, [ta,
+        el('div', { class: 'img-modal-hint', text: L ? '长按全选复制' : 'Select all & copy' })]));
+      document.body.appendChild(mask);
+      requestAnimationFrame(function () { mask.classList.add('open'); ta.focus(); ta.select(); });
+    }
+
+    // Phase 4 — per-scene churn timeline + "最常消失 / 最稳定" insight cards.
+    function renderTrend() {
+      var thisTrend = ++trendRunId;
+      trendWrap.innerHTML = '';
+      if (crossScene) return;
+      var tr = sceneTrend(sceneSel.getValue());
+      if (tr.count < 2) return;
+      if (!tr.steps.length && !tr.mostDisappeared.length && !tr.mostStable.length) return;
+      var card = el('section', { class: 'set-card trend-card' });
+      card.appendChild(el('div', { class: 'trend-head', text: '📈 ' + (L ? '场景趋势与洞察' : 'Scene trend & insights') }));
+      if (tr.steps.length) {
+        var spark = el('div', { class: 'trend-spark' });
+        var trendCap = el('div', { class: 'trend-spark-cap' });
+        function metric(s) { return s.changedPct != null ? s.changedPct : s.churn; }
+        function metricLabel(s) {
+          return s.changedPct != null
+            ? (s.changedPct.toFixed(1) + '% changedPct')
+            : ((L ? '清单变化 ' : 'Item churn ') + s.churn);
+        }
+        function paintSpark() {
+          spark.innerHTML = '';
+          var maxCh = Math.max.apply(null, tr.steps.map(metric).concat([1]));
+          tr.steps.forEach(function (s) {
+            spark.appendChild(el('span', { class: 'spark-bar',
+              style: 'height:' + Math.round(6 + (metric(s) / maxCh) * 46) + 'px',
+              title: fmtDate(s.ts) + ' · ' + metricLabel(s) }));
+          });
+          var visualCount = tr.steps.filter(function (s) { return s.changedPct != null; }).length;
+          trendCap.textContent = visualCount
+            ? (L ? '相邻存档照片 changedPct 曲线（无双图的点用清单变化兜底）'
+                 : 'Photo changedPct across adjacent archives (item churn fallback where photos are missing)')
+            : (L ? '每次存档的清单变化量（越高变化越大）' : 'Item change size per archive');
+        }
+        paintSpark();
+        card.appendChild(el('div', { class: 'trend-spark-wrap' }, [spark,
+          trendCap]));
+        var photoSteps = tr.steps.filter(function (s) { return s.base.photo && s.comp.photo; });
+        if (photoSteps.length) {
+          Promise.all(photoSteps.map(function (s) {
+            return Diff.imageDiff(s.base.photo, s.comp.photo, document.createElement('canvas'), { threshold: diffThreshold })
+              .then(function (r) { if (r && r.ok) s.changedPct = r.changedPct; });
+          })).then(function () {
+            if (thisTrend !== trendRunId || crossScene) return;
+            paintSpark();
+          });
+        }
+      }
+      function insight(icon, label, arr) {
+        if (!arr.length) return null;
+        return el('div', { class: 'insight-row' }, [
+          el('span', { class: 'insight-ic', text: icon }),
+          el('span', { class: 'insight-label', text: label }),
+          el('span', { class: 'insight-vals', text: arr.map(function (x) { return x.name + '·' + x.count; }).join('   ') })
+        ]);
+      }
+      var rows = el('div', { class: 'insight-list' });
+      [insight('🌀', L ? '最常消失' : 'Most disappeared', tr.mostDisappeared),
+       insight('🪨', L ? '最稳定' : 'Most stable', tr.mostStable),
+       insight('➕', L ? '最常新增' : 'Most added', tr.mostAdded)].forEach(function (r) { if (r) rows.appendChild(r); });
+      if (rows.childNodes.length) card.appendChild(rows);
+      trendWrap.appendChild(card);
+    }
 
     function bgStyle(src) {
       return 'background-image:url(' + src + ')';
@@ -1713,9 +2117,11 @@
     function runDiff() {
       var base = Store.getCommit(baseSel.getValue());
       var comp = Store.getCommit(compSel.getValue());
-      if (!base || !comp) return;
+      aiResult.innerHTML = '';                 // a new pair invalidates the old AI reading
+      if (!base || !comp) { result.innerHTML = ''; return; }
       var thisRun = ++diffRunId;
       result.innerHTML = '';
+      lastDiff = { base: base, comp: comp, d: null, changedPct: null };
 
       // ----- visual compare -----
       var photos = el('div', { class: 'diff-photos' }, [
@@ -1739,6 +2145,7 @@
           result.appendChild(heatWrap);
           Diff.imageDiff(base.photo, comp.photo, heatCanvas, { threshold: diffThreshold }).then(function (r) {
             if (thisRun !== diffRunId) return;
+            if (r.ok && lastDiff) lastDiff.changedPct = r.changedPct;  // cache for export/share
             var stats = $('#heat-stats');
             if (!r.ok) { stats.textContent = t('no_photo'); return; }
             stats.innerHTML = '';
@@ -1755,29 +2162,33 @@
         }
       }
 
-      // ----- semantic item diff -----
-      var d = Diff.itemDiff(base.items, comp.items);
-      var anyChange = d.added.length || d.removed.length || d.changed.length;
+      // ----- semantic item diff (+ light fuzzy item matching, Phase 3) -----
+      var raw = Diff.itemDiff(base.items, comp.items);
+      var d = reconcileFuzzy(raw);
+      lastDiff.d = d;
+      var anyChange = d.added.length || d.removed.length || d.changed.length || d.renamed.length;
       var sem = el('div', { class: 'sem-diff' });
       if (!anyChange) {
         sem.appendChild(noticeCard(t('no_change')));
       } else {
-        if (d.removed.length) sem.appendChild(diffList('removed', t('removed'), d.removed.map(function (x) {
-          return x.name + (x.qty > 1 ? ' ×' + x.qty : '');
-        })));
-        if (d.added.length) sem.appendChild(diffList('added', t('added'), d.added.map(function (x) {
-          return x.name + (x.qty > 1 ? ' ×' + x.qty : '');
-        })));
+        if (d.removed.length) sem.appendChild(diffList('removed', t('removed'), d.removed.map(qtyLabel)));
+        if (d.added.length) sem.appendChild(diffList('added', t('added'), d.added.map(qtyLabel)));
         if (d.changed.length) sem.appendChild(diffList('changed', t('changed_qty'), d.changed.map(function (x) {
           return x.name + ': ' + x.from + ' → ' + x.to;
         })));
-        if (d.kept.length) sem.appendChild(diffList('kept', t('kept'), d.kept.map(function (x) {
-          return x.name + (x.qty > 1 ? ' ×' + x.qty : '');
-        })));
+        if (d.renamed.length) sem.appendChild(diffList('renamed', (L ? '可能同一物品' : 'Likely the same'),
+          d.renamed.map(function (x) { return x.from + ' ≈ ' + x.to; })));
+        if (d.kept.length) sem.appendChild(diffList('kept', t('kept'), d.kept.map(qtyLabel)));
       }
       result.appendChild(sem);
+
+      // ----- Phase 4: meal scenes get repeated-food + AI calorie extras -----
+      if (Store.isMealScene(base.scene) && Store.isMealScene(comp.scene)) {
+        result.appendChild(mealExtras(base, comp, d));
+      }
     }
     runDiff();
+    renderTrend();
   }
 
   function photoCol(label, c) {
@@ -1794,7 +2205,7 @@
   function diffList(kind, title, lines) {
     var ul = el('ul', { class: 'diff-ul' });
     lines.forEach(function (l) { ul.appendChild(el('li', { text: l })); });
-    var sign = { removed: '−', added: '+', changed: '~', kept: '=' }[kind];
+    var sign = { removed: '−', added: '+', changed: '~', kept: '=', renamed: '≈' }[kind];
     return el('div', { class: 'diff-block ' + kind }, [
       el('div', { class: 'diff-block-head' }, [
         el('span', { class: 'diff-sign', text: sign }),
@@ -1805,7 +2216,7 @@
   /* ---------------- Rollback / 照着再记一笔 ---------------- */
   var pendingRollback = null;
   // copy an existing commit into the new-commit form as a fresh entry (the user then
-  // chooses 提交存档 or 存为计划). Powers "照着再记一笔" for meals and items alike.
+  // chooses 存档 or 预存档). Powers "照着再记一笔" for meals and items alike.
   function replicateCommit(c) {
     pendingTemplate = {
       scene: c.scene, message: c.message,
@@ -1863,7 +2274,7 @@
       if (!target) return;
       out.innerHTML = '';
 
-      // ----- meal scenes: a rollback is meaningless; offer "照着再记一笔 / 存为计划" -----
+      // ----- meal scenes: a rollback is meaningless; offer "照着再记一笔 / 预存档" -----
       if (Store.isMealScene(target.scene)) {
         out.appendChild(el('p', { class: 'rollback-intro', text: t('replicate_meal_hint') }));
         var mealCard = el('div', { class: 'rollback-ref replicate-card' });
@@ -2704,6 +3115,22 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.5.0', '2026-06-04', '五项同级导航 + 输入框顶飞修复 + 顶栏模糊回归 + 纯月历热力图 + 现实对比 AI/趋势/导出',
+      'Peer tabs, keyboard-pan fix, frosted top bar, pure month-calendar heatmap, and Reality Diff AI / trends / export',
+      ['底栏五项（时间线 / 现实对比 / 新建 / 回滚 / 分支）现在完全同级：tab 之间切换不再写入可侧滑返回的页面历史，安卓返回/侧滑只处理设置、详情、热力图等子页面。',
+       '修复安卓「点输入框时顶栏和整页被顶飞出屏幕」：Android 改用 Keyboard.resizeOnFullScreen + manifest adjustResize 的可生效路径，并移除会和它打架的 interactive-widget；若可视区没有缩小，则用原生键盘高度做有界兜底。',
+       '顶栏毛玻璃模糊回归并加强：之前底层几乎不透明又被遮罩裁没了，现在是更通透的磨砂玻璃（更强模糊 + 底部羽化 + 细发丝高光）；原生端让内容从栏下滚过，模糊真正生效。',
+       '「存档热力图」改成纯日历：一次只展示一个月、铺满整屏；用 ‹ › 翻月、点月份标题可快速选年/月；有存档的日子圆点可点，弹出当天存档数量和当天的星标存档。',
+       '现实对比按规划全面增强：✨AI 解读变化（把旧版+新版两张照片交给免费 AI，给出「少了/多了/挪到哪」的自然语言总结和清单，无 key 时本地对比照常用）；跨场景任意两版对比（解除「必须同场景」限制）；场景趋势与洞察（相邻存档照片 changedPct 曲线，缺照片时用清单变化兜底 +「最常消失/最稳定/最常新增」）；饮食专属（两餐都有的食物高亮，可选 AI 估算热量）；导出/分享（生成 before/after 对比卡片图或复制对比文本）；近似物品自动归并（「可乐/可口可乐」识别为同一物品，导出也同步归并结果）。',
+       '文案统一：新建存档的「存为计划」改为「预存档」、「提交存档」改为「存档」、「物品场景」改为「物品」，与其他场景对齐。',
+       '热力图入口按钮里的小方块改成小圆点，呼应日历圆点风格。'],
+      ['The five bottom tabs (Timeline / Reality diff / New / Rollback / Branches) are now true peers: tab switches replace history instead of creating swipe-back pages; Back only pops sub-pages such as Settings, Detail, and Heatmap.',
+       'Fixed the Android bug where focusing an input flung the whole page and top bar off-screen: Android now uses Keyboard.resizeOnFullScreen + manifest adjustResize, removes the conflicting interactive-widget, and falls back to native keyboard height only when the visual viewport does not shrink.',
+       'The frosted top-bar blur is back and stronger: the old layer was nearly opaque and masked away; it is now lighter glass (more blur + a feathered bottom edge + a hairline highlight), and on native the content scrolls under the bar so the blur actually shows.',
+       'The Archive heatmap is now a pure calendar: one month at a time, filling the screen; page months with ‹ ›, tap the month title to jump to any year/month, and tap a day-dot to see that day\'s archive count and its starred archives.',
+       'Reality Diff got the full planned upgrade: ✨ AI reads the change (both photos go to the free AI for a natural-language "gone / added / moved" summary + lists; local diff still works without a key); cross-scene compare of any two archives; an adjacent-photo changedPct sparkline with item-churn fallback plus "most disappeared / most stable / most added" insights; meal scenes highlight foods present in both, with optional AI calorie estimate; export a before/after card image or copy a text summary; and near-duplicate items (e.g. 可乐 / 可口可乐) are merged as the same item in the UI and exports.',
+       'Unified wording in the new-archive form (Chinese): 「存为计划」→「预存档」, 「提交存档」→「存档」, 「物品场景」→「物品」.',
+       'The heatmap button\'s little squares are now little circles, echoing the calendar dots.']],
     ['1.4.2', '2026-06-04', '热力图改月历 + 时间线扁平化 + 日期吸顶完全贴合',
       'Calendar heatmap, flat timeline, and a perfectly flush date handoff',
       ['「存档热力图」改成真正的月历：每个月一块日历，用圆点深浅表示当天存档多少；7 列正好铺满手机屏幕，再也不会显示不全、需要左右拖动。今天有高亮圈，未来日期淡显，每月还标注存档数。',
@@ -2947,7 +3374,9 @@
      one block per month (newest on top), each day a circle (圆形) shaded by that day's
      archive count (分颜色深浅). 7 columns always fit the phone width, so nothing is cut
      off. Reached from the topbar grid button, left of the settings gear. */
-  var statsRange = 6; // MONTHS shown on the calendar; toggled by the range segmented control
+  // The month the heatmap calendar is currently showing (persists across renders this
+  // session). null until first opened → defaults to the current month.
+  var statsView = null;
   function dayCountMap() {
     var map = {};
     Store.commits().filter(notPlanned).forEach(function (c) {
@@ -2962,6 +3391,11 @@
     if (n >= 4) return 3;
     if (n >= 2) return 2;
     return 1;
+  }
+  // real (non-planned) commits archived on a given day timestamp, newest first
+  function commitsOnDay(ts) {
+    var k = dayKey(ts);
+    return Store.commits().filter(notPlanned).filter(function (c) { return dayKey(c.createdAt) === k; });
   }
   function renderStats(v) {
     var L = lang === 'zh';
@@ -3005,12 +3439,15 @@
       tile(t('stats_busiest'), busiest)
     ]));
 
-    // ---- range switch (now in MONTHS of calendar) ----
-    var card = el('section', { class: 'set-card cal-card' });
-    card.appendChild(segmented([
-      ['3', t('stats_range_3m')], ['6', t('stats_range_6m')], ['12', t('stats_range_year')]
-    ], String(statsRange), function (val) { statsRange = parseInt(val, 10); drawCal(); }));
+    var monthsEn = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    var monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var weekdayLabels = t('stats_weekday'); // ['日','一',…] / ['S','M',…], week starts Sunday
 
+    if (!statsView) { var nd = new Date(); statsView = { year: nd.getFullYear(), month: nd.getMonth() }; }
+
+    // ---- single-month calendar (pure 日历样式), paged by month/year ----
+    var card = el('section', { class: 'set-card cal-card' });
     var calWrap = el('div', { class: 'cal-wrap' });
     card.appendChild(calWrap);
 
@@ -3022,56 +3459,124 @@
     card.appendChild(legend);
     v.appendChild(card);
 
-    var monthsEn = ['January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'];
-    var weekdayLabels = t('stats_weekday'); // ['日','一',…] / ['S','M',…], week starts Sunday
+    function stepMonth(delta) {
+      var d = new Date(statsView.year, statsView.month + delta, 1);
+      statsView = { year: d.getFullYear(), month: d.getMonth() };
+      drawCal();
+    }
 
-    // One calendar block per month, newest first. Each day is a circle shaded by its
-    // archive count; future days are dimmed; today gets an accent ring.
+    // Compact month/year picker (tap the title). A year stepper + a 12-month grid.
+    function openMonthPicker(anchor) {
+      var pickYear = statsView.year;
+      var wrap = el('div', { class: 'mp' });
+      function build() {
+        wrap.innerHTML = '';
+        wrap.appendChild(el('div', { class: 'mp-year' }, [
+          el('button', { type: 'button', class: 'mp-arrow', text: '‹',
+            onclick: function () { pickYear--; build(); } }),
+          el('span', { class: 'mp-year-val', text: L ? (pickYear + '年') : String(pickYear) }),
+          el('button', { type: 'button', class: 'mp-arrow', text: '›',
+            onclick: function () { pickYear++; build(); } })
+        ]));
+        var grid = el('div', { class: 'mp-grid' });
+        for (var m = 0; m < 12; m++) {
+          (function (m) {
+            var active = pickYear === statsView.year && m === statsView.month;
+            grid.appendChild(el('button', {
+              type: 'button', class: 'mp-month' + (active ? ' active' : ''),
+              text: L ? (m + 1) + '月' : monthsShort[m],
+              onclick: function () { statsView = { year: pickYear, month: m }; closePopover(); drawCal(); }
+            }));
+          })(m);
+        }
+        wrap.appendChild(grid);
+      }
+      build();
+      openAnchoredMenu(anchor, { content: wrap });
+    }
+
+    // Tap a day-dot → its archive count + that day's starred archives.
+    function openDayPanel(anchor, ts) {
+      var dayCommits = commitsOnDay(ts);
+      var starred = dayCommits.filter(function (c) { return c.starred; });
+      var content = el('div', { class: 'day-panel' });
+      content.appendChild(el('div', { class: 'day-panel-head' }, [
+        el('span', { class: 'day-panel-date', text: dayLabel(ts) }),
+        el('span', { class: 'day-panel-count', text: dayCommits.length + ' ' + t('stats_archives_unit') })
+      ]));
+      if (starred.length) {
+        content.appendChild(el('div', { class: 'day-panel-sub', text: '⭐ ' + t('stats_starred') }));
+        var list = el('div', { class: 'day-panel-list' });
+        starred.forEach(function (c) {
+          var sc = Store.sceneById(c.scene);
+          var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(sc.id);
+          list.appendChild(el('button', {
+            type: 'button', class: 'day-panel-item',
+            onclick: function () { closePopover(); pendingDetail = c.id; go('detail'); }
+          }, [
+            ic,
+            el('span', { class: 'day-panel-msg', text: c.message || sceneName(sc) }),
+            el('span', { class: 'day-panel-time', text: fmtTime(c.createdAt) })
+          ]));
+        });
+        content.appendChild(list);
+      } else {
+        content.appendChild(el('div', { class: 'day-panel-empty', text: t('stats_no_starred') }));
+      }
+      openAnchoredMenu(anchor, { content: content });
+    }
+
+    // Draw exactly one month (statsView): a month-nav header + weekday row + day circles.
     function drawCal() {
       calWrap.innerHTML = '';
       var today = new Date(); today.setHours(0, 0, 0, 0);
       var todayKeyStr = dayKey(today.getTime());
+      var year = statsView.year, month = statsView.month;
+      var firstDow = new Date(year, month, 1).getDay();   // 0 = Sunday
+      var daysIn = new Date(year, month + 1, 0).getDate();
 
-      for (var mi = 0; mi < statsRange; mi++) {
-        var base = new Date(today.getFullYear(), today.getMonth() - mi, 1);
-        var year = base.getFullYear(), month = base.getMonth();
-        var firstDow = new Date(year, month, 1).getDay();   // 0 = Sunday
-        var daysIn = new Date(year, month + 1, 0).getDate();
+      var monthTotal = 0;
+      for (var d0 = 1; d0 <= daysIn; d0++) monthTotal += counts[dayKey(new Date(year, month, d0).getTime())] || 0;
 
-        var grid = el('div', { class: 'cal-grid' });
-        for (var b = 0; b < firstDow; b++) {
-          grid.appendChild(el('span', { class: 'cal-cell cal-blank' }));
-        }
-        var monthTotal = 0;
-        for (var day = 1; day <= daysIn; day++) {
-          var dt = new Date(year, month, day);
-          var k = dayKey(dt.getTime());
-          var future = dt.getTime() > today.getTime();
-          var n = counts[k] || 0;
-          monthTotal += n;
-          var cls = 'cal-cell cal-day lvl-' + heatLevel(n)
-            + (future ? ' is-future' : '') + (k === todayKeyStr ? ' is-today' : '');
-          var title = (year + '-' + (month + 1) + '-' + day)
-            + (future ? '' : ' · ' + n + ' ' + t('stats_archives_unit'));
-          grid.appendChild(el('span', { class: cls, title: title },
-            [el('span', { class: 'cal-num', text: String(day) })]));
-        }
+      var titleBtn = el('button', { type: 'button', class: 'cal-title-btn',
+        'aria-label': t('stats_pick_month'), onclick: function () { openMonthPicker(titleBtn); } }, [
+        el('span', { class: 'cal-title-main',
+          text: L ? (year + '年' + (month + 1) + '月') : (monthsEn[month] + ' ' + year) }),
+        el('span', { class: 'cal-title-sub',
+          text: (monthTotal ? monthTotal : 0) + ' ' + t('stats_archives_unit') + ' ⌄' })
+      ]);
+      var nav = el('div', { class: 'cal-nav' }, [
+        el('button', { type: 'button', class: 'cal-nav-btn', 'aria-label': L ? '上个月' : 'Previous month',
+          text: '‹', onclick: function () { stepMonth(-1); } }),
+        titleBtn,
+        el('button', { type: 'button', class: 'cal-nav-btn', 'aria-label': L ? '下个月' : 'Next month',
+          text: '›', onclick: function () { stepMonth(1); } })
+      ]);
 
-        var wdRow = el('div', { class: 'cal-weekhead' });
-        for (var i = 0; i < 7; i++) wdRow.appendChild(el('span', { class: 'cal-wd', text: weekdayLabels[i] }));
+      var wdRow = el('div', { class: 'cal-weekhead' });
+      for (var i = 0; i < 7; i++) wdRow.appendChild(el('span', { class: 'cal-wd', text: weekdayLabels[i] }));
 
-        calWrap.appendChild(el('div', { class: 'cal-month' }, [
-          el('div', { class: 'cal-month-head' }, [
-            el('span', { class: 'cal-month-title',
-              text: L ? (year + '年' + (month + 1) + '月') : (monthsEn[month] + ' ' + year) }),
-            el('span', { class: 'cal-month-count',
-              text: monthTotal ? (monthTotal + ' ' + t('stats_archives_unit')) : '' })
-          ]),
-          wdRow,
-          grid
-        ]));
+      var grid = el('div', { class: 'cal-grid' });
+      for (var b = 0; b < firstDow; b++) grid.appendChild(el('span', { class: 'cal-cell cal-blank' }));
+      for (var day = 1; day <= daysIn; day++) {
+        var dt = new Date(year, month, day);
+        var k = dayKey(dt.getTime());
+        var future = dt.getTime() > today.getTime();
+        var n = counts[k] || 0;
+        var clickable = !future && n > 0;
+        var cls = 'cal-cell cal-day lvl-' + heatLevel(n)
+          + (future ? ' is-future' : '') + (k === todayKeyStr ? ' is-today' : '')
+          + (clickable ? ' is-clickable' : '');
+        var cell = el('span', { class: cls,
+          title: (year + '-' + (month + 1) + '-' + day) + (future ? '' : ' · ' + n + ' ' + t('stats_archives_unit')) },
+          [el('span', { class: 'cal-num', text: String(day) })]);
+        if (clickable) (function (ts, anchor) {
+          anchor.addEventListener('click', function () { openDayPanel(anchor, ts); });
+        })(dt.getTime(), cell);
+        grid.appendChild(cell);
       }
+
+      calWrap.appendChild(el('div', { class: 'cal-month' }, [nav, wdRow, grid]));
     }
     drawCal();
   }
@@ -3256,6 +3761,14 @@
      @capacitor-community/safe-area reads the real window insets and injects
      --safe-area-inset-* CSS vars, so the top bar clears the status bar on every
      full-screen phone (the old edge-to-edge opt-out was ignored on HyperOS). */
+  // Measure the topbar's real height into --topbar-h so the native shell can pad .view
+  // below the (now absolutely-positioned, content-scrolls-under) frosted bar. Safe-area
+  // insets land async, so this is re-run after boot + on resize.
+  function syncTopbarHeight() {
+    var tb = document.querySelector('.topbar');
+    if (tb) document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px');
+  }
+
   function initNative() {
     try {
       var Cap = window.Capacitor;
@@ -3279,34 +3792,40 @@
   } catch (e) {}
 
   /* ---------------- native: keyboard (Android, edge-to-edge safe) ----------------
-     ROOT CAUSE of the recurring "focusing an input shoves the whole page off-screen":
-     this app is edge-to-edge (for @capacitor-community/safe-area insets), and Android
-     IGNORES windowSoftInputMode adjustResize/adjustNothing in edge-to-edge mode — it
-     falls back to adjustPan and pans the whole window (top bar and all) up behind the
-     keyboard. So no native soft-input mode could fix it.
+     SYMPTOM (user-reported, recurring): focusing an input flings the WHOLE page + topbar
+     off-screen. CAUSE: the app is edge-to-edge (for safe-area insets); with the keyboard
+     plugin set to resize:'none', Android is free to adjustPan and it pans the entire
+     WebView surface up behind the keyboard — CSS can't stop an OS-level window pan, so the
+     topbar goes with it. The previous "web-layer only" fix (viewport interactive-widget=
+     resizes-content + visualViewport) relied on the WebView honoring interactive-widget;
+     on the user's device it did NOT, so the pan still happened.
 
-     Fix at the WEB layer: the viewport meta sets interactive-widget=resizes-content
-     (index.html), so the IME shrinks the LAYOUT viewport — the page reflows, the sticky
-     top bar stays put, and the browser keeps the focused field visible.
+     PRIMARY FIX (v1.5.0): Android uses @capacitor/keyboard resizeOnFullScreen:true
+     plus manifest adjustResize. Capacitor's `resize` option is iOS-only, so the Android
+     path must use resizeOnFullScreen; it resizes the WebView child in fullscreen/
+     edge-to-edge cases where plain adjustResize can be ignored. We removed
+     interactive-widget=resizes-content so the browser does not also shrink the layout.
 
-     SINGLE SOURCE OF TRUTH = window.visualViewport. Previous versions ALSO fed the raw
-     native keyboardHeight into --keyboard-inset AND set @capacitor/keyboard resize:'body',
-     so the layout got shrunk twice (browser + Capacitor + our padding) — that fight is why
-     focusing a field still misbehaved. Now @capacitor/keyboard is resize:'none' (it touches
-     nothing) and we derive everything from the visual viewport:
-       • interactive-widget worked  -> innerHeight shrank too -> overlap ~0 -> inset 0,
-         no extra padding, the browser already keeps the field visible.
-       • overlay/pan fallback (old WebView) -> overlap = keyboard height -> inset pads the
-         scroll area and we nudge the field up — BOUNDED, so it can never fling off-screen. */
+     BACKUP: visualViewport remains the first source of truth. If it visibly shrank, we
+     trust it. If it did NOT shrink but Android native keyboard events report a height,
+     we use that height as a bounded fallback for bottom padding + field visibility. */
   function isTextField(n) { return !!(n && n.tagName && /^(INPUT|TEXTAREA)$/.test(n.tagName)); }
-  // px the keyboard overlaps the content, straight from the visual viewport. ~0 once the
-  // layout viewport shrank (interactive-widget); large only in the overlay/pan fallback.
+  var nativeKeyboardPx = 0;
+  var keyboardInsetPx = 0;
+  var keyboardInsetMode = 'none'; // 'visual' or 'native-fallback'
+  var kbBaselineHeight = window.innerHeight || 0;
+  // px the keyboard overlaps the content, straight from the visual viewport.
   function kbOverlayPx() {
     var vv = window.visualViewport;
     return vv ? Math.max(0, window.innerHeight - vv.height) : 0;
   }
-  function setKeyboardInset(px) {
-    document.documentElement.style.setProperty('--keyboard-inset', Math.max(0, px || 0) + 'px');
+  function nativeKeyboardHeight(info) {
+    return Math.max(0, parseInt(info && info.keyboardHeight, 10) || 0);
+  }
+  function setKeyboardInset(px, mode) {
+    keyboardInsetPx = Math.max(0, px || 0);
+    keyboardInsetMode = keyboardInsetPx > 0 ? (mode || 'visual') : 'none';
+    document.documentElement.style.setProperty('--keyboard-inset', keyboardInsetPx + 'px');
   }
   var kbEnsureTimer = null;
   function scheduleEnsureFieldVisible(ms) {
@@ -3317,6 +3836,7 @@
     scheduleEnsureFieldVisible(0);
     setTimeout(ensureFieldVisible, 90);
     setTimeout(ensureFieldVisible, 240);
+    setTimeout(ensureFieldVisible, 420);
   }
   function fieldScrollHost(node) {
     if (!node || !node.closest) return null;
@@ -3330,7 +3850,8 @@
     if (!vv || !isTextField(node)) return;
     var r = node.getBoundingClientRect();
     var visibleTop = vv.offsetTop + 12;
-    var visibleBottom = vv.offsetTop + vv.height - 18;
+    var nativeFallback = keyboardInsetMode === 'native-fallback' ? keyboardInsetPx : 0;
+    var visibleBottom = vv.offsetTop + vv.height - nativeFallback - 18;
     var delta = 0;
     if (r.bottom > visibleBottom) delta = r.bottom - visibleBottom;
     else if (r.top < visibleTop) delta = r.top - visibleTop;
@@ -3342,12 +3863,21 @@
     if (sc) sc.scrollTop += nudge;
     else window.scrollBy({ top: nudge, behavior: 'auto' });
   }
-  // Reconcile inset + nav-hide from the visual viewport. Inset comes from the REAL
-  // overlap, never the raw keyboardHeight, so it can't double-count the shrink.
+  // Reconcile inset + nav-hide from visualViewport first, then native keyboard height
+  // only when the viewport did not shrink. This avoids both known failures: no fallback
+  // on old Android, or double-padding when modern WebView already resized correctly.
   function syncKeyboardState() {
     var overlap = kbOverlayPx();
-    setKeyboardInset(overlap);
-    document.body.classList.toggle('kb-open', overlap > 80);
+    var vv = window.visualViewport;
+    var viewportHeight = vv ? vv.height : window.innerHeight;
+    var viewportShrank = (kbBaselineHeight - viewportHeight) > 80;
+    var useNativeFallback = !viewportShrank && overlap < 40 && nativeKeyboardPx > 80;
+    setKeyboardInset(useNativeFallback ? nativeKeyboardPx : overlap,
+      useNativeFallback ? 'native-fallback' : 'visual');
+    document.body.classList.toggle('kb-open', overlap > 80 || nativeKeyboardPx > 80);
+    if (!document.body.classList.contains('kb-open')) {
+      kbBaselineHeight = window.innerHeight || kbBaselineHeight;
+    }
     scheduleEnsureFieldVisibleBurst();
   }
   function initKeyboard() {
@@ -3364,12 +3894,26 @@
       if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
       var KB = Cap.Plugins && Cap.Plugins.Keyboard;
       if (!KB || !KB.addListener) return;
-      // Native events only toggle the nav-hide promptly (snappier than waiting for the
-      // vv.resize); the inset itself is still reconciled from the visual viewport.
-      KB.addListener('keyboardWillShow', function () { document.body.classList.add('kb-open'); scheduleEnsureFieldVisibleBurst(); });
-      KB.addListener('keyboardDidShow', syncKeyboardState);
-      KB.addListener('keyboardWillHide', function () { document.body.classList.remove('kb-open'); });
-      KB.addListener('keyboardDidHide', function () { setKeyboardInset(0); document.body.classList.remove('kb-open'); });
+      // Native events hide the nav promptly and provide the Android fallback height.
+      KB.addListener('keyboardWillShow', function (info) {
+        nativeKeyboardPx = nativeKeyboardHeight(info);
+        document.body.classList.add('kb-open');
+        scheduleEnsureFieldVisibleBurst();
+      });
+      KB.addListener('keyboardDidShow', function (info) {
+        nativeKeyboardPx = nativeKeyboardHeight(info) || nativeKeyboardPx;
+        syncKeyboardState();
+      });
+      KB.addListener('keyboardWillHide', function () {
+        nativeKeyboardPx = 0;
+        document.body.classList.remove('kb-open');
+      });
+      KB.addListener('keyboardDidHide', function () {
+        nativeKeyboardPx = 0;
+        setKeyboardInset(0);
+        document.body.classList.remove('kb-open');
+        setTimeout(function () { kbBaselineHeight = window.innerHeight || kbBaselineHeight; }, 50);
+      });
     } catch (e) {}
   }
 
@@ -3385,19 +3929,20 @@
   }
 
   /* ---------------- native: Android hardware / gesture back ----------------
-     Make the system back button + edge-swipe pop a subpage to its parent (instead of
-     exiting or doing nothing). Needs @capacitor/app. go(parent) re-renders with the
-     "pop" slide because the parent route has a lower depth. */
+     Back walks the real navigation history (navStack), so the 4 browse tabs behave as
+     PEERS: pressing back returns to whichever tab you came from, never force-snapping to
+     the timeline (the old behavior that made the other tabs feel like timeline subpages).
+     Subpages pop back to their opener via the same stack. Exits only when history is empty.
+     Needs @capacitor/app. */
   function initBackButton() {
     var Cap = window.Capacitor;
     if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
     var App = Cap.Plugins && Cap.Plugins.App;
     if (!App || !App.addListener) return;
-    var PARENT = { settings: 'timeline', changelog: 'settings', detail: 'timeline', 'branch-detail': 'branch',
-      commit: 'timeline', diff: 'timeline', rollback: 'timeline', branch: 'timeline', stats: 'timeline' };
     App.addListener('backButton', function () {
-      if (current !== 'timeline' && PARENT[current]) go(PARENT[current]);
-      else App.exitApp();
+      // close an open popover/menu first if one is up
+      if ($('.popover-mask')) { closePopover(); return; }
+      if (!goBack()) App.exitApp();
     });
   }
 
@@ -3415,9 +3960,14 @@
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
+    syncTopbarHeight();
+    window.addEventListener('resize', syncTopbarHeight);
     // Hydrate the store (IndexedDB) before the first content render.
     Store.init().then(function () {
       render();
+      // re-measure once layout + async safe-area insets have settled
+      syncTopbarHeight();
+      setTimeout(syncTopbarHeight, 300);
       if (Cloud.configured()) Cloud.refreshUser().then(function () { if (current === 'settings') render(); });
     });
   });
