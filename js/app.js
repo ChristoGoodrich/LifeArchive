@@ -2704,6 +2704,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.4.2', '2026-06-04', '热力图改月历 + 时间线扁平化 + 日期吸顶完全贴合',
+      'Calendar heatmap, flat timeline, and a perfectly flush date handoff',
+      ['「存档热力图」改成真正的月历：每个月一块日历，用圆点深浅表示当天存档多少；7 列正好铺满手机屏幕，再也不会显示不全、需要左右拖动。今天有高亮圈，未来日期淡显，每月还标注存档数。',
+       '左侧时间线整体扁平化重做、更规整：主线收细成一条柔和直线（去掉发光），节点改为干净的纯色实心圆点（去掉高光 / 光晕和多余的连接小线），主线、日期圆点与卡片节点统一对齐到同一条竖线。',
+       '日期吸顶衔接彻底重做：滚到下一天时，新日期会完全贴合着旧日期把它顶替出去（紧贴、零缝隙、零重叠），交接随手指顺滑推进，不再有旧版「不丝滑」的跳变或中间露出空隙的瑕疵。',
+       '顺手修复：给 styles.css / app.js 等静态资源都加上版本号，确保每次更新后缓存一定刷新，不会再加载到旧样式或旧脚本。'],
+      ['The Archive heatmap is now a real month calendar: one calendar block per month, with each day a circle shaded by that day\'s archive count. Seven columns always fit the phone width, so nothing is cut off or needs horizontal scrolling. Today is ringed, future days are dimmed, and each month shows its total.',
+       'The left timeline got a flat, more orderly redesign: a thinner calm spine (no glow), clean solid-color commit dots (no gloss/halo or extra connector stub), with the spine, date dots, and card nodes all aligned to one vertical line.',
+       'The sticky date handoff was completely reworked: scrolling into a new day, the new date pill sits perfectly flush against the previous one and pushes it out (touching, zero gap, zero overlap), tracking your finger smoothly — no more janky jumps or a gap opening up mid-swap.',
+       'Also fixed: all static assets (styles.css, app.js, etc.) now carry a version query string so the cache always refreshes after an update and never serves stale styles or scripts.']],
     ['1.4.1', '2026-06-04', '底栏归位 + 锚定下拉 + 时间线美化 + 票据存档 + 日历热力图',
       'Bottom bar restored, anchored menus, prettier timeline, ticket archives, and a calendar heatmap',
       ['导航栏移回底部（中间是扁平加号），不再占用顶部空间；输入时底栏自动隐藏，避免挡住键盘。',
@@ -2932,11 +2942,12 @@
     v.appendChild(list);
   }
 
-  /* ---------------- Stats: calendar dot-matrix (GitHub-contribution style) ----
-     A heatmap of how many archives land on each day. Dots get darker the more you
-     logged that day (分颜色深浅), laid out as a real calendar (7 weekday rows ×
-     week columns). Reached from the topbar grid button, left of the settings gear. */
-  var statsRange = 26; // weeks shown; toggled by the range segmented control
+  /* ---------------- Stats: month calendar (日历格式) ----
+     A heatmap of how many archives land on each day, drawn as a REAL month calendar:
+     one block per month (newest on top), each day a circle (圆形) shaded by that day's
+     archive count (分颜色深浅). 7 columns always fit the phone width, so nothing is cut
+     off. Reached from the topbar grid button, left of the settings gear. */
+  var statsRange = 6; // MONTHS shown on the calendar; toggled by the range segmented control
   function dayCountMap() {
     var map = {};
     Store.commits().filter(notPlanned).forEach(function (c) {
@@ -2994,75 +3005,75 @@
       tile(t('stats_busiest'), busiest)
     ]));
 
-    // ---- range switch ----
-    var card = el('section', { class: 'set-card heat-card' });
+    // ---- range switch (now in MONTHS of calendar) ----
+    var card = el('section', { class: 'set-card cal-card' });
     card.appendChild(segmented([
-      ['13', t('stats_range_3m')], ['26', t('stats_range_6m')], ['53', t('stats_range_year')]
-    ], String(statsRange), function (val) { statsRange = parseInt(val, 10); drawGrid(); }));
+      ['3', t('stats_range_3m')], ['6', t('stats_range_6m')], ['12', t('stats_range_year')]
+    ], String(statsRange), function (val) { statsRange = parseInt(val, 10); drawCal(); }));
 
-    var gridWrap = el('div', { class: 'heat-grid-wrap' });
-    card.appendChild(gridWrap);
+    var calWrap = el('div', { class: 'cal-wrap' });
+    card.appendChild(calWrap);
 
-    // legend: 少 ▢▢▢▢▢ 多
-    var legend = el('div', { class: 'heat-legend' });
-    legend.appendChild(el('span', { class: 'heat-legend-cap', text: t('stats_legend_less') }));
-    for (var lv = 0; lv <= 4; lv++) legend.appendChild(el('span', { class: 'heat-dot lvl-' + lv }));
-    legend.appendChild(el('span', { class: 'heat-legend-cap', text: t('stats_legend_more') }));
+    // legend: 少 ○○○○○ 多 (circles)
+    var legend = el('div', { class: 'cal-legend' });
+    legend.appendChild(el('span', { class: 'cal-legend-cap', text: t('stats_legend_less') }));
+    for (var lv = 0; lv <= 4; lv++) legend.appendChild(el('span', { class: 'cal-dot lvl-' + lv }));
+    legend.appendChild(el('span', { class: 'cal-legend-cap', text: t('stats_legend_more') }));
     card.appendChild(legend);
     v.appendChild(card);
 
-    function drawGrid() {
-      gridWrap.innerHTML = '';
-      var weeks = statsRange;
-      var end = new Date(); end.setHours(0, 0, 0, 0);
-      // start = Sunday of the week, (weeks-1) weeks back, so the last column is the current week
-      var start = new Date(end);
-      start.setDate(start.getDate() - start.getDay() - (weeks - 1) * 7);
+    var monthsEn = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    var weekdayLabels = t('stats_weekday'); // ['日','一',…] / ['S','M',…], week starts Sunday
 
-      var monthsZh = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-      var monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      var months = L ? monthsZh : monthsEn;
+    // One calendar block per month, newest first. Each day is a circle shaded by its
+    // archive count; future days are dimmed; today gets an accent ring.
+    function drawCal() {
+      calWrap.innerHTML = '';
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var todayKeyStr = dayKey(today.getTime());
 
-      var grid = el('div', { class: 'heat-grid' });
-      // weekday labels column (show Mon/Wed/Fri to stay compact)
-      var wdCol = el('div', { class: 'heat-weekdays' });
-      [1, 3, 5].forEach(function (wd) {
-        wdCol.appendChild(el('span', { class: 'heat-wd', style: 'grid-row:' + (wd + 2), text: t('stats_weekday')[wd] }));
-      });
+      for (var mi = 0; mi < statsRange; mi++) {
+        var base = new Date(today.getFullYear(), today.getMonth() - mi, 1);
+        var year = base.getFullYear(), month = base.getMonth();
+        var firstDow = new Date(year, month, 1).getDay();   // 0 = Sunday
+        var daysIn = new Date(year, month + 1, 0).getDate();
 
-      var cols = el('div', { class: 'heat-cols' });
-      var monthRow = el('div', { class: 'heat-months' });
-      var lastMonth = -1;
-      var cursor = new Date(start);
-      var todayKeyStr = dayKey(end.getTime());
-      for (var w = 0; w < weeks; w++) {
-        var col = el('div', { class: 'heat-col' });
-        var colMonth = cursor.getMonth();
-        // a month label appears above the column where a new month first starts
-        if (colMonth !== lastMonth) {
-          monthRow.appendChild(el('span', { class: 'heat-month', style: 'grid-column:' + (w + 1), text: months[colMonth] }));
-          lastMonth = colMonth;
+        var grid = el('div', { class: 'cal-grid' });
+        for (var b = 0; b < firstDow; b++) {
+          grid.appendChild(el('span', { class: 'cal-cell cal-blank' }));
         }
-        for (var dRow = 0; dRow < 7; dRow++) {
-          var k = dayKey(cursor.getTime());
-          var future = cursor.getTime() > end.getTime();
+        var monthTotal = 0;
+        for (var day = 1; day <= daysIn; day++) {
+          var dt = new Date(year, month, day);
+          var k = dayKey(dt.getTime());
+          var future = dt.getTime() > today.getTime();
           var n = counts[k] || 0;
-          var cls = 'heat-dot lvl-' + heatLevel(n) + (future ? ' is-future' : '') + (k === todayKeyStr ? ' is-today' : '');
-          var title = (cursor.getFullYear() + '-' + (colMonth + 1) + '-' + cursor.getDate())
+          monthTotal += n;
+          var cls = 'cal-cell cal-day lvl-' + heatLevel(n)
+            + (future ? ' is-future' : '') + (k === todayKeyStr ? ' is-today' : '');
+          var title = (year + '-' + (month + 1) + '-' + day)
             + (future ? '' : ' · ' + n + ' ' + t('stats_archives_unit'));
-          col.appendChild(el('span', { class: cls, title: title }));
-          cursor.setDate(cursor.getDate() + 1);
+          grid.appendChild(el('span', { class: cls, title: title },
+            [el('span', { class: 'cal-num', text: String(day) })]));
         }
-        cols.appendChild(col);
+
+        var wdRow = el('div', { class: 'cal-weekhead' });
+        for (var i = 0; i < 7; i++) wdRow.appendChild(el('span', { class: 'cal-wd', text: weekdayLabels[i] }));
+
+        calWrap.appendChild(el('div', { class: 'cal-month' }, [
+          el('div', { class: 'cal-month-head' }, [
+            el('span', { class: 'cal-month-title',
+              text: L ? (year + '年' + (month + 1) + '月') : (monthsEn[month] + ' ' + year) }),
+            el('span', { class: 'cal-month-count',
+              text: monthTotal ? (monthTotal + ' ' + t('stats_archives_unit')) : '' })
+          ]),
+          wdRow,
+          grid
+        ]));
       }
-      grid.appendChild(wdCol);
-      var right = el('div', { class: 'heat-right' }, [monthRow, cols]);
-      grid.appendChild(right);
-      gridWrap.appendChild(grid);
-      // newest weeks are on the right — scroll there by default
-      gridWrap.scrollLeft = gridWrap.scrollWidth;
     }
-    drawGrid();
+    drawCal();
   }
 
   function segmented(options, currentVal, onPick) {
