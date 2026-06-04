@@ -86,16 +86,13 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
    ~90% opaque at the top, so it read as a solid fill and the backdrop-blur was invisible.
    Now it's a lighter glass (≈62%→22%) with a stronger blur, so scrolling content genuinely
    refracts through it; the mask keeps frost across most of the bar, feathering only the
-   bottom edge. A hairline highlight at the bottom gives it a subtle glassy lip. */
+   bottom edge so it blends into the content without a hard divider. */
 .topbar::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
   background:linear-gradient(to bottom, color-mix(in srgb,var(--bg) 62%,transparent),
     color-mix(in srgb,var(--bg) 22%,transparent));
   backdrop-filter:saturate(1.9) blur(26px);-webkit-backdrop-filter:saturate(1.9) blur(26px);
   -webkit-mask-image:linear-gradient(to bottom,#000 74%,transparent);
   mask-image:linear-gradient(to bottom,#000 74%,transparent)}
-.topbar::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;z-index:-1;
-  pointer-events:none;background:linear-gradient(to right,transparent,
-    color-mix(in srgb,var(--text) 9%,transparent),transparent)}
 .brand{display:flex;align-items:center;gap:12px}
 .logo{display:inline-flex;width:30px;height:30px;flex:0 0 auto}
 .logo svg{width:100%;height:100%;display:block}
@@ -144,6 +141,7 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 /* ---- layout ---- */
 .view{max-width:760px;margin:0 auto;padding:18px 20px calc(60px + var(--keyboard-inset));
   scroll-padding-bottom:calc(var(--keyboard-inset) + 32px)}
+.view.view-commit{max-width:min(1040px,100%)}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;margin:6px 2px 20px;gap:12px}
 .view-head h1{font-size:30px;margin:0;font-weight:800;letter-spacing:-.4px}
 .head-actions{display:flex;gap:8px}
@@ -375,13 +373,19 @@ textarea.field{resize:vertical}
 .tiny-field{padding:9px 12px}
 .form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
 
-.photo-drop{min-height:200px;border:2px dashed var(--line-strong);border-radius:var(--radius-sm);display:flex;
+.photo-drop{position:relative;min-height:200px;border:2px dashed var(--line-strong);border-radius:var(--radius-sm);display:flex;
   align-items:center;justify-content:center;cursor:pointer;color:var(--muted);transition:.15s;
   background-color:var(--inset);overflow:hidden}
 .photo-drop:active{transform:scale(.99)}
 /* once a cover is chosen the dropzone fits the image at its natural ratio (no crop) */
 .photo-drop.has-photo{border-style:solid;min-height:0;display:block}
 .photo-drop-img{width:100%;height:auto;display:block}
+.photo-remove-btn{position:absolute;right:10px;top:10px;z-index:2;width:34px;height:34px;border:none;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;
+  color:#fff;background:rgba(18,22,38,.50);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  font-size:22px;line-height:1;box-shadow:0 2px 10px rgba(0,0,0,.26);transition:.15s}
+.photo-remove-btn:hover{background:rgba(18,22,38,.68)}
+.photo-remove-btn:active{transform:scale(.86)}
 .photo-hint{font-size:15px;font-weight:600}
 .photo-tools{display:flex;gap:10px;margin-top:10px}
 .photo-tools.is-hidden{display:none}
@@ -817,7 +821,7 @@ textarea.field{resize:vertical}
 .cal-wrap{display:flex;flex-direction:column}
 .cal-month{width:100%;max-width:460px;margin:0 auto}
 /* month/year pager header: ‹  Month Year (tap)  › */
-.cal-nav{display:flex;align-items:center;gap:8px;margin:0 0 14px}
+.cal-nav{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 14px}
 .cal-nav-btn{flex:0 0 auto;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);
   background:var(--card);color:var(--text);font-size:20px;line-height:1;cursor:pointer;
   display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm);transition:.15s}

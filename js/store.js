@@ -195,13 +195,15 @@
     },
 
     addCommit: function (commit) {
-      // parent = previous latest REAL commit in the same scene (forms a chain).
+      commit.createdAt = commit.createdAt || Date.now();
+      // parent = previous latest REAL commit before this archive time (forms a chain).
       // Planned drafts (预存档/计划) never join the chain, so real history stays clean.
-      var sameScene = cache.commits.filter(function (c) { return c.scene === commit.scene && !c.planned; });
+      var sameScene = cache.commits.filter(function (c) {
+        return c.scene === commit.scene && !c.planned && (c.createdAt || 0) <= commit.createdAt;
+      });
       sameScene.sort(function (a, b) { return b.createdAt - a.createdAt; });
       commit.id = commit.id || uid('c');
       commit.parentId = commit.planned ? null : (sameScene.length ? sameScene[0].id : null);
-      commit.createdAt = commit.createdAt || Date.now();
       // updatedAt drives conflict resolution on cloud sync (newest wins) so a fresh
       // local change is never clobbered by a stale remote copy of the same commit.
       commit.updatedAt = commit.updatedAt || commit.createdAt;

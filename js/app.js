@@ -16,6 +16,7 @@
       empty_sub: '在出门、收拾、写作业之前，先给现实拍一张「commit」。',
       empty_cta: '创建第一个存档', empty_seed: '载入示例数据',
       scene: '场景', message: 'Commit message（一句话说明）', photo: '拍照 / 上传照片',
+      archive_time: '存档时间',
       items: '物品 / 清单', notes: '备注', files: '文件 / 图片',
       add_item: '+ 添加一项', item_name: '物品名', item_qty: '数量',
       save_commit: '存档', cancel: '取消',
@@ -95,6 +96,7 @@
       empty_sub: 'Before you head out, tidy up, or start homework — commit reality first.',
       empty_cta: 'Create first commit', empty_seed: 'Load demo data',
       scene: 'Scene', message: 'Commit message', photo: 'Photo',
+      archive_time: 'Archive time',
       items: 'Items / checklist', notes: 'Notes', files: 'Files / images',
       add_item: '+ Add item', item_name: 'Item', item_qty: 'Qty',
       save_commit: 'Commit', cancel: 'Cancel',
@@ -202,6 +204,18 @@
     var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
       ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function datetimeLocalValue(ts) {
+    var d = new Date(ts || Date.now());
+    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function parseDatetimeLocal(value, fallback) {
+    var m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if (!m) return fallback || Date.now();
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0);
+    return isNaN(d.getTime()) ? (fallback || Date.now()) : d.getTime();
   }
   function fmtBytes(n) {
     if (!n) return '0 B';
@@ -660,6 +674,8 @@
     var v = view();
     v.innerHTML = '';
     v.scrollTop = 0;
+    v.classList.remove('view-commit');
+    v.classList.toggle('view-commit', current === 'commit');
     if (current === 'timeline') renderTimeline(v);
     else if (current === 'commit') renderCommitForm(v);
     else if (current === 'diff') renderDiff(v);
@@ -1136,6 +1152,8 @@
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (src && src.message && src.message !== '(no message)') msgInput.value = src.message;
+    var createdAtInput = el('input', { class: 'field', type: 'datetime-local',
+      value: datetimeLocalValue(editing ? editing.createdAt : Date.now()) });
     var notesInput = el('textarea', { class: 'field', rows: '2' });
     if (src && src.notes) notesInput.value = src.notes;
 
@@ -1153,7 +1171,20 @@
       // show the cover at its natural aspect ratio (no cropping) — the dropzone grows
       // to fit, matching how the timeline now displays photos
       preview.appendChild(el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' }));
+      preview.appendChild(el('button', { class: 'photo-remove-btn', type: 'button',
+        'aria-label': lang === 'zh' ? '删除照片' : 'Remove photo',
+        title: lang === 'zh' ? '删除照片' : 'Remove photo',
+        text: '×',
+        onclick: function (e) { e.stopPropagation(); clearPhoto(); } }));
       preview.classList.add('has-photo');
+      syncPhotoTools();
+    }
+    function clearPhoto() {
+      draftPhoto = null;
+      preview.innerHTML = '';
+      preview.appendChild(el('span', { class: 'photo-hint', text: '📷 ' + t('photo') }));
+      preview.classList.remove('has-photo');
+      preview.style.backgroundImage = 'none';
       syncPhotoTools();
     }
     function imageEntryFromFile(file) {
@@ -1461,6 +1492,7 @@
       var payload = {
         scene: selectedScene,
         message: msgInput.value.trim() || '(no message)',
+        createdAt: parseDatetimeLocal(createdAtInput.value, editing ? editing.createdAt : Date.now()),
         photo: draftPhoto,
         items: items,
         files: draftFiles.slice(),
@@ -1483,7 +1515,7 @@
     }
 
     photoTools = el('div', { class: 'photo-tools' }, [
-      el('button', { class: 'btn tiny ghost photo-extra-btn', type: 'button',
+      el('button', { class: 'btn ghost photo-extra-btn', type: 'button',
         text: '＋ ' + t('pick_multi'), onclick: openMultiPhotoPicker })
     ]);
     syncPhotoTools();
@@ -1495,13 +1527,14 @@
         el('div', {}, [preview, fileInput, photoTools, aiBtn])
       ]),
       labeled(t('message'), msgInput),
+      labeled(t('archive_time'), createdAtInput),
       labeledBlock(t('scene'), scenePicker),
       moreDetails,
       el('div', { class: 'form-actions' }, [
         el('button', { class: 'btn ghost', text: t('cancel'),
           onclick: function () { go('timeline'); } }),
         // "预存档" only for NEW commits — it saves a 预存档/draft to fulfill later
-        editing ? null : el('button', { class: 'btn plan-btn', text: '📌 ' + t('planned_save'),
+        editing ? null : el('button', { class: 'btn plan-btn', text: t('planned_save'),
           onclick: function () { doSave(true); } }),
         el('button', { class: 'btn primary', text: t('save_commit'),
           onclick: function () { doSave(false); } })
@@ -3115,6 +3148,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.5.1', '2026-06-04', '新建存档体验整理 + 热力图去下拉符号',
+      'New archive polish and a cleaner heatmap title',
+      ['顶栏毛玻璃底部的细线已移除，滚动内容和顶部模糊层之间不再有割裂感。',
+       '新建 / 编辑存档页面在桌面端会使用更宽的响应式内容宽度，不再被全局阅读宽度压得偏窄，手机端仍保持单列适配。',
+       '照片预览右上角新增删除按钮，选错封面图时可以直接清空后重选；「选择多张图片」按钮调整为和「AI 识别照片」同级的大按钮。',
+       '新建 / 编辑存档新增「存档时间」字段，允许补录真实发生时间；新增存档的同场景链路会按填写的存档时间寻找上一条正式存档。',
+       '新建存档底部的「预存档」按钮去掉图钉表情，只保留干净文字。',
+       '存档热力图保留左右切换月份箭头，但删除月份标题下方的下拉符号，日历头部更干净。'],
+      ['Removed the thin divider under the frosted top bar so scrolling content blends cleanly into the blur.',
+       'The new/edit archive page now uses a wider responsive desktop width while keeping the mobile single-column layout.',
+       'The selected cover photo now has a top-right remove button, and the multi-image picker button now matches the AI scan button size.',
+       'New/edit archive now includes an Archive time field for backfilling the real timestamp; new archive parent links use that archive time.',
+       'The Pre-save button no longer includes the pin emoji.',
+       'The Archive heatmap keeps the left/right month arrows, but removes the dropdown glyph under the month title.']],
     ['1.5.0', '2026-06-04', '五项同级导航 + 输入框顶飞修复 + 顶栏模糊回归 + 纯月历热力图 + 现实对比 AI/趋势/导出',
       'Peer tabs, keyboard-pan fix, frosted top bar, pure month-calendar heatmap, and Reality Diff AI / trends / export',
       ['底栏五项（时间线 / 现实对比 / 新建 / 回滚 / 分支）现在完全同级：tab 之间切换不再写入可侧滑返回的页面历史，安卓返回/侧滑只处理设置、详情、热力图等子页面。',
@@ -3543,7 +3590,7 @@
         el('span', { class: 'cal-title-main',
           text: L ? (year + '年' + (month + 1) + '月') : (monthsEn[month] + ' ' + year) }),
         el('span', { class: 'cal-title-sub',
-          text: (monthTotal ? monthTotal : 0) + ' ' + t('stats_archives_unit') + ' ⌄' })
+          text: (monthTotal ? monthTotal : 0) + ' ' + t('stats_archives_unit') })
       ]);
       var nav = el('div', { class: 'cal-nav' }, [
         el('button', { type: 'button', class: 'cal-nav-btn', 'aria-label': L ? '上个月' : 'Previous month',
