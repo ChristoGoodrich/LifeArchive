@@ -49,7 +49,9 @@ button:focus-visible,a:focus-visible,summary:focus-visible,.tappable:focus-visib
   outline:2px solid var(--accent);outline-offset:3px}
 /* NOTE: do NOT set height:100% on html/body — it makes the document a fixed-height
    box and breaks position:sticky on the topbar (it scrolls away). Let body grow. */
-html,body{margin:0;overflow-x:clip}
+/* background on html too: if a native WebView ever shows the root behind/below the body
+   (e.g. while the IME resizes the view), it paints the theme bg instead of default white */
+html,body{margin:0;overflow-x:clip;background:var(--bg)}
 html{scroll-padding-bottom:calc(var(--keyboard-inset) + var(--tabbar-h) + 18px)}
 body{
   min-height:100dvh;
@@ -616,13 +618,17 @@ textarea.field{resize:vertical}
 /* ---- diff: scope toggle (同场景 / 跨场景) + action bar (AI / export) ---- */
 .diff-scope{display:flex;align-items:center;gap:12px;margin:0 2px 12px;flex-wrap:wrap}
 .diff-scope-label{font-size:13px;font-weight:700;color:var(--muted)}
-/* two actions read as a clean pair: AI (hero) grows, export sits beside it at equal height */
-.diff-action-bar{display:flex;gap:10px;margin:14px 0 2px}
+/* AI (hero) grows; export is a compact square share icon beside it. Bottom margin keeps the
+   result/AI card that renders below from hugging the buttons. */
+.diff-action-bar{display:flex;gap:10px;margin:14px 0 18px}
 .diff-action-bar .btn{height:48px}
 .ai-diff-btn{flex:1 1 auto;background:linear-gradient(135deg,#7c4dff,#b14cff);border:none;color:#fff;
   box-shadow:0 6px 18px color-mix(in srgb,#8a63ff 40%,transparent);font-weight:700}
 .ai-diff-btn:hover{filter:brightness(1.06)}
-.diff-export-btn{flex:0 0 auto}
+.diff-export-btn{flex:0 0 auto;width:48px;padding:0;display:inline-flex;align-items:center;
+  justify-content:center;color:var(--muted)}
+.diff-export-btn svg{width:21px;height:21px}
+.diff-export-btn:hover{color:var(--text)}
 
 /* ---- diff: AI reading card (Phase 3) ---- */
 .diff-ai-result:empty{display:none}
@@ -1001,6 +1007,12 @@ textarea.field{resize:vertical}
   .nav-btn[data-route="branch"]{order:5}
   /* hide the bottom bar while typing so it never floats over the keyboard */
   body.kb-open .nav{transform:translateY(120%)}
+  /* While the keyboard is up the bottom edge is the IME, not the home bar — drop the
+     bottom safe-area term from the scroller's padding. On some Android builds the safe-area
+     plugin folds the IME inset INTO --safe-area-inset-bottom, ballooning .view padding-bottom
+     into a tall white band under the field (the "白色遮罩" that the --keyboard-inset fix alone
+     didn't catch). Restored automatically when kb-open clears. */
+  body.kb-open .view{--safe-area-inset-bottom:0px}
   .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
     padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;
     font-weight:600;color:var(--muted);background:transparent;box-shadow:none}
@@ -1029,7 +1041,11 @@ textarea.field{resize:vertical}
   /* tighter inner padding on phones: the 22px desktop gutter stacked on the view's own
      16px left it cramped (~80% width) — trim it so inputs use the full card width */
   .view.view-commit{max-width:none;width:100%;padding-left:10px;padding-right:10px}
-  .view.view-commit .form-card{width:100%;margin:0}
+  .view.view-commit .form-card{width:100%;margin:0;box-sizing:border-box}
+  /* keep the new/edit form within the phone width — no child (image, item row, preview)
+     may push the card wider than the viewport (the recurring Android width drift) */
+  .view.view-commit .form-card,.view.view-commit .form-card *{min-width:0}
+  .view.view-commit img,.view.view-commit canvas,.view.view-commit video{max-width:100%;height:auto}
   .form-card{padding:16px 13px}
   .photo-drop{min-height:230px}
   .item-qty{width:68px}

@@ -786,6 +786,10 @@
   function starSVG() {
     return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.4l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 17.6l-5.2 2.81.99-5.79-4.21-4.1 5.82-.85z"/></svg>';
   }
+  // share / export glyph (tray with an up-arrow) — used for the Reality Diff export button
+  function shareSVG() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+  }
 
   function commitMatches(c, q) {
     if (!q) return true;
@@ -2060,11 +2064,17 @@
 
     // Phase 3 AI reading + Phase 5 export. (The "复制文本" button was removed — it duplicated
     // the export card and added little; the two actions below read as a clean pair.)
+    // Export is now just a compact share icon next to the primary AI button (was a full
+    // text button that crowded the layout); long label lives in aria-label/title.
+    var exportBtn = el('button', { class: 'btn ghost diff-export-btn', type: 'button',
+      'aria-label': (L ? '导出对比卡片' : 'Export comparison card'),
+      title: (L ? '导出对比卡片' : 'Export comparison card'),
+      onclick: function () { exportCard(); } });
+    exportBtn.innerHTML = shareSVG();
     v.appendChild(el('div', { class: 'diff-action-bar' }, [
       el('button', { class: 'btn ai-diff-btn', text: '✨ ' + (L ? 'AI 解读变化' : 'AI read changes'),
         onclick: function () { runAIDiff(); } }),
-      el('button', { class: 'btn ghost diff-export-btn', text: '🖼 ' + (L ? '导出对比卡片' : 'Export card'),
-        onclick: function () { exportCard(); } })
+      exportBtn
     ]));
 
     var aiResult = el('div', { class: 'diff-ai-result' });
@@ -3368,6 +3378,14 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.6.2', '2026-06-04', '现实对比控件优化 + 开屏加长去抖动 + 键盘/宽度兜底',
+      'Reality Diff controls, longer splash, and keyboard/width hardening',
+      ['现实对比页：「AI 解读变化」与「导出对比卡片」按钮和下方对比结果之间留出了间距，不再贴在一起；「导出对比卡片」简化成一个紧凑的分享图标，操作区更清爽。',
+       '开屏画面适当加长，并把首屏的安全区 / 顶栏测量沉降都收进开屏覆盖期内，进入应用时不再上下抖一下。',
+       '再次修复键盘弹出时输入框下方的白块：上次只改了键盘内边距，这次发现真正的祸首是「底部安全区」——部分安卓机型在键盘弹出时会把键盘高度也算进底部安全区，于是内容区底部又被多垫了一整块。现在键盘弹出时不再叠加底部安全区（实测内容区底部内边距从 422px 降到 82px），并补了背景与重绘兜底。新建 / 编辑存档页也限制内容不超出手机宽度，减少横向漂移。'],
+      ['Reality Diff: add breathing room between the “AI read changes” / export buttons and the comparison result below; the export action is now a compact share icon.',
+       'Lengthen the splash and fold the first-paint settle (async safe-area insets + topbar re-measure) under it, so the app no longer jitters as it appears.',
+       'Fix the blank band under the input again: last time only the keyboard inset was patched, but the real culprit is the bottom safe-area — some Android builds fold the IME height into it, so the scroller padded itself by a whole extra keyboard. The bottom safe-area is now dropped while the keyboard is open (scroller bottom padding measured 422px → 82px), with background + repaint fallbacks. New/edit form content is also constrained to the phone width.']],
     ['1.6.1', '2026-06-04', '修复键盘白屏 + 固定开屏画面 + 云 SDK 完整性校验',
       'Keyboard white-gap fix, static splash frame, and cloud SDK integrity check',
       ['修复键盘弹出时输入框下方出现一大片空白的问题：部分安卓 WebView（如 HyperOS）在系统已经把网页缩小避让键盘后，仍上报键盘弹出前的旧窗口高度，于是页面又多垫了整整一个键盘高度的内边距，看起来就像被白色遮罩盖住。现在改用布局视口的实际高度来计算键盘遮挡量，不再误判。',
@@ -4107,7 +4125,11 @@
         customColorsForSystemBars: true,
         statusBarColor: '#00000000', statusBarContent: dark ? 'light' : 'dark',
         navigationBarColor: '#00000000', navigationBarContent: dark ? 'light' : 'dark'
-      } }).catch(function () {});
+      } }).then(function () {
+        // the plugin injects --safe-area-inset-* asynchronously; re-measure the topbar the
+        // moment they land so the content doesn't visibly jump as the insets settle.
+        syncTopbarHeight(); setTimeout(syncTopbarHeight, 60);
+      }).catch(function () {});
     } catch (e) {}
   }
   try {
@@ -4166,12 +4188,21 @@
     clearTimeout(kbEnsureTimer);
     kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 0);
   }
+  // Poke the WebView to re-rasterize the scroll area: some Android WebViews leave the region
+  // vacated by the IME animation unpainted (a blank/white band under the focused field). An
+  // imperceptible 1px scroll round-trip forces a repaint without disturbing the layout.
+  function nudgeScrollerRepaint() {
+    var v = document.getElementById('view');
+    if (!v) return;
+    var s = v.scrollTop;
+    v.scrollTop = s + 1; v.scrollTop = s;
+  }
   function scheduleEnsureFieldVisibleBurst() {
     scheduleEnsureFieldVisible(0);
     setTimeout(ensureFieldVisible, 90);
     setTimeout(ensureFieldVisible, 240);
     setTimeout(ensureFieldVisible, 420);
-    setTimeout(ensureFieldVisible, 700); // one late tick for slow IME open animations
+    setTimeout(function () { ensureFieldVisible(); nudgeScrollerRepaint(); }, 700); // late tick for slow IME + repaint
   }
   function fieldScrollHost(node) {
     if (!node || !node.closest) return null;
@@ -4310,8 +4341,10 @@
     if (!splash) return;
     var elapsed = Date.now() - (bootStartedAt || Date.now());
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // static brand frame: show briefly, then fade. No loading bar to wait out anymore.
-    var wait = reduce ? 80 : Math.max(120, 600 - elapsed);
+    // static brand frame: hold it a beat, then fade. Keeping it up ~1.1s also hides the
+    // first-paint settle (async safe-area insets + topbar re-measure) so the app doesn't
+    // visibly jump as it appears. Floor at 420ms so a fast boot still shows the frame.
+    var wait = reduce ? 90 : Math.max(420, 1100 - elapsed);
     setTimeout(function () {
       splash.classList.add('is-done');
       setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
@@ -4339,9 +4372,11 @@
     Store.init().then(function () {
       render();
       hideSplash(bootStartedAt);
-      // re-measure once layout + async safe-area insets have settled
+      // re-measure as layout + async safe-area insets settle. These all land while the
+      // splash still covers the screen (~1.1s), so the topbar/content shift isn't visible.
       syncTopbarHeight();
       setTimeout(syncTopbarHeight, 300);
+      setTimeout(syncTopbarHeight, 700);
       if (Cloud.configured()) Cloud.refreshUser().then(function () { if (current === 'settings') render(); });
     });
   });
