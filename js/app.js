@@ -449,18 +449,33 @@
   };
 
   function mergeData(a, b) {
-    a = a || { commits: [], branches: [] }; b = b || { commits: [], branches: [] };
+    a = a || {}; b = b || {};
     function stamp(it) { return (it && (it.updatedAt || it.createdAt)) || 0; }
+    // Merge deletion tombstones: id -> latest deletedAt across both sides. A delete on any
+    // device thus propagates to all, instead of the cloud copy resurrecting it on the next sync.
+    var tombs = {};
+    function addTombs(map) {
+      if (!map) return;
+      Object.keys(map).forEach(function (id) {
+        var v = map[id] || 0; if (!tombs[id] || v > tombs[id]) tombs[id] = v;
+      });
+    }
+    addTombs(a.tombstones); addTombs(b.tombstones);
     // Union by id; on conflict keep the most recently modified copy (updatedAt, falling
     // back to createdAt). This stops a stale remote record from clobbering a fresh local
     // edit/star — and vice-versa across devices — without losing either side's new rows.
+    // Then drop any record a tombstone marks deleted at/after its last change (an edit made
+    // AFTER the delete has a larger stamp and survives — deliberate "edit beats stale delete").
     function union(x, y) {
       var m = {};
       function add(it) { if (it && it.id && (!m[it.id] || stamp(it) >= stamp(m[it.id]))) m[it.id] = it; }
       (x || []).forEach(add); (y || []).forEach(add);
-      return Object.keys(m).map(function (k) { return m[k]; });
+      return Object.keys(m).filter(function (id) {
+        var d = tombs[id] || 0; return !(d && d >= stamp(m[id]));
+      }).map(function (id) { return m[id]; });
     }
-    return { commits: union(a.commits, b.commits), branches: union(a.branches, b.branches) };
+    return { commits: union(a.commits, b.commits), branches: union(a.branches, b.branches),
+             tombstones: tombs };
   }
 
   function cloudSync() {
@@ -892,13 +907,35 @@
 
     // photo-first: a real <img> at its natural aspect ratio (no cropping), so cards
     // grow to fit each picture and the timeline reads as a vertical waterfall.
-    var media = null;
+    var media = null, thumbStrip = null;
     if (thumbSrc) {
       var img = el('img', { class: 'commit-img', src: thumbSrc, alt: c.message || '',
         loading: 'lazy', decoding: 'async' });
+      // reserve the image's box from its stored pixel size so the card doesn't grow/“放大”
+      // when a freshly added photo finishes decoding (CSS keeps width:100%;height:auto)
+      if (c.photoW && c.photoH) { img.setAttribute('width', c.photoW); img.setAttribute('height', c.photoH); }
       media = el('div', { class: 'commit-media' }, [img, starBtn]);
-      var imgN = (c.files || []).filter(isImageFile).length + (c.photo ? 1 : 0);
-      if (imgN > 1) media.appendChild(el('span', { class: 'commit-img-count', text: '⧉ ' + imgN }));
+
+      // multi-photo: a horizontal thumbnail strip UNDER the cover shows the extra images
+      // right on the timeline (cover first, extras after). Tapping anywhere still opens the
+      // full gallery in the detail page.
+      var imageSrcs = [];
+      if (c.photo) imageSrcs.push(c.photo);
+      (c.files || []).filter(isImageFile).forEach(function (f) { imageSrcs.push(f.data); });
+      var extras = imageSrcs.slice(1);
+      if (extras.length) {
+        thumbStrip = el('div', { class: 'commit-thumbs' });
+        var MAXT = 8;
+        extras.slice(0, MAXT).forEach(function (sdata) {
+          thumbStrip.appendChild(el('div', { class: 'commit-thumb' }, [
+            el('img', { class: 'commit-thumb-img', src: sdata, alt: '', loading: 'lazy', decoding: 'async' })
+          ]));
+        });
+        if (extras.length > MAXT) {
+          thumbStrip.appendChild(el('div', { class: 'commit-thumb commit-thumb-more-tile',
+            text: '+' + (extras.length - MAXT) }));
+        }
+      }
     }
 
     var subKids = [
@@ -947,7 +984,9 @@
     }
 
     var body = el('div', { class: 'commit-body' }, bodyKids);
-    var cardKids = media ? [media, body] : [body, starBtn];
+    var cardKids;
+    if (media) { cardKids = [media]; if (thumbStrip) cardKids.push(thumbStrip); cardKids.push(body); }
+    else { cardKids = [body, starBtn]; }
     var card = el('div', { class: 'commit-card tappable'
       + (c.starred ? ' is-starred' : '') + (c.planned ? ' is-planned' : '') + (media ? '' : ' no-media') }, cardKids);
     card.addEventListener('click', function () { pendingDetail = c.id; go('detail'); });
@@ -980,7 +1019,11 @@
     var card = el('div', { class: 'detail-card' + (c.planned ? ' is-planned' : '') });
     if (c.planned) card.appendChild(el('div', { class: 'detail-plan-banner', text: t('planned_tag') }));
     // photo at its natural aspect ratio (no cropping), matching the timeline cards
-    if (c.photo) card.appendChild(el('img', { class: 'detail-photo', src: c.photo, alt: c.message || '', decoding: 'async' }));
+    if (c.photo) {
+      var detailPhoto = el('img', { class: 'detail-photo', src: c.photo, alt: c.message || '', decoding: 'async' });
+      if (c.photoW && c.photoH) { detailPhoto.setAttribute('width', c.photoW); detailPhoto.setAttribute('height', c.photoH); }
+      card.appendChild(detailPhoto);
+    }
     card.appendChild(el('div', { class: 'detail-title', text: c.message || '(no message)' }));
     card.appendChild(el('div', { class: 'detail-sub' }, [
       el('span', { class: 'commit-scene', text: sceneLabel(Store.sceneById(c.scene)) }),
@@ -1084,11 +1127,13 @@
 
   /* ---------------- New / edit commit form ---------------- */
   var draftPhoto = null;
+  var draftPhotoDims = null; // {w,h} of the cover, so timeline cards can reserve its box
   var draftFiles = [];
   var pendingEdit = null;
   var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
   function renderCommitForm(v) {
     draftPhoto = null;
+    draftPhotoDims = null;
     draftFiles = [];
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
@@ -1166,11 +1211,20 @@
     }
     function setPhoto(dataUrl) {
       draftPhoto = dataUrl;
+      draftPhotoDims = null;
       preview.innerHTML = '';
       preview.style.backgroundImage = 'none';
       // show the cover at its natural aspect ratio (no cropping) — the dropzone grows
       // to fit, matching how the timeline now displays photos
-      preview.appendChild(el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' }));
+      var coverImg = el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' });
+      // remember the cover's pixel size so saved commits carry it and timeline cards can
+      // reserve the image box up-front (no decode-time "pop"/enlarge — see commitCard)
+      coverImg.addEventListener('load', function () {
+        if (coverImg.naturalWidth && coverImg.naturalHeight) {
+          draftPhotoDims = { w: coverImg.naturalWidth, h: coverImg.naturalHeight };
+        }
+      });
+      preview.appendChild(coverImg);
       preview.appendChild(el('button', { class: 'photo-remove-btn', type: 'button',
         'aria-label': lang === 'zh' ? '删除照片' : 'Remove photo',
         title: lang === 'zh' ? '删除照片' : 'Remove photo',
@@ -1181,6 +1235,7 @@
     }
     function clearPhoto() {
       draftPhoto = null;
+      draftPhotoDims = null;
       preview.innerHTML = '';
       preview.appendChild(el('span', { class: 'photo-hint', text: '📷 ' + t('photo') }));
       preview.classList.remove('has-photo');
@@ -1359,7 +1414,12 @@
     document.addEventListener('paste', onPasteImg);
     viewCleanup = function () { document.removeEventListener('paste', onPasteImg); };
 
-    if (src && src.photo) setPhoto(src.photo);
+    if (src && src.photo) {
+      setPhoto(src.photo);
+      // adopt the stored size immediately (don't wait for the re-decode) so re-saving an
+      // existing commit keeps its dimensions even if the user saves fast
+      if (src.photoW && src.photoH) draftPhotoDims = { w: src.photoW, h: src.photoH };
+    }
 
     // dynamic item rows
     var itemsWrap = el('div', { class: 'items-wrap' });
@@ -1494,6 +1554,10 @@
         message: msgInput.value.trim() || '(no message)',
         createdAt: parseDatetimeLocal(createdAtInput.value, editing ? editing.createdAt : Date.now()),
         photo: draftPhoto,
+        // cover pixel size → timeline/detail reserve the image box so a freshly added
+        // archive doesn't visibly "pop"/enlarge when its photo finishes decoding
+        photoW: draftPhoto && draftPhotoDims ? draftPhotoDims.w : null,
+        photoH: draftPhoto && draftPhotoDims ? draftPhotoDims.h : null,
         items: items,
         files: draftFiles.slice(),
         notes: notesInput.value.trim(),
@@ -3143,11 +3207,21 @@
   }
 
   function settingsCard(title, children) {
-    return el('section', { class: 'set-card' },
-      [el('div', { class: 'set-card-title', text: title })].concat(children));
+    // title may be null when the card sits under a settings group header (which titles it)
+    var head = title ? [el('div', { class: 'set-card-title', text: title })] : [];
+    return el('section', { class: 'set-card' }, head.concat(children));
   }
 
   var RELEASE_NOTES = [
+    ['1.5.2', '2026-06-04', '删除可彻底同步 + 时间线放大修复 + 多图缩略图 + 设置分组 + 扁平图标',
+      'True cloud delete + no timeline pop + photo strip + grouped settings + flat icon',
+      ['☁️ 彻底修复「删了又被云端拉回来」：新增删除墓碑并参与云同步——本机删除存档后会在所有已登录设备和云端一起删除，不再因为云端还存着而被重新下载；「清空全部」同样会同步清空云端。云端上比删除更新的编辑仍会保留（编辑优先于过期删除）。',
+       '🖼 修复「新建存档后时间线上的存档会放大」：保存封面图时记录其尺寸，时间线 / 详情页据此提前预留图片高度，照片解码完成时卡片不再从小突然撑大。旧存档再次编辑保存后同样生效。',
+       '🧩 多图存档在时间线上新增「封面下缩略图条」：封面下方多出一排可横滑的小缩略图，直接看到这条存档的其他照片（超过 8 张显示 +N）；点卡片仍进入详情看完整图库。',
+       '📐 修复新建 / 编辑存档页面宽度：桌面端不再把输入框拉到近 1000px 宽，改为更舒适的居中宽度（约 680px），手机端不受影响。',
+       '⚙️ 设置界面重新分组、重新排序：账号与云同步置顶，关于（版本 / 检查更新 / 更新日志）置底，中间按「通用（外观语言、AI 识别）」「数据」分组，并加上分组小标题，层次更清晰。',
+       '⌨️ 继续加固移动端输入框：在系统视口事件之外再监听 window resize，并补一个较晚的回正帧，键盘弹出动画较慢的机型也能把当前输入框滚动到可见区。',
+       '🎨 应用图标底色改为扁平纯色：去掉斜向渐变 + 高光 + 暗角，换成干净的蓝紫纯色底，卡片玻璃质感保留；桌面与安卓图标、启动图已重新生成。']],
     ['1.5.1', '2026-06-04', '新建存档体验整理 + 热力图去下拉符号',
       'New archive polish and a cleaner heatmap title',
       ['顶栏毛玻璃底部的细线已移除，滚动内容和顶部模糊层之间不再有割裂感。',
@@ -3645,7 +3719,7 @@
 
   function accountCard() {
     var L = lang === 'zh';
-    var title = L ? '账号与云同步' : 'Account & sync';
+    // titled by its settings group header (see renderSettings) — no in-card title
 
     // 1) not configured -> ask for Supabase project URL + anon key
     if (!Cloud.configured()) {
@@ -3656,7 +3730,7 @@
         if (!urlI.value.trim() || !keyI.value.trim()) { toast(L ? '请填写 URL 和 anon key' : 'Fill both fields'); return; }
         Cloud.setCfg(urlI.value, keyI.value); toast(L ? '已保存配置' : 'Saved'); render();
       });
-      return settingsCard(title, [
+      return settingsCard(null, [
         el('p', { class: 'set-hint', text: L
           ? '用 Supabase 免费后端做多设备云同步。填入你的项目地址和 anon key（公开可用、可放心填）。'
           : 'Multi-device sync via Supabase (free). Paste your project URL + anon key (safe to embed).' }),
@@ -3681,7 +3755,7 @@
       });
       var outB = el('button', { class: 'btn ghost tiny', text: L ? '退出登录' : 'Log out' });
       outB.addEventListener('click', function () { Cloud.signOut().then(function () { toast(L ? '已退出' : 'Logged out'); render(); }); });
-      return settingsCard(title, [
+      return settingsCard(null, [
         el('div', { class: 'set-row' }, [
           el('span', { class: 'set-label', text: L ? '已登录' : 'Signed in' }),
           el('span', { class: 'set-value', text: u.email || u.id })
@@ -3726,7 +3800,7 @@
       el('span', { text: lang === 'zh' ? '更新日志' : 'Release notes' }),
       el('span', { class: 'set-menu-chevron', text: '›' })
     ]);
-    var about = settingsCard(lang === 'zh' ? '关于' : 'About', [
+    var about = settingsCard(null, [
       el('div', { class: 'set-row' }, [
         el('span', { class: 'set-label', text: lang === 'zh' ? '当前版本' : 'Version' }),
         el('span', { class: 'set-value', text: 'v' + (window.APP_VERSION || '?') })
@@ -3756,7 +3830,7 @@
     var clrBtn = el('button', { class: 'btn danger-ghost tiny', text: lang === 'zh' ? '清空全部' : 'Clear all' });
     clrBtn.addEventListener('click', clearAll);
     var onIdb = Store.backend() === 'indexeddb';
-    var data = settingsCard(lang === 'zh' ? '数据' : 'Data', [
+    var data = settingsCard(null, [
       el('div', { class: 'set-row' }, [
         el('span', { class: 'set-label', text: lang === 'zh' ? '存储用量' : 'Storage used' }),
         el('span', { class: 'set-value', text: fmtBytes(Store.usage()) + ' · ' + (onIdb ? 'IndexedDB' : (lang === 'zh' ? '本地' : 'localStorage')) })
@@ -3784,7 +3858,19 @@
       ])
     ]);
 
-    v.appendChild(el('div', { class: 'settings-wrap' }, [appearance, about, ai, account, data]));
+    // grouped + reordered: account on top, about at the bottom (conventional settings order),
+    // with section headers clustering related cards.
+    var L = lang === 'zh';
+    function setGroup(zh, en, cards) {
+      return el('section', { class: 'set-group' },
+        [el('h2', { class: 'set-group-title', text: L ? zh : en })].concat(cards));
+    }
+    v.appendChild(el('div', { class: 'settings-wrap' }, [
+      setGroup('账号与云同步', 'Account & sync', [account]),
+      setGroup('通用', 'General', [appearance, ai]),
+      setGroup('数据', 'Data', [data]),
+      setGroup('关于', 'About', [about])
+    ]));
   }
 
   /* ---------------- theme (light/dark; follows system or manual override) ---------------- */
@@ -3884,6 +3970,7 @@
     setTimeout(ensureFieldVisible, 90);
     setTimeout(ensureFieldVisible, 240);
     setTimeout(ensureFieldVisible, 420);
+    setTimeout(ensureFieldVisible, 700); // one late tick for slow IME open animations
   }
   function fieldScrollHost(node) {
     if (!node || !node.closest) return null;
@@ -3933,6 +4020,10 @@
       vv.addEventListener('resize', syncKeyboardState);
       vv.addEventListener('scroll', function () { scheduleEnsureFieldVisible(0); });
     }
+    // Some Android WebViews fire window 'resize' (the resizeOnFullScreen child resize) but
+    // not always visualViewport 'resize' — reconcile on both so the inset/nav-hide and the
+    // field-into-view nudge never get stuck because one event didn't fire.
+    window.addEventListener('resize', syncKeyboardState);
     document.addEventListener('focusin', function (e) {
       if (isTextField(e.target)) scheduleEnsureFieldVisibleBurst();
     });

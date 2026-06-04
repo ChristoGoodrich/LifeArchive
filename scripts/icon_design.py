@@ -16,6 +16,10 @@ from PIL import Image, ImageDraw, ImageFilter
 # (less cyan / less navy-black than before) for a simpler, higher-end feel.
 BG_TL = (88, 156, 255)      # bright brand blue, top-left light source
 BG_BR = (98, 52, 196)       # rich royal violet, bottom-right
+# Flat backdrop: one clean blue->violet brand color (≈ the average of the two stops above),
+# used instead of a busy diagonal gradient + radial gloss + vignette. Flatter & cleaner; the
+# glass card stack keeps its frosted look on top.
+BG_FLAT = (108, 119, 226)
 # frosted-glass card gradient (top -> bottom)
 CARD_TOP = (242, 247, 255)  # clean near-white
 CARD_BOT = (210, 216, 255)  # soft lavender
@@ -52,17 +56,9 @@ def _radial(size, cx, cy, radius, color, peak, falloff=2.0):
 
 
 def gradient_bg(size):
-    """Full-bleed premium diagonal blue->violet field with a top-left light and a
-    bottom-right vignette for depth."""
-    img = Image.new("RGB", (size, size))
-    px = img.load()
-    for y in range(size):
-        for x in range(size):
-            px[x, y] = lerp(BG_TL, BG_BR, (x + y) / (2 * size))
-    base = img.convert("RGBA")
-    base = Image.alpha_composite(base, _radial(size, 0.30, 0.24, 0.95, (255, 255, 255), 74, 2.2))
-    base = Image.alpha_composite(base, _radial(size, 0.98, 1.00, 1.05, SHADOW, 42, 2.6))
-    return base
+    """Flat, clean brand-color field. (Was a diagonal blue->violet gradient with a radial
+    top-left gloss + bottom-right vignette — flattened per the 'logo 底色更扁平干净' ask.)"""
+    return Image.new("RGBA", (size, size), BG_FLAT + (255,))
 
 
 def diagonal_grad(size):

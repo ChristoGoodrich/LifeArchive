@@ -141,7 +141,9 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 /* ---- layout ---- */
 .view{max-width:760px;margin:0 auto;padding:18px 20px calc(60px + var(--keyboard-inset));
   scroll-padding-bottom:calc(var(--keyboard-inset) + 32px)}
-.view.view-commit{max-width:min(1040px,100%)}
+/* new/edit archive form: a comfortable centered column. Wider than the old 760 felt too
+   stretched (single-line fields ran ~950px on desktop); this keeps inputs readable. */
+.view.view-commit{max-width:680px}
 .view-head{display:flex;align-items:flex-end;justify-content:space-between;margin:6px 2px 20px;gap:12px}
 .view-head h1{font-size:30px;margin:0;font-weight:800;letter-spacing:-.4px}
 .head-actions{display:flex;gap:8px}
@@ -210,6 +212,16 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .commit-img-count{position:absolute;left:10px;bottom:10px;z-index:2;display:inline-flex;align-items:center;
   gap:4px;padding:4px 9px;border-radius:999px;background:rgba(18,22,38,.5);color:#fff;font-size:12px;
   font-weight:700;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+/* multi-photo thumbnail strip under the cover (horizontal, swipeable) — extra images
+   show right on the timeline; tapping the card still opens the full gallery in detail */
+.commit-thumbs{display:flex;gap:6px;overflow-x:auto;padding:10px 14px 2px;scrollbar-width:none;
+  font-size:0;line-height:0}
+.commit-thumbs::-webkit-scrollbar{display:none}
+.commit-thumb{position:relative;flex:0 0 auto;width:56px;height:56px;border-radius:11px;overflow:hidden;
+  background:var(--card-2);border:1px solid var(--line)}
+.commit-thumb-img{width:100%;height:100%;object-fit:cover;display:block}
+.commit-thumb-more-tile{display:flex;align-items:center;justify-content:center;color:var(--muted);
+  font-weight:800;font-size:13.5px;font-family:var(--mono);line-height:1}
 .commit-body{padding:14px 16px 16px;min-width:0}
 .commit-title-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
 .commit-msg{font-weight:700;font-size:16px;letter-spacing:-.2px;flex:1;min-width:0}
@@ -763,7 +775,11 @@ textarea.field{resize:vertical}
 .toast.show{opacity:.96;transform:translateX(-50%) translateY(0)}
 
 /* ---- settings ---- */
-.settings-wrap{display:flex;flex-direction:column;gap:14px}
+/* grouped sections: bigger gap BETWEEN groups, tight gap within a group (header + cards) */
+.settings-wrap{display:flex;flex-direction:column;gap:24px}
+.set-group{display:flex;flex-direction:column;gap:10px}
+.set-group-title{font-size:13px;font-weight:800;color:var(--muted);letter-spacing:.4px;
+  margin:0 4px 2px;padding:0}
 .set-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
   padding:18px;box-shadow:var(--shadow-sm)}
 .set-card-title{font-size:12.5px;font-weight:800;color:var(--muted);text-transform:uppercase;

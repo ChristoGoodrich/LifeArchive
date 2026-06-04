@@ -11,6 +11,7 @@
 
   var KEY_COMMITS = 'lifearchive.commits.v1';
   var KEY_BRANCHES = 'lifearchive.branches.v1';
+  var KEY_TOMBSTONES = 'lifearchive.tombstones.v1';
   var KEY_META = 'lifearchive.meta.v1';
   var IDB_NAME = 'lifearchive';
   var IDB_STORE = 'kv';
@@ -56,12 +57,39 @@
   }
 
   /* ---- in-memory cache (authoritative after init) ---- */
-  var cache = { commits: [], branches: [] };
+  // tombstones: { id: deletedAtMs } — a record of what was deleted, so the deletion
+  // survives a cloud round-trip. Without them the id-union merge would re-download a
+  // locally-deleted commit from the cloud and "un-delete" it. Synced like the rest.
+  var cache = { commits: [], branches: [], tombstones: {} };
   function persist() {
-    if (idb) { idbSet(KEY_COMMITS, cache.commits); idbSet(KEY_BRANCHES, cache.branches); return true; }
+    if (idb) {
+      idbSet(KEY_COMMITS, cache.commits);
+      idbSet(KEY_BRANCHES, cache.branches);
+      idbSet(KEY_TOMBSTONES, cache.tombstones);
+      return true;
+    }
     var a = lsWrite(KEY_COMMITS, cache.commits);
     var b = lsWrite(KEY_BRANCHES, cache.branches);
+    lsWrite(KEY_TOMBSTONES, cache.tombstones);
     return a && b;
+  }
+
+  /* mark an id as deleted (now). The timestamp lets a later edit/restore win over an
+     older deletion, and lets the cloud merge drop the record on every device. */
+  function tombstone(id) { if (id) cache.tombstones[id] = Date.now(); }
+  function copyMap(m) {
+    var o = {};
+    for (var k in m) { if (m.hasOwnProperty(k)) o[k] = m[k]; }
+    return o;
+  }
+  function recStamp(it) { return (it && (it.updatedAt || it.createdAt)) || 0; }
+  // Drop any cached record a tombstone says was deleted at/after its last change. A record
+  // edited AFTER its deletion (larger stamp) survives — deliberate "edit beats stale delete".
+  function applyTombstones() {
+    var t = cache.tombstones || {};
+    function keep(it) { var d = t[it.id] || 0; return !(d && d >= recStamp(it)); }
+    cache.commits = cache.commits.filter(keep);
+    cache.branches = cache.branches.filter(keep);
   }
 
   function uid(prefix) {
@@ -158,20 +186,26 @@
         if (!idb) {
           cache.commits = lsRead(KEY_COMMITS, []);
           cache.branches = lsRead(KEY_BRANCHES, []);
+          cache.tombstones = lsRead(KEY_TOMBSTONES, {}) || {};
           return;
         }
-        return Promise.all([idbGet(KEY_COMMITS), idbGet(KEY_BRANCHES)]).then(function (res) {
+        return Promise.all([idbGet(KEY_COMMITS), idbGet(KEY_BRANCHES), idbGet(KEY_TOMBSTONES)]).then(function (res) {
           if (res[0] === undefined && res[1] === undefined) {
             // first run on IDB — migrate anything already saved in localStorage
             cache.commits = lsRead(KEY_COMMITS, []);
             cache.branches = lsRead(KEY_BRANCHES, []);
-            if (cache.commits.length || cache.branches.length) {
+            cache.tombstones = lsRead(KEY_TOMBSTONES, {}) || {};
+            if (cache.commits.length || cache.branches.length || Object.keys(cache.tombstones).length) {
               persist();
-              try { localStorage.removeItem(KEY_COMMITS); localStorage.removeItem(KEY_BRANCHES); } catch (e) {}
+              try {
+                localStorage.removeItem(KEY_COMMITS); localStorage.removeItem(KEY_BRANCHES);
+                localStorage.removeItem(KEY_TOMBSTONES);
+              } catch (e) {}
             }
           } else {
             cache.commits = res[0] || [];
             cache.branches = res[1] || [];
+            cache.tombstones = res[2] || {};
           }
         });
       });
@@ -259,6 +293,7 @@
 
     deleteCommit: function (id) {
       cache.commits = cache.commits.filter(function (c) { return c.id !== id; });
+      tombstone(id);
       persist();
     },
 
@@ -297,6 +332,7 @@
 
     deleteBranch: function (id) {
       cache.branches = cache.branches.filter(function (b) { return b.id !== id; });
+      tombstone(id);
       persist();
     },
 
@@ -312,7 +348,13 @@
     /* ---------- Misc ---------- */
     isEmpty: function () { return cache.commits.length === 0; },
 
-    clearAll: function () { cache.commits = []; cache.branches = []; persist(); },
+    clearAll: function () {
+      // tombstone everything so a "clear all" also clears the cloud copy on next sync,
+      // instead of the cloud re-seeding the wiped archive back onto this device.
+      cache.commits.forEach(function (c) { tombstone(c.id); });
+      cache.branches.forEach(function (b) { tombstone(b.id); });
+      cache.commits = []; cache.branches = []; persist();
+    },
 
     exportJSON: function () { return JSON.stringify(this.exportRaw(), null, 2); },
 
@@ -331,11 +373,18 @@
     backend: function () { return idb ? 'indexeddb' : 'localstorage'; },
 
     /* ---------- Cloud sync helpers (raw data in/out) ---------- */
-    exportRaw: function () { return { commits: cache.commits.slice(), branches: cache.branches.slice() }; },
+    exportRaw: function () {
+      return { commits: cache.commits.slice(), branches: cache.branches.slice(),
+               tombstones: copyMap(cache.tombstones) };
+    },
     replaceAll: function (data) {
       data = data || {};
       cache.commits = data.commits || [];
       cache.branches = data.branches || [];
+      // keep local tombstones if the incoming blob predates the feature (old backup),
+      // otherwise adopt the merged set; then enforce them so nothing deleted lingers.
+      if (data.tombstones) cache.tombstones = data.tombstones;
+      applyTombstones();
       persist();
     }
   };
