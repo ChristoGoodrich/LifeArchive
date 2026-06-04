@@ -9,9 +9,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Life Archive · 生活存档</title>
   <meta name="description" content="给现实生活装一个 Git：存档、对比、回滚、分支。" />
-  <link rel="stylesheet" href="css/styles.css?v=1.5.3" />
+  <link rel="icon" href='data:image/svg+xml,&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"&gt;&lt;rect x="7" y="4" width="13" height="8.5" rx="2.7" fill="%237b5bff" opacity=".35"/&gt;&lt;rect x="5.5" y="6.4" width="13" height="8.5" rx="2.7" fill="%234f8bff" opacity=".7"/&gt;&lt;rect x="4" y="8.8" width="13" height="10.6" rx="2.7" fill="%233d7dff"/&gt;&lt;/svg&gt;' />
+  <link rel="stylesheet" href="css/styles.css?v=1.6.0" />
 </head>
 <body>
+  <div id="splash-screen" class="splash-screen" aria-hidden="true">
+    <div class="splash-mark">
+      <span class="splash-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="laSplashLogo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f8bff"/><stop offset="1" stop-color="#8a63ff"/></linearGradient></defs><rect x="7" y="4" width="13" height="8.5" rx="2.7" fill="url(#laSplashLogo)" opacity=".3"/><rect x="5.5" y="6.4" width="13" height="8.5" rx="2.7" fill="url(#laSplashLogo)" opacity=".58"/><rect x="4" y="8.8" width="13" height="10.6" rx="2.7" fill="url(#laSplashLogo)"/></svg></span>
+      <span class="splash-title">Life Archive</span>
+      <span class="splash-line"><i></i></span>
+    </div>
+  </div>
   <header class="topbar">
     <div class="brand">
       <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="laLogo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f8bff"/><stop offset="1" stop-color="#8a63ff"/></linearGradient></defs><rect x="7" y="4" width="13" height="8.5" rx="2.7" fill="url(#laLogo)" opacity=".3"/><rect x="5.5" y="6.4" width="13" height="8.5" rx="2.7" fill="url(#laLogo)" opacity=".58"/><rect x="4" y="8.8" width="13" height="10.6" rx="2.7" fill="url(#laLogo)"/></svg></span>
@@ -32,9 +40,9 @@
 
   <div id="toast" class="toast"></div>
 
-  <script src="js/version.js?v=1.5.3"></script>
-  <script src="js/store.js?v=1.5.3"></script>
-  <script src="js/diff.js?v=1.5.3"></script>
-  <script src="js/app.js?v=1.5.3"></script>
+  <script src="js/version.js?v=1.6.0"></script>
+  <script src="js/store.js?v=1.6.0"></script>
+  <script src="js/diff.js?v=1.6.0"></script>
+  <script src="js/app.js?v=1.6.0"></script>
 </body>
 </html>

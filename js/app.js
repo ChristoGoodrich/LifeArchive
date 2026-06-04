@@ -27,6 +27,11 @@
       no_change: '两个版本几乎一致 👍',
       rollback_pick: '选择要恢复到的存档', rollback_version: '时间描述', rollback_steps: '恢复步骤',
       rollback_intro: '按下面的步骤，把现状恢复到这个存档：',
+      rollback_target_state: '目标状态', rollback_current_state: '当前状态',
+      rollback_diff_summary: '恢复差异', rollback_no_steps: '当前已经和目标存档一致，可以直接确认或生成一条恢复存档。',
+      rollback_create_commit: '生成恢复存档', rollback_commit_created: '已生成恢复存档',
+      rollback_reset_progress: '重置进度', rollback_progress_saved: '回滚进度已保存',
+      rollback_resume: '已恢复上次进度',
       step_remove: '拿走 / 移除', step_add: '放回 / 补上', step_check: '确认仍在',
       done: '完成', branch_q: '你在纠结什么？',
       branch_q_ph: '例如：今晚写作业 还是 出去玩？',
@@ -107,6 +112,11 @@
       no_change: 'The two versions look nearly identical 👍',
       rollback_pick: 'Pick the commit to restore to', rollback_version: 'Time & description', rollback_steps: 'Restore steps',
       rollback_intro: 'Follow these steps to restore the current state to this commit:',
+      rollback_target_state: 'Target state', rollback_current_state: 'Current state',
+      rollback_diff_summary: 'Restore diff', rollback_no_steps: 'Current state already matches the target. Confirm it or create a restore commit.',
+      rollback_create_commit: 'Create restore commit', rollback_commit_created: 'Restore commit created',
+      rollback_reset_progress: 'Reset progress', rollback_progress_saved: 'Rollback progress saved',
+      rollback_resume: 'Previous progress restored',
       step_remove: 'Remove', step_add: 'Put back / add', step_check: 'Confirm present',
       done: 'Done', branch_q: 'What are you torn between?',
       branch_q_ph: 'e.g. Do homework tonight, or go out?',
@@ -246,6 +256,19 @@
     var img = firstImageFile(c.files);
     return c.photo || (img && img.data) || '';
   }
+  function imageFiles(c) {
+    return (c && c.files || []).filter(isImageFile);
+  }
+  function commitImageEntries(c) {
+    var out = [];
+    if (!c) return out;
+    if (c.photo) out.push({ data: c.photo, name: c.message || 'cover.jpg',
+      w: c.photoW || null, h: c.photoH || null, cover: true });
+    imageFiles(c).forEach(function (f) {
+      out.push({ data: f.data, name: f.name || 'image.jpg', w: f.w || null, h: f.h || null, file: f });
+    });
+    return out;
+  }
   // Pixel size of whatever image commitThumbSrc shows, so timeline/detail can reserve its
   // box (no decode-time "pop"). Cover photo first; else the first image attachment (e.g. a
   // multi-photo archive whose cover was removed). Legacy commits without stored dims → null.
@@ -253,6 +276,27 @@
     if (c.photo) return (c.photoW && c.photoH) ? { w: c.photoW, h: c.photoH } : null;
     var img = firstImageFile(c.files);
     return (img && img.w && img.h) ? { w: img.w, h: img.h } : null;
+  }
+  function timelineMediaAttrs(dims) {
+    var attrs = { class: 'commit-media' };
+    if (dims && dims.w && dims.h && dims.h / dims.w > 1.35) {
+      // Timeline previews are intentionally compact for tall screenshots/long photos;
+      // detail view still shows the original aspect ratio.
+      attrs.class += ' is-clamped';
+      attrs.style = '--media-ratio:' + dims.w + '/' + Math.round(dims.w * 1.28);
+    }
+    return attrs;
+  }
+  function cloneItems(items) {
+    return (items || []).map(function (it) { return { name: it.name, qty: it.qty || 1 }; });
+  }
+  function cloneFiles(files) {
+    return (files || []).map(function (f) {
+      var copy = {};
+      for (var k in f) { if (f.hasOwnProperty(k)) copy[k] = f[k]; }
+      copy.id = Store.uid('f');
+      return copy;
+    });
   }
   function notPlanned(c) { return !c.planned; }
   // real (non-planned) commits in a scene, newest first — used by diff / rollback so
@@ -921,28 +965,33 @@
     // grow to fit each picture and the timeline reads as a vertical waterfall.
     var media = null, thumbStrip = null;
     if (thumbSrc) {
+      var imageEntries = commitImageEntries(c);
+      if (!imageEntries.length) imageEntries = [{ data: thumbSrc, name: c.message || '' }];
+      var coverDims = commitCoverDims(c);
       var img = el('img', { class: 'commit-img', src: thumbSrc, alt: c.message || '',
         loading: 'lazy', decoding: 'async' });
       // reserve the image's box from its stored pixel size so the card doesn't grow/“放大”
       // when a freshly added photo finishes decoding (CSS keeps width:100%;height:auto).
       // commitCoverDims covers multi-photo archives too (incl. cover-removed → file image).
-      var coverDims = commitCoverDims(c);
       if (coverDims) { img.setAttribute('width', coverDims.w); img.setAttribute('height', coverDims.h); }
-      media = el('div', { class: 'commit-media' }, [img, starBtn]);
+      media = el('div', timelineMediaAttrs(coverDims), [img, starBtn]);
+      if (imageEntries.length > 1) {
+        media.appendChild(el('span', { class: 'commit-img-count', text: '🖼 ' + imageEntries.length }));
+      }
 
       // multi-photo: a horizontal thumbnail strip UNDER the cover shows the extra images
       // right on the timeline (cover first, extras after). Tapping anywhere still opens the
       // full gallery in the detail page.
-      var imageSrcs = [];
-      if (c.photo) imageSrcs.push(c.photo);
-      (c.files || []).filter(isImageFile).forEach(function (f) { imageSrcs.push(f.data); });
-      var extras = imageSrcs.slice(1);
+      var extras = imageEntries.slice(1);
       if (extras.length) {
         thumbStrip = el('div', { class: 'commit-thumbs' });
         var MAXT = 8;
-        extras.slice(0, MAXT).forEach(function (sdata) {
+        extras.slice(0, MAXT).forEach(function (entry) {
+          var thumbAttrs = { class: 'commit-thumb-img', src: entry.data, alt: '',
+            loading: 'lazy', decoding: 'async' };
+          if (entry.w && entry.h) { thumbAttrs.width = entry.w; thumbAttrs.height = entry.h; }
           thumbStrip.appendChild(el('div', { class: 'commit-thumb' }, [
-            el('img', { class: 'commit-thumb-img', src: sdata, alt: '', loading: 'lazy', decoding: 'async' })
+            el('img', thumbAttrs)
           ]));
         });
         if (extras.length > MAXT) {
@@ -972,6 +1021,8 @@
     var chips = el('div', { class: 'commit-chips' });
     if (isRoot && !c.planned) chips.appendChild(el('span', { class: 'chip root', text: t('root') }));
     if (c.fromBranchId) chips.appendChild(el('span', { class: 'chip branch-link', text: t('from_branch') + ' ' + shortId(c.fromBranchId) }));
+    if (c.rollbackTargetId) chips.appendChild(el('span', { class: 'chip rollback-link',
+      text: (lang === 'zh' ? '回滚自 ' : 'Restored from ') + shortId(c.rollbackTargetId) }));
     (c.items || []).slice(0, 6).forEach(function (it) {
       chips.appendChild(el('span', { class: 'chip',
         text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') }));
@@ -1066,16 +1117,25 @@
           onclick: function () { pendingBranchDetail = linkedBranch.id; go('branch-detail'); } }));
       }
     }
+    if (c.rollbackTargetId) {
+      var linkedTarget = Store.getCommit(c.rollbackTargetId);
+      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '回滚来源' : 'Restore source' }));
+      card.appendChild(el('button', { class: 'btn ghost detail-link-btn',
+        text: '↩︎ ' + (linkedTarget ? (linkedTarget.message || shortId(linkedTarget.id)) : shortId(c.rollbackTargetId)),
+        onclick: function () { if (linkedTarget) { pendingDetail = linkedTarget.id; go('detail'); } } }));
+    }
     if (c.files && c.files.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
       var imgs = (c.files || []).filter(isImageFile);
       if (imgs.length) {
         var gallery = el('div', { class: 'detail-gallery' });
         imgs.slice(0, 12).forEach(function (f) {
+          var imageAttrs = { class: 'detail-image', src: f.data, alt: f.name,
+            loading: 'lazy', decoding: 'async' };
+          if (f.w && f.h) { imageAttrs.width = f.w; imageAttrs.height = f.h; }
           gallery.appendChild(el('a', { class: 'detail-image-link', href: f.data,
             download: f.name, title: f.name }, [
-            el('img', { class: 'detail-image', src: f.data, alt: f.name,
-              loading: 'lazy', decoding: 'async' })
+            el('img', imageAttrs)
           ]));
         });
         if (imgs.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more',
@@ -2293,6 +2353,26 @@
     };
     go('commit');
   }
+  var ROLLBACK_PROGRESS_KEY = 'lifearchive.rollback.progress.v1';
+  function readRollbackProgress() {
+    try { return JSON.parse(localStorage.getItem(ROLLBACK_PROGRESS_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function rollbackProgress(id) {
+    var all = readRollbackProgress();
+    var list = all[id] || [];
+    var m = {};
+    list.forEach(function (k) { m[k] = true; });
+    return m;
+  }
+  function saveRollbackProgress(id, keys) {
+    var all = readRollbackProgress();
+    if (keys && keys.length) all[id] = keys;
+    else delete all[id];
+    try { localStorage.setItem(ROLLBACK_PROGRESS_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+  function rollbackStepKey(s) { return s.kind + '|' + s.text; }
+
   function renderRollback(v) {
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_rollback') })]));
     var commits = Store.commits().filter(notPlanned);
@@ -2339,6 +2419,76 @@
       return b;
     }
 
+    function imageGallery(c) {
+      var imgs = commitImageEntries(c);
+      if (!imgs.length) return el('div', { class: 'rollback-no-photo', text: t('no_photo') });
+      var first = imgs[0];
+      var mainAttrs = { class: 'ref-photo-img', src: first.data, alt: first.name || '' };
+      if (first.w && first.h) { mainAttrs.width = first.w; mainAttrs.height = first.h; }
+      var kids = [el('img', mainAttrs)];
+      if (imgs.length > 1) {
+        var strip = el('div', { class: 'rollback-gallery-strip' });
+        imgs.slice(1, 10).forEach(function (entry) {
+          var attrs = { class: 'rollback-gallery-thumb-img', src: entry.data, alt: '',
+            loading: 'lazy', decoding: 'async' };
+          if (entry.w && entry.h) { attrs.width = entry.w; attrs.height = entry.h; }
+          strip.appendChild(el('span', { class: 'rollback-gallery-thumb' }, [el('img', attrs)]));
+        });
+        if (imgs.length > 10) strip.appendChild(el('span', { class: 'rollback-gallery-thumb more', text: '+' + (imgs.length - 10) }));
+        kids.push(strip);
+      }
+      return el('div', { class: 'rollback-gallery' }, kids);
+    }
+
+    function stateCard(title, c, tone) {
+      var card = el('div', { class: 'rollback-state-card ' + tone });
+      card.appendChild(el('div', { class: 'rollback-state-title', text: title }));
+      card.appendChild(imageGallery(c));
+      card.appendChild(el('div', { class: 'rollback-state-message', text: c.message || shortId(c.id) }));
+      card.appendChild(el('div', { class: 'detail-sub' }, [
+        sceneTag(Store.sceneById(c.scene)),
+        el('span', { class: 'commit-dot', text: '·' }),
+        el('span', { text: fmtDate(c.createdAt) })
+      ]));
+      if (c.items && c.items.length) {
+        var chips = el('div', { class: 'commit-chips' });
+        c.items.slice(0, 10).forEach(function (it) {
+          chips.appendChild(el('span', { class: 'chip', text: it.name + (it.qty > 1 ? ' ×' + it.qty : '') }));
+        });
+        if (c.items.length > 10) chips.appendChild(el('span', { class: 'chip more', text: '+' + (c.items.length - 10) }));
+        card.appendChild(chips);
+      }
+      return card;
+    }
+
+    function createRestoreCommit(target, currentC) {
+      var L = lang === 'zh';
+      var msg = L
+        ? '回滚到：' + (target.message || shortId(target.id))
+        : 'Restored to: ' + (target.message || shortId(target.id));
+      var note = (target.notes ? target.notes + '\n\n' : '') + (L
+        ? '由回滚工作台生成。目标存档：' + shortId(target.id) + '；恢复前状态：' + shortId(currentC && currentC.id)
+        : 'Created from Rollback Workbench. Target: ' + shortId(target.id) + '; before restore: ' + shortId(currentC && currentC.id));
+      var ok = Store.addCommit({
+        scene: target.scene,
+        message: msg,
+        createdAt: Date.now(),
+        photo: target.photo || null,
+        photoW: target.photoW || null,
+        photoH: target.photoH || null,
+        items: cloneItems(target.items),
+        files: cloneFiles(target.files),
+        notes: note,
+        rollbackTargetId: target.id,
+        rollbackFromId: currentC && currentC.id
+      });
+      if (!ok) { toast('⚠ ' + (L ? '存储空间不足，无法生成恢复存档' : 'Storage full; restore commit not created')); return; }
+      saveRollbackProgress(target.id, []);
+      toast('✅ ' + t('rollback_commit_created'));
+      autoSync(true);
+      go('timeline');
+    }
+
     function build() {
       var target = Store.getCommit(sel.getValue());
       if (!target) return;
@@ -2348,7 +2498,7 @@
       if (Store.isMealScene(target.scene)) {
         out.appendChild(el('p', { class: 'rollback-intro', text: t('replicate_meal_hint') }));
         var mealCard = el('div', { class: 'rollback-ref replicate-card' });
-        if (target.photo) mealCard.appendChild(el('img', { class: 'ref-photo-img', src: target.photo, alt: '' }));
+        mealCard.appendChild(imageGallery(target));
         mealCard.appendChild(el('div', { class: 'replicate-card-title', text: '🍽 ' + (target.message || shortId(target.id)) }));
         if (target.items && target.items.length) {
           var ml = el('div', { class: 'commit-chips' });
@@ -2360,67 +2510,92 @@
         return;
       }
 
-      // current state = latest real commit in the same scene
       var sceneCommits = realCommitsForScene(target.scene); // newest first
-      var currentC = sceneCommits[0];
+      var currentC = sceneCommits[0] || target;
       var d = Diff.itemDiff(currentC.items, target.items);
-
-      out.appendChild(el('p', { class: 'rollback-intro', text: t('rollback_intro') }));
-
-      // reference photo (natural aspect ratio, no cropping)
-      if (target.photo) {
-        out.appendChild(el('div', { class: 'rollback-ref' }, [
-          el('div', { class: 'ref-label', text: '🎯 ' + t('reference') + ' · ' + (target.message || '') }),
-          el('img', { class: 'ref-photo-img', src: target.photo, alt: '' })
-        ]));
-      }
-
-      // To get FROM current TO target:
-      //  - items in target but missing now  => add back
-      //  - items present now but not in target => remove
       var steps = [];
-      d.removed.forEach(function (x) { // in current(before) not in target(after) => remove
+      d.removed.forEach(function (x) {
         steps.push({ kind: 'remove', text: x.name + (x.qty > 1 ? ' ×' + x.qty : '') });
       });
-      d.added.forEach(function (x) {  // in target(after) not in current => add back
+      d.added.forEach(function (x) {
         steps.push({ kind: 'add', text: x.name + (x.qty > 1 ? ' ×' + x.qty : '') });
       });
       d.changed.forEach(function (x) {
         steps.push({ kind: 'add', text: x.name + ': ' + x.from + ' → ' + x.to });
       });
       if (!steps.length) {
-        // already matches — just confirm the items
         (target.items || []).forEach(function (x) {
           steps.push({ kind: 'check', text: x.name + (x.qty > 1 ? ' ×' + x.qty : '') });
         });
       }
+      steps.forEach(function (s) { s.key = rollbackStepKey(s); });
+
+      var saved = rollbackProgress(target.id);
+      var hadSaved = Object.keys(saved).length > 0;
+      if (hadSaved) out.appendChild(el('div', { class: 'rollback-resume', text: '↺ ' + t('rollback_resume') }));
+      out.appendChild(el('p', { class: 'rollback-intro', text: t('rollback_intro') }));
+      out.appendChild(el('div', { class: 'rollback-state-grid' }, [
+        stateCard(t('rollback_current_state'), currentC, 'current'),
+        stateCard(t('rollback_target_state'), target, 'target')
+      ]));
+
+      out.appendChild(el('div', { class: 'rollback-diff-summary' }, [
+        el('span', { text: '− ' + d.removed.length + ' ' + t('removed') }),
+        el('span', { text: '+ ' + d.added.length + ' ' + t('added') }),
+        el('span', { text: '~ ' + d.changed.length + ' ' + t('changed_qty') })
+      ]));
+      if (!d.removed.length && !d.added.length && !d.changed.length) {
+        out.appendChild(el('p', { class: 'replicate-hint', text: t('rollback_no_steps') }));
+      }
 
       out.appendChild(el('h3', { class: 'rollback-steps-h', text: t('rollback_steps') }));
       var ol = el('ol', { class: 'rollback-steps' });
+      var progressText = el('strong', { id: 'rb-progress', text: '0 / ' + steps.length });
+      var meterFill = el('span', { class: 'rb-progress-fill' });
+      var checks = [];
       var doneCount = 0;
+      function syncProgress(showToast) {
+        var keys = [];
+        doneCount = 0;
+        checks.forEach(function (entry) {
+          entry.li.classList.toggle('done', entry.cb.checked);
+          if (entry.cb.checked) { doneCount++; keys.push(entry.key); }
+        });
+        progressText.textContent = doneCount + ' / ' + steps.length;
+        meterFill.style.width = steps.length ? Math.round(doneCount * 100 / steps.length) + '%' : '0%';
+        saveRollbackProgress(target.id, keys);
+        if (showToast) toast(t('rollback_progress_saved'));
+      }
       steps.forEach(function (s) {
         var label = { remove: '🗑️ ' + t('step_remove'), add: '📥 ' + t('step_add'),
           check: '✔️ ' + t('step_check') }[s.kind];
         var cb = el('input', { type: 'checkbox' });
+        cb.checked = !!saved[s.key];
         var li = el('li', { class: 'rollback-step ' + s.kind }, [
           el('label', {}, [cb,
             el('span', { class: 'step-action', text: label }),
             el('span', { class: 'step-item', text: s.text })])
         ]);
-        cb.addEventListener('change', function () {
-          li.classList.toggle('done', cb.checked);
-          doneCount += cb.checked ? 1 : -1;
-          $('#rb-progress').textContent = doneCount + ' / ' + steps.length;
-        });
+        checks.push({ cb: cb, li: li, key: s.key });
+        cb.addEventListener('change', function () { syncProgress(true); });
         ol.appendChild(li);
       });
       out.appendChild(ol);
       out.appendChild(el('div', { class: 'rb-progress-bar' }, [
         el('span', { text: t('done') + ': ' }),
-        el('strong', { id: 'rb-progress', text: '0 / ' + steps.length })
+        progressText,
+        el('span', { class: 'rb-progress-track' }, [meterFill])
       ]));
+      var resetBtn = el('button', { class: 'btn ghost', text: t('rollback_reset_progress') });
+      resetBtn.addEventListener('click', function () {
+        checks.forEach(function (entry) { entry.cb.checked = false; });
+        syncProgress(false);
+      });
+      var createBtn = el('button', { class: 'btn primary', text: '↩︎ ' + t('rollback_create_commit') });
+      createBtn.addEventListener('click', function () { createRestoreCommit(target, currentC); });
       out.appendChild(el('p', { class: 'replicate-hint', text: t('replicate_item_hint') }));
-      out.appendChild(el('div', { class: 'replicate-actions' }, [replicateButton(false)]));
+      out.appendChild(el('div', { class: 'replicate-actions' }, [replicateButton(false), resetBtn, createBtn]));
+      syncProgress(false);
     }
     build();
   }
@@ -3186,6 +3361,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.6.0', '2026-06-04', '回滚工作台 + 开屏动画 + 移动端体验收口',
+      'Rollback Workbench, splash animation, and mobile experience hardening',
+      ['回滚页升级为「回滚工作台」：同时展示当前状态与目标状态，给出恢复差异摘要，恢复步骤支持勾选并自动保存进度，退出后再回来可以继续。',
+       '新增「生成恢复存档」：回滚不覆盖历史，而是把目标状态写成一条新的正式存档，并标记来源存档，时间线和详情页都能看到它来自哪次回滚。',
+       '多图目标存档在回滚页可直接查看封面与缩略图，不再只靠单张参考图判断；饮食类仍保留「照着再记一笔」而不套用物品回滚。',
+       '时间线多图展示继续增强：长截图 / 竖向长图在时间线会压成紧凑预览，避免一张图撑满整屏；详情页仍按原比例完整查看，缩略图也带尺寸信息以减少跳变。',
+       '继续收口移动端新建 / 编辑存档页宽度和输入框聚焦：手机上表单更贴近可用宽度，物品行、底部按钮和键盘弹出时的焦点滚动更稳定，并清理 Android WebView 偶发横向漂移。',
+       '新增应用开屏动画：保留原生启动图的无白屏冷启动，再用 Web 首屏短动画完成品牌过渡；开启减少动态效果时会自动降级为快速淡出。'],
+      ['Rollback is now a workbench: current state and target state are shown together, restore diffs are summarized, checklist progress is saved, and users can resume later.',
+       'Add Create restore commit: rollback never overwrites history; it writes the target state as a new real commit and marks the restore source in timeline/detail.',
+       'Rollback targets with multiple images now show the cover plus thumbnails; meal scenes still use the log-it-again flow instead of fake item restoration.',
+       'Timeline multi-image rendering is more practical: tall screenshots are compact previews in the timeline while the detail page still shows the full original ratio.',
+       'Harden mobile new/edit archive width and input focus behavior, including item rows, action buttons, focused-field scrolling, and Android WebView horizontal drift cleanup.',
+       'Add a short app splash animation after the native launch image, with reduced-motion fallback.']],
     ['1.5.3', '2026-06-04', '移动端新建存档与现实对比 / 回滚体验修复',
       'Mobile new-archive, Reality Diff, rollback, and timeline polish',
       ['修复移动端新建 / 编辑存档页的卡片和输入框宽度：手机上表单内边距更紧凑，输入框不再显得被挤窄，照片、按钮和场景选择都能更自然地吃满卡片宽度。',
@@ -3963,12 +4152,23 @@
     if (!node || !node.closest) return null;
     var sheet = node.closest('.choice-sheet');
     if (sheet) return sheet;
-    if (document.body.classList.contains('native')) return document.getElementById('view');
+    var view = document.getElementById('view');
+    if (view && view.contains(node) && (document.body.classList.contains('native') ||
+        window.matchMedia('(max-width:720px)').matches)) return view;
     return null;
+  }
+  function resetHorizontalDrift() {
+    try {
+      var view = document.getElementById('view');
+      if (view) view.scrollLeft = 0;
+      document.documentElement.scrollLeft = 0;
+      document.body.scrollLeft = 0;
+    } catch (e) {}
   }
   function ensureFieldVisible() {
     var vv = window.visualViewport, node = document.activeElement;
     if (!vv || !isTextField(node)) return;
+    resetHorizontalDrift();
     var r = node.getBoundingClientRect();
     // floor the "visible top" at the bottom of the (absolute/sticky) topbar, so a focused
     // field near the top of the page is never left tucked behind the bar (see the timeline
@@ -3988,6 +4188,7 @@
     var sc = fieldScrollHost(node);
     if (sc) sc.scrollTop += nudge;
     else window.scrollBy({ top: nudge, behavior: 'auto' });
+    resetHorizontalDrift();
   }
   // Reconcile inset + nav-hide from visualViewport first, then native keyboard height
   // only when the viewport did not shrink. This avoids both known failures: no fallback
@@ -4017,7 +4218,10 @@
     // field-into-view nudge never get stuck because one event didn't fire.
     window.addEventListener('resize', syncKeyboardState);
     document.addEventListener('focusin', function (e) {
-      if (isTextField(e.target)) scheduleEnsureFieldVisibleBurst();
+      if (isTextField(e.target)) {
+        resetHorizontalDrift();
+        scheduleEnsureFieldVisibleBurst();
+      }
     });
     try {
       var Cap = window.Capacitor;
@@ -4076,8 +4280,21 @@
     });
   }
 
+  function hideSplash(bootStartedAt) {
+    var splash = $('#splash-screen');
+    if (!splash) return;
+    var elapsed = Date.now() - (bootStartedAt || Date.now());
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var wait = reduce ? 80 : Math.max(120, 850 - elapsed);
+    setTimeout(function () {
+      splash.classList.add('is-done');
+      setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
+    }, wait);
+  }
+
   /* ---------------- boot ---------------- */
   document.addEventListener('DOMContentLoaded', function () {
+    var bootStartedAt = Date.now();
     $('#tagline').textContent = t('tagline');
     var _brand = document.querySelector('.brand-name'); if (_brand) _brand.textContent = t('brand');
     var _set = document.getElementById('settings-btn');
@@ -4095,6 +4312,7 @@
     // Hydrate the store (IndexedDB) before the first content render.
     Store.init().then(function () {
       render();
+      hideSplash(bootStartedAt);
       // re-measure once layout + async safe-area insets have settled
       syncTopbarHeight();
       setTimeout(syncTopbarHeight, 300);

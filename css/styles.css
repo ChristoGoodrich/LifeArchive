@@ -58,6 +58,21 @@ body{
     -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   -webkit-font-smoothing:antialiased; letter-spacing:.1px;
 }
+.splash-screen{position:fixed;inset:0;z-index:999;display:grid;place-items:center;
+  background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 34%),
+    var(--bg);transition:opacity .34s ease,visibility .34s ease}
+.splash-screen.is-done{opacity:0;visibility:hidden;pointer-events:none}
+.splash-mark{display:flex;flex-direction:column;align-items:center;gap:14px;animation:splashRise .82s cubic-bezier(.22,.61,.36,1)}
+.splash-logo{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;
+  background:color-mix(in srgb,var(--card) 86%,transparent);box-shadow:0 18px 50px color-mix(in srgb,var(--accent) 30%,transparent),
+    inset 0 1px 0 rgba(255,255,255,.22)}
+.splash-logo svg{width:48px;height:48px}
+.splash-title{font-size:18px;font-weight:900;letter-spacing:.2px}
+.splash-line{width:86px;height:5px;border-radius:999px;overflow:hidden;background:var(--card-2)}
+.splash-line i{display:block;width:48%;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  animation:splashLoad .82s ease both}
+@keyframes splashRise{0%{opacity:0;transform:translateY(14px) scale(.96)}100%{opacity:1;transform:none}}
+@keyframes splashLoad{0%{transform:translateX(-110%)}100%{transform:translateX(216%)}}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px}
 
@@ -161,6 +176,8 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 @keyframes rgFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion: reduce){
   .view.anim-push,.view.anim-pop,.view.anim-fade{animation:none}
+  .splash-mark,.splash-line i{animation:none}
+  .splash-screen{transition:opacity .12s ease,visibility .12s ease}
 }
 
 /* ---- buttons ---- */
@@ -213,6 +230,9 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .commit-media{position:relative;width:100%;background:var(--card-2);line-height:0;font-size:0;
   border-radius:calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;overflow:hidden}
 .commit-img{width:100%;height:auto;display:block}
+.commit-media.is-clamped{aspect-ratio:var(--media-ratio);display:flex;align-items:center;justify-content:center;
+  max-height:min(62vh,460px)}
+.commit-media.is-clamped .commit-img{width:100%;height:100%;object-fit:contain}
 .commit-img-count{position:absolute;left:10px;bottom:10px;z-index:2;display:inline-flex;align-items:center;
   gap:4px;padding:4px 9px;border-radius:999px;background:rgba(18,22,38,.5);color:#fff;font-size:12px;
   font-weight:700;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
@@ -243,6 +263,7 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .chip{background:var(--card-2);border:1px solid transparent;border-radius:999px;
   padding:5px 12px;font-size:12.5px;color:var(--muted)}
 .chip.root{background:color-mix(in srgb,var(--accent-2) 16%,transparent);color:var(--accent-2)}
+.chip.rollback-link{background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent)}
 .chip.more{color:var(--dim)}
 .commit-notes{font-size:13.5px;color:var(--muted);background:var(--inset);border-radius:var(--radius-xs);
   padding:10px 12px;margin:8px 0;line-height:1.5}
@@ -431,6 +452,7 @@ textarea.field{resize:vertical}
 .more-details[open] .more-summary{margin-bottom:14px}
 .items-wrap{display:flex;flex-direction:column;gap:9px;margin-bottom:11px}
 .item-row{display:flex;gap:9px}
+.item-row>*{min-width:0}
 .item-name{flex:1}
 .item-qty{width:80px}
 
@@ -664,11 +686,30 @@ textarea.field{resize:vertical}
 .rollback-controls .labeled{margin-bottom:0}
 .rollback-out{margin-top:6px}
 .rollback-intro{color:var(--muted);font-size:14.5px}
+.rollback-resume{margin:0 0 10px;padding:10px 12px;border-radius:14px;color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent);font-size:13.5px;font-weight:800}
 .rollback-ref{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
   padding:14px;margin:14px 0;box-shadow:var(--shadow-sm)}
 .ref-label{font-size:13.5px;color:var(--muted);margin-bottom:10px;font-weight:700}
 .ref-photo{width:100%;height:230px;border-radius:var(--radius-xs);background-size:cover;background-position:center;background-color:var(--inset)}
 .rollback-steps-h{font-size:16px;margin:20px 0 12px;font-weight:800}
+.rollback-state-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.rollback-state-card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:12px;box-shadow:var(--shadow-sm)}
+.rollback-state-card.target{border-color:color-mix(in srgb,var(--accent) 32%,var(--line))}
+.rollback-state-title{font-size:12.5px;font-weight:900;color:var(--muted);margin-bottom:9px}
+.rollback-state-message{font-weight:800;margin:10px 0 7px;line-height:1.25}
+.rollback-gallery{display:flex;flex-direction:column;gap:8px}
+.rollback-no-photo{display:flex;align-items:center;justify-content:center;min-height:120px;border-radius:var(--radius-xs);
+  background:var(--inset);color:var(--muted);font-size:13.5px}
+.rollback-gallery-strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.rollback-gallery-strip::-webkit-scrollbar{display:none}
+.rollback-gallery-thumb{flex:0 0 auto;width:48px;height:48px;border-radius:10px;overflow:hidden;border:1px solid var(--line);
+  background:var(--inset);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;font-weight:800}
+.rollback-gallery-thumb-img{width:100%;height:100%;object-fit:cover;display:block}
+.rollback-diff-summary{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+.rollback-diff-summary span{padding:7px 10px;border-radius:999px;background:var(--card);
+  border:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:800}
 .rollback-steps{list-style:none;counter-reset:step;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
 .rollback-step{counter-increment:step;background:var(--card);border:1px solid var(--line);
   border-radius:var(--radius-sm);box-shadow:var(--shadow-sm)}
@@ -684,8 +725,12 @@ textarea.field{resize:vertical}
 .rollback-step.check{border-left:4px solid var(--accent)}
 .rollback-step.done{opacity:.5}
 .rollback-step.done .step-item{text-decoration:line-through}
-.rb-progress-bar{margin-top:18px;font-size:14.5px;color:var(--muted)}
+.rb-progress-bar{display:flex;align-items:center;gap:8px;margin:12px 0 4px;font-size:14.5px;color:var(--muted)}
 .rb-progress-bar strong{color:var(--accent);font-family:var(--mono)}
+.rb-progress-track{position:relative;display:block;flex:1;min-width:80px;height:7px;border-radius:999px;
+  overflow:hidden;background:var(--inset);border:1px solid var(--line)}
+.rb-progress-fill{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  border-radius:999px;transition:width .18s ease}
 
 /* ---- branches ---- */
 .branch-form{margin-bottom:24px}
@@ -981,10 +1026,20 @@ textarea.field{resize:vertical}
   .date-head{top:calc(60px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}
 
   .field{font-size:16px}            /* avoid iOS focus-zoom */
-  .field,.choice-trigger,.photo-drop{scroll-margin-bottom:calc(var(--keyboard-inset) + 28px)}
+  .field,.choice-trigger,.photo-drop{scroll-margin-top:calc(var(--topbar-h, 66px) + 12px);
+    scroll-margin-bottom:calc(var(--keyboard-inset) + 28px)}
   /* tighter inner padding on phones: the 22px desktop gutter stacked on the view's own
      16px left it cramped (~80% width) — trim it so inputs use the full card width */
+  .view.view-commit{max-width:none;width:100%;padding-left:10px;padding-right:10px}
+  .view.view-commit .form-card{width:100%;margin:0}
   .form-card{padding:16px 13px}
+  .photo-drop{min-height:230px}
+  .item-qty{width:68px}
+  .rollback-controls,.rollback-state-grid{grid-template-columns:1fr}
+  .replicate-actions{flex-wrap:wrap}
+  .replicate-actions .btn{flex:1 1 160px}
+  .form-actions{flex-wrap:wrap}
+  .commit-media.is-clamped{max-height:390px}
   .btn.tiny{padding:10px 14px;font-size:13.5px}
   .commit-actions .btn{flex:1 1 auto}
   .form-actions .btn{flex:1}
