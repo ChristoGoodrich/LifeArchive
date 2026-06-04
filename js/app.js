@@ -246,6 +246,14 @@
     var img = firstImageFile(c.files);
     return c.photo || (img && img.data) || '';
   }
+  // Pixel size of whatever image commitThumbSrc shows, so timeline/detail can reserve its
+  // box (no decode-time "pop"). Cover photo first; else the first image attachment (e.g. a
+  // multi-photo archive whose cover was removed). Legacy commits without stored dims → null.
+  function commitCoverDims(c) {
+    if (c.photo) return (c.photoW && c.photoH) ? { w: c.photoW, h: c.photoH } : null;
+    var img = firstImageFile(c.files);
+    return (img && img.w && img.h) ? { w: img.w, h: img.h } : null;
+  }
   function notPlanned(c) { return !c.planned; }
   // real (non-planned) commits in a scene, newest first — used by diff / rollback so
   // a not-yet-happened 计划 never shows up as a comparable/rollbackable version.
@@ -262,6 +270,10 @@
      Both the file picker and the native camera funnel through downscaleSrc so every
      stored photo is a compact JPEG, regardless of source. */
   var PHOTO_MAX = 1000, PHOTO_Q = 0.72;
+  // Resolves { data, w, h } — the downscaled JPEG dataURL plus its final pixel size.
+  // Reporting w/h here means every add path (camera, gallery multi-pick, paste, drag,
+  // screenshot) knows the cover/thumbnail dimensions up-front, so timeline cards can
+  // reserve the image box without waiting on a preview <img> onload (no decode-time "pop").
   function downscaleSrc(src, maxW, quality) {
     return new Promise(function (resolve, reject) {
       var img = new Image();
@@ -271,7 +283,7 @@
         var c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', quality || PHOTO_Q));
+        resolve({ data: c.toDataURL('image/jpeg', quality || PHOTO_Q), w: w, h: h });
       };
       img.onerror = reject;
       img.src = src;
@@ -912,8 +924,10 @@
       var img = el('img', { class: 'commit-img', src: thumbSrc, alt: c.message || '',
         loading: 'lazy', decoding: 'async' });
       // reserve the image's box from its stored pixel size so the card doesn't grow/“放大”
-      // when a freshly added photo finishes decoding (CSS keeps width:100%;height:auto)
-      if (c.photoW && c.photoH) { img.setAttribute('width', c.photoW); img.setAttribute('height', c.photoH); }
+      // when a freshly added photo finishes decoding (CSS keeps width:100%;height:auto).
+      // commitCoverDims covers multi-photo archives too (incl. cover-removed → file image).
+      var coverDims = commitCoverDims(c);
+      if (coverDims) { img.setAttribute('width', coverDims.w); img.setAttribute('height', coverDims.h); }
       media = el('div', { class: 'commit-media' }, [img, starBtn]);
 
       // multi-photo: a horizontal thumbnail strip UNDER the cover shows the extra images
@@ -1209,9 +1223,11 @@
     function syncPhotoTools() {
       if (photoTools) photoTools.classList.toggle('is-hidden', !draftPhoto);
     }
-    function setPhoto(dataUrl) {
+    function setPhoto(dataUrl, dims) {
       draftPhoto = dataUrl;
-      draftPhotoDims = null;
+      // prefer dims known up-front (from downscale) so a fast save never loses them; the
+      // onload below is only a fallback for paths that didn't supply a size (e.g. edit).
+      draftPhotoDims = (dims && dims.w && dims.h) ? { w: dims.w, h: dims.h } : null;
       preview.innerHTML = '';
       preview.style.backgroundImage = 'none';
       // show the cover at its natural aspect ratio (no cropping) — the dropzone grows
@@ -1220,7 +1236,7 @@
       // remember the cover's pixel size so saved commits carry it and timeline cards can
       // reserve the image box up-front (no decode-time "pop"/enlarge — see commitCard)
       coverImg.addEventListener('load', function () {
-        if (coverImg.naturalWidth && coverImg.naturalHeight) {
+        if (!draftPhotoDims && coverImg.naturalWidth && coverImg.naturalHeight) {
           draftPhotoDims = { w: coverImg.naturalWidth, h: coverImg.naturalHeight };
         }
       });
@@ -1243,9 +1259,9 @@
       syncPhotoTools();
     }
     function imageEntryFromFile(file) {
-      return downscale(file).then(function (data) {
-        return { data: data, name: (file && file.name) || '', type: 'image/jpeg',
-          size: Math.round((data.length || 0) * 0.75) };
+      return downscale(file).then(function (res) {
+        return { data: res.data, name: (file && file.name) || '', type: 'image/jpeg',
+          size: Math.round(((res.data && res.data.length) || 0) * 0.75), w: res.w, h: res.h };
       });
     }
     function imageFileName(entry) {
@@ -1264,10 +1280,13 @@
       var replaceCover = !!(opts && opts.replaceCover);
       var extras = 0;
       entries.forEach(function (entry, idx) {
-        if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data); return; }
+        var dims = (entry.w && entry.h) ? { w: entry.w, h: entry.h } : null;
+        if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data, dims); return; }
+        // store each image attachment's pixel size too, so a multi-photo archive whose
+        // cover is later removed still reserves the box for the first image (commitCoverDims)
         draftFiles.push({ id: Store.uid('f'), name: imageFileName(entry),
           type: 'image/jpeg', size: entry.size || Math.round((entry.data.length || 0) * 0.75),
-          data: entry.data });
+          data: entry.data, w: entry.w || null, h: entry.h || null });
         extras++;
       });
       if (extras) { renderFilesList(); if (moreDetails) moreDetails.open = true; }
@@ -1289,8 +1308,8 @@
     function nativeCamera(source) {
       window.Capacitor.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: source, quality: 80, width: 1200, correctOrientation: true })
         .then(function (photo) {
-          if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(function (data) {
-            addImageDataUrls([{ data: data, name: 'photo.jpg' }], { replaceCover: true });
+          if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(function (res) {
+            addImageDataUrls([{ data: res.data, name: 'photo.jpg', w: res.w, h: res.h }], { replaceCover: true });
           });
         })
         .catch(function () { /* cancelled */ });
@@ -1305,8 +1324,8 @@
         if (!photos.length) return;
         return Promise.all(photos.map(function (p, idx) {
           return fetch(p.webPath || p.path).then(function (r) { return r.blob(); }).then(function (b) {
-            return downscale(b).then(function (data) {
-              return { data: data, name: (p && p.name) || ('album_' + (idx + 1) + '.jpg') };
+            return downscale(b).then(function (res) {
+              return { data: res.data, name: (p && p.name) || ('album_' + (idx + 1) + '.jpg'), w: res.w, h: res.h };
             });
           });
         })).then(addImageDataUrls);
@@ -1319,8 +1338,8 @@
       toast(lang === 'zh' ? '正在截图…' : 'Capturing…');
       window.electronAPI.captureScreen().then(function (dataUrl) {
         if (!dataUrl) { toast(lang === 'zh' ? '截图失败' : 'Screenshot failed'); return; }
-        downscaleSrc(dataUrl, 1600, 0.85).then(function (data) {
-          addImageDataUrls([{ data: data, name: 'screenshot.jpg' }], { replaceCover: true });
+        downscaleSrc(dataUrl, 1600, 0.85).then(function (res) {
+          addImageDataUrls([{ data: res.data, name: 'screenshot.jpg', w: res.w, h: res.h }], { replaceCover: true });
         });
       }).catch(function (e) { toast('⚠ ' + (e && e.message || e)); });
     }
@@ -1331,8 +1350,8 @@
             var imgType = (items[i].types || []).filter(function (ty) { return /^image\//.test(ty); })[0];
             if (imgType) {
               items[i].getType(imgType).then(function (blob) {
-                downscale(blob).then(function (data) {
-                  addImageDataUrls([{ data: data, name: 'clipboard.jpg' }], { replaceCover: true });
+                downscale(blob).then(function (res) {
+                  addImageDataUrls([{ data: res.data, name: 'clipboard.jpg', w: res.w, h: res.h }], { replaceCover: true });
                 });
               });
               return;
@@ -1622,6 +1641,7 @@
      so every option picker uses the same compact bottom sheet instead. */
   function choiceSelect(options, selectedValue, extraClass) {
     var root = el('div', { class: 'choice-select' + (extraClass ? ' ' + extraClass : '') });
+    var hideChevron = extraClass && /\bno-chevron\b/.test(extraClass);
     var trigger = el('button', {
       type: 'button', class: 'choice-trigger', 'aria-haspopup': 'listbox',
       onclick: function () { openChoiceSheet(root); }
@@ -1655,7 +1675,7 @@
       var picked = root._choices.find(function (it) { return it.value === root._value; });
       trigger.innerHTML = '';
       trigger.appendChild(el('span', { class: 'choice-trigger-text', text: picked ? picked.text : t('choose_option') }));
-      trigger.appendChild(el('span', { class: 'choice-chevron', text: '⌄' }));
+      if (!hideChevron) trigger.appendChild(el('span', { class: 'choice-chevron', text: '⌄' }));
     }
     root.setOptions(options, selectedValue);
     return root;
@@ -1814,22 +1834,6 @@
     return { steps: steps, count: list.length, mostDisappeared: top(disappear), mostStable: top(stable), mostAdded: top(appear) };
   }
 
-  // Phase 5 — a plain-text diff summary for "复制文本 / 贴到聊天里".
-  function diffShareText(base, comp, d, changedPct) {
-    var L = lang === 'zh';
-    var lines = [L ? 'Life Archive · 现实对比' : 'Life Archive · Reality diff'];
-    lines.push((L ? '旧：' : 'Base: ') + fmtDate(base.createdAt) + ' ' + (base.message || ''));
-    lines.push((L ? '新：' : 'Compare: ') + fmtDate(comp.createdAt) + ' ' + (comp.message || ''));
-    if (changedPct != null) lines.push((L ? '画面变化：' : 'Pixels changed: ') + changedPct.toFixed(1) + '%');
-    function join(arr) { return arr.map(function (x) { return x.name + (x.qty > 1 ? '×' + x.qty : ''); }).join('、'); }
-    if (d.removed.length) lines.push((L ? '少了：' : 'Removed: ') + join(d.removed));
-    if (d.added.length) lines.push((L ? '多了：' : 'Added: ') + join(d.added));
-    if (d.changed.length) lines.push((L ? '数量变化：' : 'Qty: ') + d.changed.map(function (x) { return x.name + ' ' + x.from + '→' + x.to; }).join('、'));
-    if (d.renamed && d.renamed.length) lines.push((L ? '可能同一物品：' : 'Likely same item: ')
-      + d.renamed.map(function (x) { return x.from + '≈' + x.to; }).join('、'));
-    return lines.join('\n');
-  }
-
   function loadImgEl(src) {
     return new Promise(function (resolve) {
       if (!src) { resolve(null); return; }
@@ -1981,31 +1985,19 @@
       ['slider', L ? '左右滑块' : 'Slider'],
       ['blink', L ? '淡入闪烁' : 'Blink']
     ], diffMode, function (m) { diffMode = m; runDiff(); });
-    var thresholdValue = el('span', { class: 'diff-threshold-value', text: String(diffThreshold) });
-    var thresholdInput = el('input', { class: 'diff-threshold', type: 'range', min: '18', max: '90', value: String(diffThreshold) });
-    var thresholdTimer = null;
-    thresholdInput.addEventListener('input', function () {
-      diffThreshold = parseInt(thresholdInput.value, 10) || 38;
-      thresholdValue.textContent = String(diffThreshold);
-      clearTimeout(thresholdTimer);
-      thresholdTimer = setTimeout(function () { runDiff(); renderTrend(); }, 80);
-    });
+    // Sensitivity slider removed (it confused more than it helped) — the image diff just
+    // uses a sensible fixed threshold (diffThreshold) under the hood.
     v.appendChild(el('div', { class: 'diff-tuning' }, [
-      labeledBlock(L ? '显示模式' : 'View mode', modeControl),
-      labeledBlock(L ? '敏感度' : 'Sensitivity', el('div', { class: 'diff-threshold-row' }, [
-        thresholdInput,
-        thresholdValue
-      ]))
+      labeledBlock(L ? '显示模式' : 'View mode', modeControl)
     ]));
 
-    // Phase 3 AI reading + Phase 5 export / share
+    // Phase 3 AI reading + Phase 5 export. (The "复制文本" button was removed — it duplicated
+    // the export card and added little; the two actions below read as a clean pair.)
     v.appendChild(el('div', { class: 'diff-action-bar' }, [
       el('button', { class: 'btn ai-diff-btn', text: '✨ ' + (L ? 'AI 解读变化' : 'AI read changes'),
         onclick: function () { runAIDiff(); } }),
-      el('button', { class: 'btn tiny ghost', text: '🖼 ' + (L ? '导出对比卡片' : 'Export card'),
-        onclick: function () { exportCard(); } }),
-      el('button', { class: 'btn tiny ghost', text: '📋 ' + (L ? '复制文本' : 'Copy text'),
-        onclick: function () { copyDiffText(); } })
+      el('button', { class: 'btn ghost diff-export-btn', text: '🖼 ' + (L ? '导出对比卡片' : 'Export card'),
+        onclick: function () { exportCard(); } })
     ]));
 
     var aiResult = el('div', { class: 'diff-ai-result' });
@@ -2082,7 +2074,7 @@
       });
     }
 
-    // Phase 5 — compose a before/after share card, or copy a plain-text summary.
+    // Phase 5 — compose a before/after share card.
     function exportCard() {
       var base = lastDiff && lastDiff.base, comp = lastDiff && lastDiff.comp;
       if (!base || !comp) return;
@@ -2092,27 +2084,6 @@
       else Diff.imageDiff(base.photo, comp.photo, document.createElement('canvas'), { threshold: diffThreshold })
         .then(function (r) { make(r.ok ? r.changedPct : null); });
     }
-    function copyDiffText() {
-      var base = lastDiff && lastDiff.base, comp = lastDiff && lastDiff.comp;
-      if (!base || !comp) return;
-      var d = lastDiff.d || Diff.itemDiff(base.items, comp.items);
-      var txt = diffShareText(base, comp, d, lastDiff.changedPct);
-      if (navigator.clipboard && navigator.clipboard.writeText)
-        navigator.clipboard.writeText(txt).then(function () { toast(L ? '已复制对比文本' : 'Copied'); }).catch(function () { showTextModal(txt); });
-      else showTextModal(txt);
-    }
-    function showTextModal(txt) {
-      closePopover();
-      var mask = el('div', { class: 'img-modal' });
-      var ta = el('textarea', { class: 'text-modal-area' }); ta.value = txt; ta.readOnly = true;
-      mask.addEventListener('click', function (e) { if (e.target === mask) mask.remove(); });
-      mask.appendChild(el('button', { type: 'button', class: 'img-modal-close', text: '✕', onclick: function () { mask.remove(); } }));
-      mask.appendChild(el('div', { class: 'img-modal-body' }, [ta,
-        el('div', { class: 'img-modal-hint', text: L ? '长按全选复制' : 'Select all & copy' })]));
-      document.body.appendChild(mask);
-      requestAnimationFrame(function () { mask.classList.add('open'); ta.focus(); ta.select(); });
-    }
-
     // Phase 4 — per-scene churn timeline + "最常消失 / 最稳定" insight cards.
     function renderTrend() {
       var thisTrend = ++trendRunId;
@@ -2333,10 +2304,12 @@
     var scenes = Store.SCENES.filter(function (s) {
       return realCommitsForScene(s.id).length > 0;
     });
+    // 'no-chevron' hides the dropdown caret on the rollback pickers (the user found the
+    // ⌄ glyphs ugly here); they're still tappable popover triggers, just cleaner-looking.
     var sceneSel = choiceSelect(scenes.map(function (s) {
       return { value: s.id, text: sceneLabel(s) };
-    }), initialCommit.scene);
-    var sel = choiceSelect([]);
+    }), initialCommit.scene, 'no-chevron');
+    var sel = choiceSelect([], null, 'no-chevron');
 
     function fillCommitSelect(preferredId) {
       var choices = realCommitsForScene(sceneSel.getValue()).map(function (c) {
@@ -3213,6 +3186,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.5.3', '2026-06-04', '移动端新建存档与现实对比 / 回滚体验修复',
+      'Mobile new-archive, Reality Diff, rollback, and timeline polish',
+      ['修复移动端新建 / 编辑存档页的卡片和输入框宽度：手机上表单内边距更紧凑，输入框不再显得被挤窄，照片、按钮和场景选择都能更自然地吃满卡片宽度。',
+       '继续加固移动端输入框聚焦：滚动兜底会把顶部栏高度算进可视区，时间线搜索、新建存档说明、时间等靠上的输入框不会再被顶到顶部栏下面。',
+       '整理现实对比控件排布：删除低价值的“复制文本”按钮，只保留“AI 解读变化”和“导出对比卡片”；导出按钮和 AI 按钮高度统一，手机上不再掉到难看的第二行。',
+       '移除面向普通用户意义不大的“敏感度”滑杆：视觉对比继续使用内部固定阈值，显示模式控件独占一行，界面更清爽。',
+       '清理回滚页的场景和时间下拉箭头：保留可点选的弹出菜单，但去掉蓝色小箭头，回滚选择区更干净。',
+       '修复新存档添加后时间线画面比例/跳变问题：所有拍照、相册、多图、截图、粘贴入口都会记录缩放后的图片尺寸，多图首图兜底也能预留正确比例，时间线不再等图片解码后突然放大。'],
+      ['Tighten the mobile new/edit archive form so cards and inputs use the available phone width more naturally.',
+       'Harden input focus scrolling by accounting for the top bar when keeping focused fields visible.',
+       'Clean up Reality Diff actions by removing Copy text and keeping AI reading plus Export card as the two primary actions.',
+       'Remove the user-facing sensitivity slider while keeping a fixed internal image-diff threshold.',
+       'Hide rollback picker chevrons while preserving the same tappable anchored menus.',
+       'Store downscaled image dimensions across camera, album, multi-photo, screenshot, paste, and fallback-cover paths so new timeline cards reserve the right aspect ratio immediately.']],
     ['1.5.2', '2026-06-04', '删除可彻底同步 + 时间线放大修复 + 多图缩略图 + 设置分组 + 扁平图标',
       'True cloud delete + no timeline pop + photo strip + grouped settings + flat icon',
       ['☁️ 彻底修复「删了又被云端拉回来」：新增删除墓碑并参与云同步——本机删除存档后会在所有已登录设备和云端一起删除，不再因为云端还存着而被重新下载；「清空全部」同样会同步清空云端。云端上比删除更新的编辑仍会保留（编辑优先于过期删除）。',
@@ -3983,7 +3970,12 @@
     var vv = window.visualViewport, node = document.activeElement;
     if (!vv || !isTextField(node)) return;
     var r = node.getBoundingClientRect();
-    var visibleTop = vv.offsetTop + 12;
+    // floor the "visible top" at the bottom of the (absolute/sticky) topbar, so a focused
+    // field near the top of the page is never left tucked behind the bar (see the timeline
+    // search box). getBoundingClientRect().bottom works for both native-absolute & sticky.
+    var tb = document.querySelector('.topbar');
+    var topbarBottom = tb ? Math.max(0, tb.getBoundingClientRect().bottom) : 0;
+    var visibleTop = Math.max(vv.offsetTop + 12, topbarBottom + 10);
     var nativeFallback = keyboardInsetMode === 'native-fallback' ? keyboardInsetPx : 0;
     var visibleBottom = vv.offsetTop + vv.height - nativeFallback - 18;
     var delta = 0;
