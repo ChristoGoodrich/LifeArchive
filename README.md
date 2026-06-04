@@ -34,7 +34,6 @@
 | 文件 | 平台 | 说明 |
 |------|------|------|
 | `LifeArchive-Setup-x.x.x.exe` | Windows | **安装版（推荐）**——进开始菜单，**支持自动更新** |
-| `LifeArchive-portable.exe` | Windows | **免安装单文件**——直接双击运行 |
 | `LifeArchive-debug.apk` | Android | 手机浏览器打开下载页直接装（需允许"未知来源"） |
 
 > Windows 首次运行可能提示「未知发布者」，点 **更多信息 → 仍要运行** 即可（应用未做代码签名，属正常）。

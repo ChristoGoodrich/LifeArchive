@@ -64,7 +64,7 @@ body{
   background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 34%),
     var(--bg);transition:opacity .34s ease,visibility .34s ease}
 .splash-screen.is-done{opacity:0;visibility:hidden;pointer-events:none}
-.splash-mark{display:flex;flex-direction:column;align-items:center;gap:11px;animation:splashRise .55s cubic-bezier(.22,.61,.36,1) both}
+.splash-mark{display:flex;flex-direction:column;align-items:center;gap:11px;animation:splashRise .42s ease both}
 .splash-logo{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;
   background:color-mix(in srgb,var(--card) 86%,transparent);box-shadow:0 18px 50px color-mix(in srgb,var(--accent) 30%,transparent),
     inset 0 1px 0 rgba(255,255,255,.22)}
@@ -72,7 +72,7 @@ body{
 .splash-title{font-size:18px;font-weight:900;letter-spacing:.2px}
 .splash-sub{font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.2px}
 /* a static brand frame (logo + name + tagline): one gentle fade-in, no loading bar */
-@keyframes splashRise{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+@keyframes splashRise{0%{opacity:0}100%{opacity:1}}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:9px}
 
@@ -81,7 +81,8 @@ body{
    then a bounded JS fallback. We lock the document and let ONLY .view scroll, so the
    topbar/nav are not part of the field-focus scroll target. Scoped to `body.native`
    (added in JS only on a real device), so desktop Electron and browsers are untouched. */
-body.native{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
+body.native{height:100dvh;overflow:hidden;display:flex;flex-direction:column;
+  --native-topbar-h:calc(58px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}
 /* The topbar OVERLAYS the scroller (absolute, out of flex flow) so the frosted
    backdrop-blur has the scrolling .view content behind it. If the topbar sat as a static
    sibling ABOVE .view (the old native layout) nothing ever passed under the bar, so the
@@ -89,12 +90,12 @@ body.native{height:100dvh;overflow:hidden;display:flex;flex-direction:column}
    syncTopbarHeight) keeps content clear of the bar; 66px is a safe fallback. */
 body.native .topbar{position:absolute;top:0;left:0;right:0;flex:0 0 auto}
 body.native .nav{position:static;flex:0 0 auto}
-body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding-top:calc(var(--topbar-h, 66px) + 2px);
+body.native .view{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-top:calc(var(--topbar-h, var(--native-topbar-h, 66px)) + 2px);
   /* when the browser scrolls a focused field into view, keep it BELOW the absolute topbar
      (otherwise a top field like the timeline search tucks behind the bar — only the chips
      below it stay visible). ensureFieldVisible() applies the same floor as a JS backstop. */
-  scroll-padding-top:calc(var(--topbar-h, 66px) + 10px)}
+  scroll-padding-top:calc(var(--topbar-h, var(--native-topbar-h, 66px)) + 10px)}
 
 /* ---- topbar ---- */
 .topbar{display:flex;align-items:center;justify-content:space-between;
@@ -159,7 +160,7 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 
 /* ---- layout ---- */
 .view{max-width:760px;margin:0 auto;padding:18px 20px calc(60px + var(--keyboard-inset));
-  scroll-padding-bottom:calc(var(--keyboard-inset) + 32px)}
+  overflow-x:hidden;scroll-padding-bottom:calc(var(--keyboard-inset) + 32px)}
 /* new/edit archive form: a comfortable centered column. Wider than the old 760 felt too
    stretched (single-line fields ran ~950px on desktop); this keeps inputs readable. */
 .view.view-commit{max-width:680px}
@@ -211,14 +212,14 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 /* padding-bottom (not group margin) is the section gap — kept INSIDE the group content
    box so the flush date-header handoff stays pixel-perfect; last card drops its margin so
    the gap is exactly this value. */
-.commit-rail{position:relative;padding-left:30px;padding-bottom:18px}
+.commit-rail{position:relative;padding-left:30px;padding-bottom:18px;min-width:0;max-width:100%}
 .commit-rail .commit-card:last-child{margin-bottom:0}
 .commit-rail::before{content:"";position:absolute;left:8px;top:-8px;bottom:-4px;width:2px;border-radius:2px;
   background:color-mix(in srgb,var(--accent) 26%,var(--line-strong))}
 /* photo-first archive card: image on top at its NATURAL ratio (no cropping), content
    below. Uniform for every archive, and cards grow to fit each photo → the timeline
    reads as a single-column vertical waterfall. */
-.commit-card{position:relative;display:flex;flex-direction:column;background:var(--card);
+.commit-card{position:relative;display:flex;flex-direction:column;width:100%;min-width:0;max-width:100%;background:var(--card);
   border:1px solid var(--line);border-radius:var(--radius);margin-bottom:16px;
   box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .15s ease;overflow:visible}
 /* node + short connector linking the card to the rail — a polished "commit dot":
@@ -227,7 +228,7 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
    card-colored gap ring — no gloss, no glow, no connector stub */
 .commit-card::before{content:"";position:absolute;left:-27px;top:21px;width:12px;height:12px;z-index:2;
   border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--card)}
-.commit-media{position:relative;width:100%;background:var(--card-2);line-height:0;font-size:0;
+.commit-media{position:relative;width:100%;min-width:0;max-width:100%;background:var(--card-2);line-height:0;font-size:0;
   border-radius:calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;overflow:hidden}
 .commit-img{width:100%;height:auto;display:block}
 .commit-media.is-clamped{aspect-ratio:var(--media-ratio);display:flex;align-items:center;justify-content:center;
@@ -290,8 +291,8 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
 .tl-empty-ic{font-size:34px;opacity:.7}
 
 /* ---- timeline date sections ---- */
-.tl-list{position:relative}
-.timeline-stream{position:relative}
+.tl-list{position:relative;min-width:0;max-width:100%}
+.timeline-stream{position:relative;min-width:0;max-width:100%}
 /* one continuous spine tying every archive together; faded at both ends so it doesn't
    hard-stop, with a faint glow for a softer, prettier look */
 .timeline-stream::before{content:"";position:absolute;left:8px;top:4px;bottom:4px;width:2px;border-radius:2px;
@@ -304,7 +305,7 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
    content box. That makes the group's content-box bottom land exactly on the next day's
    header, so the sticky constraint pushes the old header out only at the very last pixel —
    a perfectly flush handoff with no gap and no overlap. */
-.date-group{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;position:relative}
+.date-group{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;position:relative;min-width:0;max-width:100%}
 /* Flat sticky date marker. Every header is the SAME height and sits flush at the top of
    its group (margin:0), so each new day's pill rides up and pushes the previous one out
    PERFECTLY FLUSH as you scroll (一个日期完全贴合另一日期来取代) — the handoff tracks the
@@ -315,13 +316,14 @@ body.native .view{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-sc
   width:14px;height:14px;border-radius:50%;background:var(--accent);
   box-shadow:0 0 0 3px var(--card),0 0 0 5px color-mix(in srgb,var(--accent) 20%,transparent)}
 body.native .date-head{top:6px}
-.date-pill{display:inline-flex;align-items:center;border-radius:999px;
+.date-pill{display:inline-flex;align-items:center;min-width:0;border-radius:999px;
   background:color-mix(in srgb,var(--card) 78%,transparent);border:1px solid var(--line);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .date-label{font-size:14px;font-weight:800;letter-spacing:-.2px;padding:5px 13px}
-.date-head-right{display:inline-flex;align-items:center;gap:7px;padding:5px 11px}
-.date-count{font-size:12px;color:var(--muted);font-family:var(--mono)}
-.date-meals{font-size:11.5px;font-weight:800;color:var(--accent)}
+.date-head-right{display:inline-flex;align-items:center;gap:7px;flex:0 1 auto;max-width:calc(100% - 94px);
+  overflow:hidden;padding:5px 11px}
+.date-count{font-size:12px;color:var(--muted);font-family:var(--mono);white-space:nowrap}
+.date-meals{font-size:11.5px;font-weight:800;color:var(--accent);white-space:nowrap}
 .commit-card.tappable{cursor:pointer}
 .commit-card.tappable:active{transform:scale(.99);box-shadow:var(--shadow)}
 .commit-scene{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:600}
@@ -337,7 +339,7 @@ body.native .date-head{top:6px}
   border-radius:2px;background:var(--amber);opacity:.4}
 .planned-head-title{font-size:16px;font-weight:800;color:var(--amber);letter-spacing:-.2px}
 .planned-head-sub{font-size:12.5px;color:var(--muted)}
-.planned-rail{position:relative;padding-left:30px}
+.planned-rail{position:relative;padding-left:30px;min-width:0;max-width:100%}
 .planned-rail::before{content:"";position:absolute;left:8px;top:-8px;bottom:-4px;width:2px;border-radius:2px;
   background:repeating-linear-gradient(180deg,var(--amber) 0 6px,transparent 6px 12px);opacity:.55}
 .commit-card.is-planned{border-color:color-mix(in srgb,var(--amber) 40%,var(--line));
@@ -489,6 +491,12 @@ textarea.field{resize:vertical}
 /* hide the dropdown caret where it reads as visual clutter (e.g. the rollback pickers) */
 .no-chevron .choice-chevron{display:none}
 .tiny-choice .choice-trigger{min-height:40px;padding:9px 12px;font-size:14px}
+.time-select .choice-trigger{justify-content:flex-start}
+.time-panel{display:flex;flex-direction:column;gap:12px;min-width:min(280px,calc(100vw - 44px));padding:2px}
+.time-panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.time-panel .labeled{margin-bottom:0}
+.time-panel-actions,.time-quick{display:flex;gap:8px}
+.time-panel-actions .btn,.time-quick .btn{flex:1}
 /* ---- anchored dropdown menu (app-owned <select> + photo source) ----
    Replaces the old bottom sheet: the panel pops right at the trigger you tapped
    (drops below, flips above when cramped), clamped to the viewport. */
@@ -1012,7 +1020,7 @@ textarea.field{resize:vertical}
      plugin folds the IME inset INTO --safe-area-inset-bottom, ballooning .view padding-bottom
      into a tall white band under the field (the "白色遮罩" that the --keyboard-inset fix alone
      didn't catch). Restored automatically when kb-open clears. */
-  body.kb-open .view{--safe-area-inset-bottom:0px}
+  body.kb-open .view{--safe-area-inset-bottom:0px;padding-bottom:calc(var(--keyboard-inset) + 18px)}
   .nav-btn{flex:1;flex-direction:column;gap:3px;justify-content:center;align-items:center;
     padding:6px 2px;border-radius:14px;font-size:11px;line-height:1.1;white-space:normal;min-width:0;
     font-weight:600;color:var(--muted);background:transparent;box-shadow:none}
@@ -1036,7 +1044,7 @@ textarea.field{resize:vertical}
   .date-head{top:calc(60px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)))}
 
   .field{font-size:16px}            /* avoid iOS focus-zoom */
-  .field,.choice-trigger,.photo-drop{scroll-margin-top:calc(var(--topbar-h, 66px) + 12px);
+  .field,.choice-trigger,.photo-drop{scroll-margin-top:calc(var(--topbar-h, var(--native-topbar-h, 66px)) + 12px);
     scroll-margin-bottom:calc(var(--keyboard-inset) + 28px)}
   /* tighter inner padding on phones: the 22px desktop gutter stacked on the view's own
      16px left it cramped (~80% width) — trim it so inputs use the full card width */

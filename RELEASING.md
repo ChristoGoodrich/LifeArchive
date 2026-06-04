@@ -53,7 +53,7 @@ gh release edit v1.4.1 --repo ChristoGoodrich/LifeArchive `
 - [ ] 5 处版本号都已改、且 `git grep` 不到旧版本号
 - [ ] `CHANGELOG.md` / `RELEASE_NOTES` / GitHub Release 三处说明一致
 - [ ] GitHub Release 标题是纯版本号，正文非空且详细
-- [ ] Release 里同时挂着 Windows 安装包 + portable + `latest.yml` + `*.blockmap` + 安卓 `LifeArchive-debug.apk`
+- [ ] Release 里同时挂着 Windows 安装包 + `latest.yml` + `*.blockmap` + 安卓 `LifeArchive-debug.apk`
 - [ ] 已在安卓真机装新包，验证本次改动涉及的交互（尤其是输入框 / 键盘 / 导航相关改动）
 
 > 双击 `发布新版本.bat` 发版时，它会**自动弹出记事本让你写本次更新说明**，写完保存关闭即可，脚本会把它设到 Release 上。但 `.bat` 不会替你改 `js/version.js` / `index.html` / `RELEASE_NOTES` / `CHANGELOG.md`——这几处仍需按铁律 1、2 手动同步。
@@ -88,8 +88,7 @@ GitHub 仓库 → **Actions** 标签 → 左侧 **Build Android APK** → 右侧
 
 ## 注意事项
 
-- **自动更新只对「安装版」(`LifeArchive-Setup.exe`) 生效**。
-  免安装的 `LifeArchive-portable.exe` 不会自更新——那个只适合临时拷给别人试用。
+- **Windows 只发布安装版**（`LifeArchive-Setup-<版本>.exe`），这是唯一支持自动更新的主路径；不再发布免安装 portable 包。
 - 没有代码签名，用户首次运行会有 SmartScreen「未知发布者」提示，属正常。
 - 开发时 `npm start`（`electron .`）不会触发更新检查（代码里用 `app.isPackaged` 挡住了）。
 - 想换成自建服务器/OSS 而不用 GitHub：把 `publish` 的 `provider` 改成

@@ -1,6 +1,6 @@
 {
   "name": "life-archive",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Life Archive — version control for everyday life",
   "main": "main.js",
   "author": "Life Archive",
@@ -45,21 +45,12 @@
       "icon": "build/icon.ico",
       "target": [
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
           "target": "nsis",
           "arch": [
             "x64"
           ]
         }
       ]
-    },
-    "portable": {
-      "artifactName": "LifeArchive-portable.exe"
     },
     "nsis": {
       "oneClick": false,

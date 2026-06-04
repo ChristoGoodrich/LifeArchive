@@ -752,6 +752,9 @@
     var v = view();
     v.innerHTML = '';
     v.scrollTop = 0;
+    v.scrollLeft = 0;
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
     v.classList.remove('view-commit');
     v.classList.toggle('view-commit', current === 'commit');
     if (current === 'timeline') renderTimeline(v);
@@ -1282,8 +1285,7 @@
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (src && src.message && src.message !== '(no message)') msgInput.value = src.message;
-    var createdAtInput = el('input', { class: 'field', type: 'datetime-local',
-      value: datetimeLocalValue(editing ? editing.createdAt : Date.now()) });
+    var createdAtInput = timeSelect(datetimeLocalValue(editing ? editing.createdAt : Date.now()));
     var notesInput = el('textarea', { class: 'field', rows: '2' });
     if (src && src.notes) notesInput.value = src.notes;
 
@@ -1642,7 +1644,7 @@
       var payload = {
         scene: selectedScene,
         message: msgInput.value.trim() || '(no message)',
-        createdAt: parseDatetimeLocal(createdAtInput.value, editing ? editing.createdAt : Date.now()),
+        createdAt: parseDatetimeLocal(createdAtInput.getValue(), editing ? editing.createdAt : Date.now()),
         photo: draftPhoto,
         // cover pixel size → timeline/detail reserve the image box so a freshly added
         // archive doesn't visibly "pop"/enlarge when its photo finishes decoding
@@ -1750,6 +1752,80 @@
     }
     root.setOptions(options, selectedValue);
     return root;
+  }
+
+  function timeSelect(selectedValue) {
+    var root = el('div', { class: 'choice-select time-select' });
+    var trigger = el('button', {
+      type: 'button', class: 'choice-trigger', 'aria-haspopup': 'dialog',
+      onclick: function () { openTimePicker(root); }
+    });
+    root.appendChild(trigger);
+    root._value = selectedValue || datetimeLocalValue(Date.now());
+    root.getValue = function () { return root._value; };
+    root.setValue = function (value) {
+      var next = String(value || '');
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(next)) return;
+      var ts = parseDatetimeLocal(next, Date.now());
+      root._value = datetimeLocalValue(ts);
+      updateTimeTrigger();
+    };
+    function updateTimeTrigger() {
+      var ts = parseDatetimeLocal(root._value, Date.now());
+      trigger.innerHTML = '';
+      trigger.appendChild(el('span', { class: 'choice-trigger-text', text: fmtDate(ts) }));
+      trigger.appendChild(el('span', { class: 'choice-chevron', text: '⌄' }));
+    }
+    updateTimeTrigger();
+    return root;
+  }
+
+  function splitDatetimeValue(value) {
+    var v = String(value || datetimeLocalValue(Date.now()));
+    var m = v.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/);
+    if (m) return { date: m[1], time: m[2] };
+    return splitDatetimeValue(datetimeLocalValue(Date.now()));
+  }
+
+  function openTimePicker(select) {
+    var anchor = (select.querySelector && select.querySelector('.choice-trigger')) || select;
+    var parts = splitDatetimeValue(select.getValue());
+    var dateI = el('input', { class: 'field tiny-field', type: 'date', value: parts.date });
+    var timeI = el('input', { class: 'field tiny-field', type: 'time', value: parts.time });
+    function setTo(ts) {
+      var p = splitDatetimeValue(datetimeLocalValue(ts));
+      dateI.value = p.date; timeI.value = p.time;
+    }
+    var panel = el('div', { class: 'time-panel' }, [
+      el('div', { class: 'time-panel-grid' }, [
+        el('label', { class: 'labeled' }, [
+          el('span', { class: 'label-text', text: lang === 'zh' ? '日期' : 'Date' }), dateI
+        ]),
+        el('label', { class: 'labeled' }, [
+          el('span', { class: 'label-text', text: lang === 'zh' ? '时间' : 'Time' }), timeI
+        ])
+      ]),
+      el('div', { class: 'time-quick' }, [
+        el('button', { type: 'button', class: 'btn tiny ghost', text: lang === 'zh' ? '现在' : 'Now',
+          onclick: function () { setTo(Date.now()); } }),
+        el('button', { type: 'button', class: 'btn tiny ghost', text: lang === 'zh' ? '昨天此时' : 'Yesterday',
+          onclick: function () { setTo(Date.now() - 86400000); } })
+      ])
+    ]);
+    var menu = null;
+    panel.appendChild(el('div', { class: 'time-panel-actions' }, [
+      el('button', { type: 'button', class: 'btn tiny ghost', text: t('cancel'),
+        onclick: function () { if (menu) menu.close(); } }),
+      el('button', { type: 'button', class: 'btn tiny primary', text: lang === 'zh' ? '完成' : 'Done',
+        onclick: function () {
+          select.setValue(dateI.value + 'T' + (timeI.value || '00:00'));
+          if (menu) menu.close();
+        } })
+    ]));
+    menu = openAnchoredMenu(anchor, {
+      title: t('archive_time'),
+      content: panel
+    });
   }
 
   /* Close any open anchored menu. */
@@ -3378,6 +3454,18 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.6.3', '2026-06-04', '键盘白块收口 + 时间线防溢出 + 存档时间统一 + 开屏去抖',
+      'Keyboard gap fix, timeline containment, archive-time picker, and splash stability',
+      ['键盘弹出时再次收紧底部留白：底栏隐藏后不再继续把底栏高度垫进内容区，现代 Android 已经缩小 WebView 时只保留很小的输入兜底空间，减少搜索框下方出现整片空白的情况。',
+       '时间线增加移动端硬约束：列表、日期组、轨道、卡片和图片容器都限制在可用宽度内；页面切换回时间线时也会清掉横向滚动漂移，避免新建存档后卡片飞出屏幕。',
+       '新建 / 编辑存档的「存档时间」改成应用内统一控件：表单里显示为同款圆角按钮，点开是锚定弹层，可选日期、时间，也可一键填入现在或昨天此时。',
+       '开屏去掉上下位移动画，只保留淡入；揭开遮罩前会再测一次顶栏并等待 safe-area 沉降，减少进入应用时上下抖动。',
+       'Windows 发布取消免安装便携版，只保留支持自动更新的安装版，避免用户拿到不会自更新的包。'],
+      ['Keyboard-open spacing is tightened again: when the bottom tab bar is hidden, its height is no longer kept in the content padding, so already-resized Android WebViews do not show a large blank band under focused fields.',
+       'Timeline containment is hardened on mobile: lists, date groups, rails, cards, and media are clamped to the available width, and route renders clear horizontal scroll drift after saving a new archive.',
+       'The Archive time field now uses the app-owned picker style instead of the bare native datetime-local control, with date/time fields plus Now and Yesterday shortcuts.',
+       'The splash no longer translates vertically; it fades in place and re-measures the top bar before revealing the app so safe-area settling is hidden under the splash.',
+       'Windows releases now ship only the auto-updating installer; the portable build target has been removed.']],
     ['1.6.2', '2026-06-04', '现实对比控件优化 + 开屏加长去抖动 + 键盘/宽度兜底',
       'Reality Diff controls, longer splash, and keyboard/width hardening',
       ['现实对比页：「AI 解读变化」与「导出对比卡片」按钮和下方对比结果之间留出了间距，不再贴在一起；「导出对比卡片」简化成一个紧凑的分享图标，操作区更清爽。',
@@ -4341,13 +4429,18 @@
     if (!splash) return;
     var elapsed = Date.now() - (bootStartedAt || Date.now());
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // static brand frame: hold it a beat, then fade. Keeping it up ~1.1s also hides the
+    // static brand frame: hold it a beat, then fade. Keeping it up ~1.45s also hides the
     // first-paint settle (async safe-area insets + topbar re-measure) so the app doesn't
-    // visibly jump as it appears. Floor at 420ms so a fast boot still shows the frame.
-    var wait = reduce ? 90 : Math.max(420, 1100 - elapsed);
+    // visibly jump as it appears. Floor at 700ms so a fast boot still shows the frame.
+    var wait = reduce ? 90 : Math.max(700, 1450 - elapsed);
     setTimeout(function () {
-      splash.classList.add('is-done');
-      setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
+      syncTopbarHeight();
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          splash.classList.add('is-done');
+          setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
+        });
+      });
     }, wait);
   }
 
