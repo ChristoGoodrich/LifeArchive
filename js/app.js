@@ -432,7 +432,14 @@
     if (_supaSDK) return _supaSDK;
     _supaSDK = new Promise(function (resolve, reject) {
       var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      // Pinned to an exact, immutable, package-published file (NOT the floating @2 alias —
+      // jsDelivr re-minifies that on the fly and explicitly says not to SRI those dynamic
+      // files). integrity + crossOrigin let the browser reject a tampered / MITM'd SDK before
+      // it runs, which matters because the renderer can read the local archive. When bumping
+      // supabase-js, update BOTH the version in the URL and the integrity hash together.
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.107.0/dist/umd/supabase.js';
+      s.integrity = 'sha384-CQbEv3UOeYwlaBLdPF5KqEagCP39Q1KpvJC6Gwa3UGjZAwMvpA+0TFxSSnrgb4MX';
+      s.crossOrigin = 'anonymous';
       s.onload = function () { resolve(window.supabase); };
       s.onerror = function () { _supaSDK = null; reject(new Error('无法加载云服务 SDK（请检查网络）')); };
       document.head.appendChild(s);
@@ -3361,6 +3368,14 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.6.1', '2026-06-04', '修复键盘白屏 + 固定开屏画面 + 云 SDK 完整性校验',
+      'Keyboard white-gap fix, static splash frame, and cloud SDK integrity check',
+      ['修复键盘弹出时输入框下方出现一大片空白的问题：部分安卓 WebView（如 HyperOS）在系统已经把网页缩小避让键盘后，仍上报键盘弹出前的旧窗口高度，于是页面又多垫了整整一个键盘高度的内边距，看起来就像被白色遮罩盖住。现在改用布局视口的实际高度来计算键盘遮挡量，不再误判。',
+       '开屏简化为一个固定的品牌画面（应用图标 + 名称 + 标语），去掉底部的加载进度条，只保留一次轻微淡入；系统开启「减少动态效果」时仍为快速淡出。',
+       '云同步 SDK 加固：由浮动版本改为锁定到精确版本，并加上 SRI 完整性校验与跨域属性，浏览器会在脚本运行前拒绝被篡改或中间人注入的 SDK。'],
+      ['Fix a tall blank gap under the input when the keyboard opens: some Android WebViews (e.g. HyperOS) keep reporting the pre-keyboard window height after the system already shrank the page, so the app stacked a whole keyboard-height of padding on top — looking like a white mask. Keyboard overlap is now measured from the real layout-viewport height.',
+       'Simplify the splash into a static brand frame (app icon + name + tagline) with a single gentle fade-in; the loading bar is gone, and reduced-motion still fast-fades.',
+       'Harden the cloud sync SDK: pin it to an exact version and add Subresource Integrity + crossorigin, so the browser rejects a tampered or MITM-injected SDK before it runs.']],
     ['1.6.0', '2026-06-04', '回滚工作台 + 开屏动画 + 移动端体验收口',
       'Rollback Workbench, splash animation, and mobile experience hardening',
       ['回滚页升级为「回滚工作台」：同时展示当前状态与目标状态，给出恢复差异摘要，恢复步骤支持勾选并自动保存进度，退出后再回来可以继续。',
@@ -4123,10 +4138,20 @@
   var keyboardInsetPx = 0;
   var keyboardInsetMode = 'none'; // 'visual' or 'native-fallback'
   var kbBaselineHeight = window.innerHeight || 0;
-  // px the keyboard overlaps the content, straight from the visual viewport.
+  // px the keyboard overlaps the *layout* viewport. We measure against the smaller of
+  // window.innerHeight and documentElement.clientHeight: when Android's resizeOnFullScreen /
+  // adjustResize shrinks the WebView, clientHeight follows, but some WebViews (seen on
+  // HyperOS) leave window.innerHeight at the pre-keyboard height. Using innerHeight alone
+  // then reported a whole keyboard's worth of "overlap" on an ALREADY-resized view, so the
+  // --keyboard-inset padding stacked a tall white gap under the content (the "白色遮罩" bug).
+  // offsetTop keeps the pinch-zoom case correct.
   function kbOverlayPx() {
     var vv = window.visualViewport;
-    return vv ? Math.max(0, window.innerHeight - vv.height) : 0;
+    if (!vv) return 0;
+    var de = document.documentElement;
+    var layoutH = Math.min(window.innerHeight || Infinity, (de && de.clientHeight) || Infinity);
+    if (!isFinite(layoutH)) layoutH = window.innerHeight || 0;
+    return Math.max(0, layoutH - (vv.height + (vv.offsetTop || 0)));
   }
   function nativeKeyboardHeight(info) {
     return Math.max(0, parseInt(info && info.keyboardHeight, 10) || 0);
@@ -4285,7 +4310,8 @@
     if (!splash) return;
     var elapsed = Date.now() - (bootStartedAt || Date.now());
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var wait = reduce ? 80 : Math.max(120, 850 - elapsed);
+    // static brand frame: show briefly, then fade. No loading bar to wait out anymore.
+    var wait = reduce ? 80 : Math.max(120, 600 - elapsed);
     setTimeout(function () {
       splash.classList.add('is-done');
       setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
