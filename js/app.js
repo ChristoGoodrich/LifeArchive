@@ -101,6 +101,23 @@
       onboard_step1_title: '选一个要盯住的东西', onboard_step1_text: '房间、冰箱、押金房况、行李箱都可以。',
       onboard_step2_title: '拍第一张存档', onboard_step2_text: '照片、清单、文件会一起留在本机仓库。',
       onboard_step3_title: '设一个复查提醒', onboard_step3_text: '到点回来看变化，直接进入现实对比。',
+      nav_review: '回顾',
+      review_open: '回顾',
+      review_empty: '还没有可重温的存档，先去记录一些生活吧。',
+      review_on_this_day: '那年今日',
+      review_this_day_months: '往月的今天',
+      review_random: '随机翻牌重温',
+      review_month_count: '本月你已经记录了 {n} 个瞬间',
+      notif_memory_title: '生活存档 · 那年今日',
+      photo_time: '图片时间',
+      photo_time_empty: '先选择一张带拍摄时间的照片',
+      photo_time_set: '已使用图片拍摄时间',
+      time_pick_title: '选择存档时间',
+      time_pick_sub: '用真实发生时间组织生活存档',
+      time_date_label: '日期',
+      time_time_label: '时间',
+      time_now: '现在',
+      time_done: '完成',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -197,6 +214,23 @@
       onboard_step1_title: 'Pick something to watch', onboard_step1_text: 'A room, fridge, deposit condition, or packed bag all work.',
       onboard_step2_title: 'Take the first archive', onboard_step2_text: 'Photo, checklist, and files stay together in the local repo.',
       onboard_step3_title: 'Set a re-check reminder', onboard_step3_text: 'Come back on time and jump straight into Reality Diff.',
+      nav_review: 'Memories',
+      review_open: 'Memories',
+      review_empty: 'Nothing to resurface yet - go capture some life first.',
+      review_on_this_day: 'On this day',
+      review_this_day_months: 'This day, earlier months',
+      review_random: 'Random resurface',
+      review_month_count: 'You have logged {n} moments this month',
+      notif_memory_title: 'Life Archive · On this day',
+      photo_time: 'Photo time',
+      photo_time_empty: 'Choose a photo with shooting time first',
+      photo_time_set: 'Photo shooting time applied',
+      time_pick_title: 'Pick archive time',
+      time_pick_sub: 'Use when it really happened',
+      time_date_label: 'Date',
+      time_time_label: 'Time',
+      time_now: 'Now',
+      time_done: 'Done',
       saved_value_prefix: 'Saved'
     }
   };
@@ -378,6 +412,121 @@
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  }
+
+  function parseExifDateString(value, offset) {
+    if (value == null) return null;
+    if (typeof value === 'number' && isFinite(value)) {
+      var ms = value > 100000000000 ? value : value * 1000;
+      return ms > 0 ? ms : null;
+    }
+    var raw = String(value).trim().replace(/\0/g, '');
+    var m = raw.match(/^(\d{4})[:\-](\d{1,2})[:\-](\d{1,2})[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (!m) {
+      var parsed = Date.parse(raw);
+      return isNaN(parsed) ? null : parsed;
+    }
+    var pad = function (n) { n = Number(n); return n < 10 ? '0' + n : '' + n; };
+    var tz = offset && /^[-+]\d{2}:?\d{2}$/.test(String(offset).trim())
+      ? String(offset).trim().replace(/^([-+]\d{2})(\d{2})$/, '$1:$2') : '';
+    if (tz) {
+      var iso = m[1] + '-' + pad(m[2]) + '-' + pad(m[3]) + 'T' +
+        pad(m[4]) + ':' + pad(m[5]) + ':' + pad(m[6] || 0) + tz;
+      var withTz = Date.parse(iso);
+      if (!isNaN(withTz)) return withTz;
+    }
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+      Number(m[4]), Number(m[5]), Number(m[6] || 0), 0);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  function parseExifFromArrayBuffer(buf) {
+    if (!buf || buf.byteLength < 12) return null;
+    var v = new DataView(buf);
+    if (v.getUint8(0) !== 0xff || v.getUint8(1) !== 0xd8) return null;
+    function ascii(start, len) {
+      var s = '';
+      for (var i = 0; i < len && start + i < v.byteLength; i++) s += String.fromCharCode(v.getUint8(start + i));
+      return s;
+    }
+    function parseTiff(base, end) {
+      if (base + 8 > end) return null;
+      var endian = v.getUint16(base, false);
+      var little = endian === 0x4949;
+      if (!little && endian !== 0x4d4d) return null;
+      function u16(pos) { return pos + 2 <= end ? v.getUint16(pos, little) : 0; }
+      function u32(pos) { return pos + 4 <= end ? v.getUint32(pos, little) : 0; }
+      if (u16(base + 2) !== 42) return null;
+      function readAscii(entry) {
+        var type = u16(entry + 2), count = u32(entry + 4);
+        if (type !== 2 || !count || count > 128) return null;
+        var start = count <= 4 ? entry + 8 : base + u32(entry + 8);
+        if (start < base || start + count > end) return null;
+        return ascii(start, count).replace(/\0+$/, '').trim();
+      }
+      function readIfd(ifdPos) {
+        var out = {}, entries, entry, tag, n;
+        if (!ifdPos || ifdPos + 2 > end) return out;
+        entries = u16(ifdPos);
+        for (n = 0; n < entries; n++) {
+          entry = ifdPos + 2 + n * 12;
+          if (entry + 12 > end) break;
+          tag = u16(entry);
+          if (tag === 0x0132 || tag === 0x9003 || tag === 0x9004 ||
+              tag === 0x9010 || tag === 0x9011 || tag === 0x9012) {
+            out[tag] = readAscii(entry);
+          } else if (tag === 0x8769) {
+            out.exifIfd = base + u32(entry + 8);
+          }
+        }
+        return out;
+      }
+      var ifd0 = readIfd(base + u32(base + 4));
+      var exif = ifd0.exifIfd ? readIfd(ifd0.exifIfd) : {};
+      var stamp = exif[0x9003] || exif[0x9004] || ifd0[0x0132];
+      var off = exif[0x9011] || exif[0x9012] || exif[0x9010];
+      return parseExifDateString(stamp, off);
+    }
+    var pos = 2;
+    while (pos + 4 <= v.byteLength) {
+      if (v.getUint8(pos) !== 0xff) break;
+      var marker = v.getUint8(pos + 1);
+      pos += 2;
+      if (marker === 0xda || marker === 0xd9) break;
+      if (pos + 2 > v.byteLength) break;
+      var len = v.getUint16(pos, false);
+      if (len < 2 || pos + len > v.byteLength) break;
+      var start = pos + 2, end = pos + len;
+      if (marker === 0xe1 && len >= 10 && ascii(start, 6) === 'Exif\0\0') {
+        return parseTiff(start + 6, end);
+      }
+      pos += len;
+    }
+    return null;
+  }
+
+  function imageTakenAtFromFile(file) {
+    if (!file || !file.arrayBuffer) return Promise.resolve(null);
+    return file.arrayBuffer().then(parseExifFromArrayBuffer).catch(function () { return null; });
+  }
+
+  function imageTakenAtFromNativePhoto(photo) {
+    var exif = photo && photo.exif;
+    if (!exif) return null;
+    function find(names) {
+      var keys = Object.keys(exif || {});
+      for (var i = 0; i < names.length; i++) {
+        if (exif[names[i]] != null) return exif[names[i]];
+        var wanted = names[i].toLowerCase();
+        for (var k = 0; k < keys.length; k++) {
+          if (String(keys[k]).toLowerCase() === wanted) return exif[keys[k]];
+        }
+      }
+      return null;
+    }
+    return parseExifDateString(find(['DateTimeOriginal', 'DateTimeDigitized', 'DateTime', 'CreateDate', 'ModifyDate',
+      'dateTimeOriginal', 'dateTimeDigitized', 'dateTime']),
+      find(['OffsetTimeOriginal', 'OffsetTimeDigitized', 'OffsetTime', 'offsetTimeOriginal']));
   }
 
   /* POST JSON and get parsed JSON back. On native Android the Zhipu API is
@@ -650,6 +799,26 @@
     return Notify.scheduleAt(c.id, 'recheck', c.remindAt, t('notif_recheck_title'),
       reminderBodyForCommit(c), { kind: 'recheck', route: 'diff', sceneId: c.scene, commitId: c.id });
   }
+  function scheduleMemoryNotifs() {
+    if (!Notify.available()) return Promise.resolve();
+    var jobs = [], base = startOfToday(), L = lang === 'zh';
+    for (var i = 0; i < 14; i++) {
+      var day = new Date(base.getTime() + i * 86400000);
+      var hits = anniversaryCommits(day);
+      if (!hits.length) continue;
+      var when = new Date(day); when.setHours(20, 0, 0, 0);
+      if (when.getTime() <= Date.now()) continue;
+      var sample = hits.reduce(function (a, b) { return a.createdAt < b.createdAt ? a : b; });
+      var years = day.getFullYear() - new Date(sample.createdAt).getFullYear();
+      var what = sample.message || sceneName(Store.sceneById(sample.scene));
+      var body = L ? (years + ' 年前的今天，你记录了「' + what + '」，点开看看 →')
+                   : (years + 'y ago today you logged "' + what + '" - take a look');
+      var dateKey = day.getFullYear() + '-' + (day.getMonth() + 1) + '-' + day.getDate();
+      jobs.push(Notify.scheduleAt('memory:' + dateKey, 'memory', when.getTime(),
+        t('notif_memory_title'), body, { kind: 'memory', route: 'review' }));
+    }
+    return Promise.all(jobs);
+  }
   function branchDueMs(b) {
     if (!b || !b.dueAt) return 0;
     var ts = new Date(b.dueAt + 'T09:00:00').getTime();
@@ -733,7 +902,7 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats', 'review'];
   var current = 'timeline';
   var storeReady = false;
   var pendingDeepLink = null;
@@ -742,7 +911,7 @@
   var TAB_ROUTES = ['timeline', 'diff', 'commit', 'rollback', 'branch'];
   function isTabRoute(route) { return TAB_ROUTES.indexOf(route) >= 0; }
   // nav depth drives page animation (tabs fade; subpages push/pop)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1 };
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1, review: 1 };
   var prevDepth = 0;
   // Subpage return stack for hardware/gesture back. Tabs never go here; they are peers.
   var navStack = [];
@@ -787,6 +956,7 @@
   function handleNotifyIntent(ex) {
     if (!ex || !ex.route) return;
     if (!storeReady) { pendingDeepLink = ex; return; }
+    if (ex.route === 'review') { routeOrRefresh('review'); return; }
     if (ex.route === 'diff') {
       var c = Store.getCommit(ex.commitId);
       if (!c) { routeOrRefresh('timeline'); return; }
@@ -955,6 +1125,7 @@
     else if (current === 'settings') renderSettings(v);
     else if (current === 'changelog') renderChangelog(v);
     else if (current === 'stats') renderStats(v);
+    else if (current === 'review') renderReview(v);
     else if (current === 'detail') renderDetail(v);
     // directional entrance animation: push (deeper), pop (back), or fade (sibling tab)
     var d = ROUTE_DEPTH[current] || 0;
@@ -1027,7 +1198,23 @@
       return;
     }
 
-    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_timeline') })]));
+    v.appendChild(el('div', { class: 'view-head' }, [
+      el('h1', { text: t('nav_timeline') }),
+      el('button', { type: 'button', class: 'btn ghost tiny review-entry',
+        text: t('review_open'), onclick: function () { go('review'); } })
+    ]));
+    var resurface = pickResurface(startOfToday());
+    if (resurface) {
+      var L = lang === 'zh';
+      var label = resurface.kind === 'year'
+        ? (L ? ('那年今日 · ' + resurface.commits.length + ' 个瞬间')
+             : ('On this day · ' + resurface.commits.length + ' memories'))
+        : resurface.kind === 'month'
+          ? (L ? '往月今日 · 翻翻看' : 'This day in earlier months')
+          : (L ? '随机重温 · 翻一张旧存档' : 'Resurface an old memory');
+      v.appendChild(el('button', { type: 'button', class: 'resurface-banner',
+        text: label, onclick: function () { go('review'); } }));
+    }
 
     // ---- search + scene filter (only the list is rebuilt on change, so the
     //      search box keeps focus while typing) ----
@@ -1278,6 +1465,91 @@
     return card;
   }
 
+  /* ---------------- Review / Resurface ---------------- */
+  function startOfToday() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  function anniversaryCommits(ref) {
+    return Store.commits().filter(notPlanned).filter(function (c) {
+      var d = new Date(c.createdAt);
+      return d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate()
+        && d.getFullYear() < ref.getFullYear();
+    });
+  }
+  function monthlyAnniversaryCommits(ref) {
+    return Store.commits().filter(notPlanned).filter(function (c) {
+      var d = new Date(c.createdAt);
+      if (d.getDate() !== ref.getDate()) return false;
+      if (d.getFullYear() < ref.getFullYear()) return true;
+      return d.getFullYear() === ref.getFullYear() && d.getMonth() < ref.getMonth();
+    });
+  }
+  function randomOlderCommits(n) {
+    var cutoff = Date.now() - 7 * 86400000;
+    var pool = Store.commits().filter(notPlanned).filter(function (c) { return c.createdAt <= cutoff; });
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var x = pool[i]; pool[i] = pool[j]; pool[j] = x;
+    }
+    return pool.slice(0, n);
+  }
+  function thisMonthCount(ref) {
+    return Store.commits().filter(notPlanned).filter(function (c) {
+      var d = new Date(c.createdAt);
+      return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+    }).length;
+  }
+  function pickResurface(ref) {
+    var y = anniversaryCommits(ref);
+    if (y.length) {
+      var oldest = y.reduce(function (a, b) { return a.createdAt < b.createdAt ? a : b; });
+      return { kind: 'year', years: ref.getFullYear() - new Date(oldest.createdAt).getFullYear(), commits: y };
+    }
+    var m = monthlyAnniversaryCommits(ref);
+    if (m.length) return { kind: 'month', commits: m };
+    var r = randomOlderCommits(3);
+    if (r.length) return { kind: 'random', commits: r };
+    return null;
+  }
+  function renderReview(v) {
+    tlRerender = null;
+    tlRerenderChips = null;
+    var L = lang === 'zh';
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head review-view-head' }, [
+      back,
+      el('h1', { text: t('nav_review') })
+    ]));
+    if (Store.isEmpty()) { v.appendChild(noticeCard(t('review_empty'))); return; }
+    var ref = startOfToday();
+    function section(title, sub, commits) {
+      if (!commits || !commits.length) return;
+      var head = [el('h2', { text: title })];
+      if (sub) head.push(el('span', { class: 'review-sec-sub', text: sub }));
+      var rail = el('div', { class: 'commit-rail review-rail' });
+      commits.forEach(function (c) { rail.appendChild(commitCard(c)); });
+      v.appendChild(el('section', { class: 'review-sec' }, [
+        el('div', { class: 'review-sec-head' }, head),
+        rail
+      ]));
+    }
+    var anni = anniversaryCommits(ref);
+    section(t('review_on_this_day'), null, anni);
+
+    var anniIds = {};
+    anni.forEach(function (c) { anniIds[c.id] = 1; });
+    section(t('review_this_day_months'), null,
+      monthlyAnniversaryCommits(ref).filter(function (c) { return !anniIds[c.id]; }));
+    section(t('review_random'), null, randomOlderCommits(6));
+
+    var n = thisMonthCount(ref);
+    if (n) v.appendChild(el('div', { class: 'review-month-note',
+      text: t('review_month_count').replace('{n}', n) }));
+  }
+
   /* ---------------- Commit detail ---------------- */
   var pendingDetail = null;
   function previousCommitFor(c) {
@@ -1431,18 +1703,21 @@
   /* ---------------- New / edit commit form ---------------- */
   var draftPhoto = null;
   var draftPhotoDims = null; // {w,h} of the cover, so timeline cards can reserve its box
+  var draftPhotoTakenAt = null; // shooting timestamp from image EXIF/native metadata
   var draftFiles = [];
   var pendingEdit = null;
   var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
   function renderCommitForm(v) {
     draftPhoto = null;
     draftPhotoDims = null;
+    draftPhotoTakenAt = null;
     draftFiles = [];
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
     var template = (!editing && pendingTemplate) ? pendingTemplate : null;
     pendingTemplate = null;
     var src = editing || template; // where prefilled values come from (edit OR replicate)
+    draftPhotoTakenAt = src && src.photoTakenAt ? Number(src.photoTakenAt) || null : null;
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
     if (template) v.appendChild(el('div', { class: 'form-template-hint',
@@ -1500,7 +1775,8 @@
 
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (src && src.message && src.message !== '(no message)') msgInput.value = src.message;
-    var createdAtInput = timeSelect(datetimeLocalValue(editing ? editing.createdAt : Date.now()));
+    var createdAtInput = timeSelect(datetimeLocalValue(editing ? editing.createdAt : Date.now()),
+      function () { return draftPhotoTakenAt; });
     function initialRemindDays() {
       if (!src || src.planned) return null;
       if (src.remindDays) return Number(src.remindDays) || null;
@@ -1545,8 +1821,9 @@
     function syncPhotoTools() {
       if (photoTools) photoTools.classList.toggle('is-hidden', !draftPhoto);
     }
-    function setPhoto(dataUrl, dims) {
+    function setPhoto(dataUrl, dims, takenAt) {
       draftPhoto = dataUrl;
+      if (takenAt !== undefined) draftPhotoTakenAt = takenAt ? Number(takenAt) || null : null;
       // prefer dims known up-front (from downscale) so a fast save never loses them; the
       // onload below is only a fallback for paths that didn't supply a size (e.g. edit).
       draftPhotoDims = (dims && dims.w && dims.h) ? { w: dims.w, h: dims.h } : null;
@@ -1574,6 +1851,7 @@
     function clearPhoto() {
       draftPhoto = null;
       draftPhotoDims = null;
+      draftPhotoTakenAt = null;
       preview.innerHTML = '';
       preview.appendChild(el('span', { class: 'photo-hint', text: '📷 ' + t('photo') }));
       preview.classList.remove('has-photo');
@@ -1581,9 +1859,11 @@
       syncPhotoTools();
     }
     function imageEntryFromFile(file) {
-      return downscale(file).then(function (res) {
+      return Promise.all([downscale(file), imageTakenAtFromFile(file)]).then(function (parts) {
+        var res = parts[0], takenAt = parts[1];
         return { data: res.data, name: (file && file.name) || '', type: 'image/jpeg',
-          size: Math.round(((res.data && res.data.length) || 0) * 0.75), w: res.w, h: res.h };
+          size: Math.round(((res.data && res.data.length) || 0) * 0.75), w: res.w, h: res.h,
+          takenAt: takenAt || null };
       });
     }
     function imageFileName(entry) {
@@ -1603,12 +1883,12 @@
       var extras = 0;
       entries.forEach(function (entry, idx) {
         var dims = (entry.w && entry.h) ? { w: entry.w, h: entry.h } : null;
-        if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data, dims); return; }
+        if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data, dims, entry.takenAt || null); return; }
         // store each image attachment's pixel size too, so a multi-photo archive whose
         // cover is later removed still reserves the box for the first image (commitCoverDims)
         draftFiles.push({ id: Store.uid('f'), name: imageFileName(entry),
           type: 'image/jpeg', size: entry.size || Math.round((entry.data.length || 0) * 0.75),
-          data: entry.data, w: entry.w || null, h: entry.h || null });
+          data: entry.data, w: entry.w || null, h: entry.h || null, takenAt: entry.takenAt || null });
         extras++;
       });
       if (extras) { renderFilesList(); if (moreDetails) moreDetails.open = true; }
@@ -1630,8 +1910,9 @@
     function nativeCamera(source) {
       window.Capacitor.Plugins.Camera.getPhoto({ resultType: 'dataUrl', source: source, quality: 80, width: 1200, correctOrientation: true })
         .then(function (photo) {
+          var takenAt = imageTakenAtFromNativePhoto(photo);
           if (photo && photo.dataUrl) downscaleSrc(photo.dataUrl).then(function (res) {
-            addImageDataUrls([{ data: res.data, name: 'photo.jpg', w: res.w, h: res.h }], { replaceCover: true });
+            addImageDataUrls([{ data: res.data, name: 'photo.jpg', w: res.w, h: res.h, takenAt: takenAt }], { replaceCover: true });
           });
         })
         .catch(function () { /* cancelled */ });
@@ -1646,8 +1927,10 @@
         if (!photos.length) return;
         return Promise.all(photos.map(function (p, idx) {
           return fetch(p.webPath || p.path).then(function (r) { return r.blob(); }).then(function (b) {
-            return downscale(b).then(function (res) {
-              return { data: res.data, name: (p && p.name) || ('album_' + (idx + 1) + '.jpg'), w: res.w, h: res.h };
+            return Promise.all([downscale(b), imageTakenAtFromFile(b)]).then(function (parts) {
+              var res = parts[0];
+              return { data: res.data, name: (p && p.name) || ('album_' + (idx + 1) + '.jpg'),
+                w: res.w, h: res.h, takenAt: parts[1] || null };
             });
           });
         })).then(addImageDataUrls);
@@ -1661,7 +1944,7 @@
       window.electronAPI.captureScreen().then(function (dataUrl) {
         if (!dataUrl) { toast(lang === 'zh' ? '截图失败' : 'Screenshot failed'); return; }
         downscaleSrc(dataUrl, 1600, 0.85).then(function (res) {
-          addImageDataUrls([{ data: res.data, name: 'screenshot.jpg', w: res.w, h: res.h }], { replaceCover: true });
+          addImageDataUrls([{ data: res.data, name: 'screenshot.jpg', w: res.w, h: res.h, takenAt: null }], { replaceCover: true });
         });
       }).catch(function (e) { toast('⚠ ' + (e && e.message || e)); });
     }
@@ -1672,8 +1955,10 @@
             var imgType = (items[i].types || []).filter(function (ty) { return /^image\//.test(ty); })[0];
             if (imgType) {
               items[i].getType(imgType).then(function (blob) {
-                downscale(blob).then(function (res) {
-                  addImageDataUrls([{ data: res.data, name: 'clipboard.jpg', w: res.w, h: res.h }], { replaceCover: true });
+                Promise.all([downscale(blob), imageTakenAtFromFile(blob)]).then(function (parts) {
+                  var res = parts[0];
+                  addImageDataUrls([{ data: res.data, name: 'clipboard.jpg', w: res.w, h: res.h,
+                    takenAt: parts[1] || null }], { replaceCover: true });
                 });
               });
               return;
@@ -1902,6 +2187,7 @@
         // archive doesn't visibly "pop"/enlarge when its photo finishes decoding
         photoW: draftPhoto && draftPhotoDims ? draftPhotoDims.w : null,
         photoH: draftPhoto && draftPhotoDims ? draftPhotoDims.h : null,
+        photoTakenAt: draftPhoto && draftPhotoTakenAt ? draftPhotoTakenAt : null,
         items: items,
         files: draftFiles.slice(),
         notes: notesInput.value.trim(),
@@ -2035,7 +2321,7 @@
     return root;
   }
 
-  function timeSelect(selectedValue) {
+  function timeSelect(selectedValue, photoTimeProvider) {
     var root = el('div', { class: 'choice-select time-select' });
     var trigger = el('button', {
       type: 'button', class: 'choice-trigger', 'aria-haspopup': 'dialog',
@@ -2044,6 +2330,9 @@
     root.appendChild(trigger);
     root._value = selectedValue || datetimeLocalValue(Date.now());
     root.getValue = function () { return root._value; };
+    root.getPhotoTime = function () {
+      return photoTimeProvider ? photoTimeProvider() : null;
+    };
     root.setValue = function (value) {
       var next = String(value || '');
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(next)) return;
@@ -2071,41 +2360,67 @@
   function openTimePicker(select) {
     var anchor = (select.querySelector && select.querySelector('.choice-trigger')) || select;
     var parts = splitDatetimeValue(select.getValue());
-    var dateI = el('input', { class: 'field tiny-field', type: 'date', value: parts.date });
-    var timeI = el('input', { class: 'field tiny-field', type: 'time', value: parts.time });
+    var dateI = el('input', { class: 'field tiny-field time-field-input', type: 'date', value: parts.date });
+    var timeI = el('input', { class: 'field tiny-field time-field-input', type: 'time', value: parts.time });
+    var previewMain = el('div', { class: 'time-preview-main' });
+    var previewSub = el('div', { class: 'time-preview-sub' });
+    function selectedTs() {
+      return parseDatetimeLocal((dateI.value || parts.date) + 'T' + (timeI.value || '00:00'), Date.now());
+    }
+    function refreshPreview() {
+      var ts = selectedTs();
+      previewMain.textContent = fmtTime(ts);
+      previewSub.textContent = fmtDate(ts).replace(' ', ' · ');
+    }
     function setTo(ts) {
       var p = splitDatetimeValue(datetimeLocalValue(ts));
       dateI.value = p.date; timeI.value = p.time;
+      refreshPreview();
     }
+    dateI.addEventListener('input', refreshPreview);
+    timeI.addEventListener('input', refreshPreview);
+    refreshPreview();
     var panel = el('div', { class: 'time-panel' }, [
+      el('div', { class: 'time-hero' }, [
+        el('div', { class: 'time-hero-kicker', text: t('time_pick_title') }),
+        previewMain,
+        previewSub,
+        el('div', { class: 'time-hero-sub', text: t('time_pick_sub') })
+      ]),
       el('div', { class: 'time-panel-grid' }, [
-        el('label', { class: 'labeled' }, [
-          el('span', { class: 'label-text', text: lang === 'zh' ? '日期' : 'Date' }), dateI
+        el('label', { class: 'time-field-card' }, [
+          el('span', { class: 'time-field-label', text: t('time_date_label') }), dateI
         ]),
-        el('label', { class: 'labeled' }, [
-          el('span', { class: 'label-text', text: lang === 'zh' ? '时间' : 'Time' }), timeI
+        el('label', { class: 'time-field-card' }, [
+          el('span', { class: 'time-field-label', text: t('time_time_label') }), timeI
         ])
       ]),
       el('div', { class: 'time-quick' }, [
-        el('button', { type: 'button', class: 'btn tiny ghost', text: lang === 'zh' ? '现在' : 'Now',
+        el('button', { type: 'button', class: 'btn tiny ghost', text: t('time_now'),
           onclick: function () { setTo(Date.now()); } }),
-        el('button', { type: 'button', class: 'btn tiny ghost', text: lang === 'zh' ? '昨天此时' : 'Yesterday',
-          onclick: function () { setTo(Date.now() - 86400000); } })
+        el('button', { type: 'button', class: 'btn tiny ghost photo-time-btn', text: t('photo_time'),
+          onclick: function () {
+            var ts = select.getPhotoTime && select.getPhotoTime();
+            if (!ts) { toast(t('photo_time_empty')); return; }
+            setTo(ts);
+            toast(t('photo_time_set'));
+          } })
       ])
     ]);
     var menu = null;
     panel.appendChild(el('div', { class: 'time-panel-actions' }, [
       el('button', { type: 'button', class: 'btn tiny ghost', text: t('cancel'),
         onclick: function () { if (menu) menu.close(); } }),
-      el('button', { type: 'button', class: 'btn tiny primary', text: lang === 'zh' ? '完成' : 'Done',
+      el('button', { type: 'button', class: 'btn tiny primary', text: t('time_done'),
         onclick: function () {
           select.setValue(dateI.value + 'T' + (timeI.value || '00:00'));
           if (menu) menu.close();
         } })
     ]));
     menu = openAnchoredMenu(anchor, {
-      title: t('archive_time'),
-      content: panel
+      content: panel,
+      compact: true,
+      panelClass: 'time-popover'
     });
   }
 
@@ -2130,7 +2445,7 @@
     closePopover();
     opts = opts || {};
     var mask = el('div', { class: 'popover-mask' });
-    var panel = el('div', { class: 'popover-menu', role: 'menu' });
+    var panel = el('div', { class: 'popover-menu' + (opts.panelClass ? ' ' + opts.panelClass : ''), role: 'menu' });
     if (opts.title) panel.appendChild(el('div', { class: 'popover-title', text: opts.title }));
     var listWrap = el('div', { class: 'popover-list' });
     panel.appendChild(listWrap);
@@ -2171,7 +2486,7 @@
       panel.style.maxHeight = '';
       var vw = window.innerWidth, vh = window.innerHeight, margin = 10, gap = 6;
       var aRect = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
-      var minW = aRect ? aRect.width : 240;
+      var minW = opts.compact ? 240 : (aRect ? aRect.width : 240);
       panel.style.maxWidth = Math.min(vw - margin * 2, 440) + 'px';
       panel.style.minWidth = Math.max(190, Math.min(minW, vw - margin * 2)) + 'px';
       var pw = panel.offsetWidth, ph = panel.offsetHeight, left, top, origin;
@@ -3703,6 +4018,15 @@
   function seedDemo() {
     var now = Date.now();
     var day = 86400000;
+    var today = new Date(); today.setHours(10, 0, 0, 0);
+    var lastYear = new Date(today); lastYear.setFullYear(today.getFullYear() - 1);
+    var lastMonth = new Date(today); lastMonth.setMonth(today.getMonth() - 1);
+    Store.addCommit({ scene: 'desk', createdAt: lastYear.getTime(),
+      message: lang === 'zh' ? '去年今天的书桌' : 'Desk on this day last year',
+      items: [{ name: lang === 'zh' ? '书桌状态' : 'Desk state', qty: 1 }] });
+    Store.addCommit({ scene: 'room', createdAt: lastMonth.getTime(),
+      message: lang === 'zh' ? '上个月今天的房间' : 'Room on this day last month',
+      items: [{ name: lang === 'zh' ? '房间状态' : 'Room state', qty: 1 }] });
     // Go-bag: two versions, something missing on return
     Store.addCommit({ scene: 'bag', createdAt: now - 2 * day, photo: bagPhoto(true),
       message: lang === 'zh' ? '出门去学校前，带电脑和充电器' : 'Leaving for school — laptop + charger',
@@ -3812,6 +4136,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.8.0', '2026-06-05', '重温·那年今日：回顾页 + 图片时间 + HyperOS 时间面板',
+      'On This Day memories, photo time, and HyperOS archive-time picker',
+      ['时间线新增「回顾」入口和「那年今日 / 往月今日 / 随机重温」横幅：进 App 就能遇见过去的生活存档，点开进入回顾页继续翻看。',
+       '新增回顾页：按「那年今日」「往月的今天」「随机翻牌重温」分区展示旧存档，复用现有存档卡片，点卡片可直接进入详情。',
+       '手机端新增温暖的那年今日通知：有真实周年记忆时，会在接下来 14 天内为对应日期 20:00 预排提醒，点通知直达回顾页；桌面端继续用应用内横幅降级。',
+       '新建 / 编辑存档的「图片时间」按钮会读取所选图片的 EXIF / 原生拍摄时间，并一键填入存档时间。',
+       '存档时间选择器重做为 HyperOS 风格轻玻璃面板，替换旧的 Material 感大色块日期 / 时间样式，并移除「昨天此时」快捷按钮。',
+       '示例数据加入去年今天和上个月今天的记录，方便验证「那年今日」和「往月今日」链路。'],
+      ['Add a Memories entry and resurface banner on the timeline: On this day, earlier-month matches, and random older archives now bring past moments back into the first screen.',
+       'Add the Memories page with On this day, earlier months, and random resurface sections, reusing the existing archive cards and detail navigation.',
+       'Add warm mobile On This Day notifications: when true anniversary memories exist, the app pre-schedules the next 14 days at 20:00 and opens Memories from the notification; desktop falls back to the in-app banner.',
+       'The Archive time picker now has a Photo time action that reads EXIF / native shooting time from the selected image and applies it to the archive timestamp.',
+       'Restyle the Archive time picker as a HyperOS-like glass panel and replace the old Yesterday shortcut.',
+       'Demo data now includes last-year-today and last-month-today archives for validating the resurface flow.']],
     ['1.7.0', '2026-06-05', '引擎层闭环：复查提醒 + 可分享凭证 + 首存反馈',
       'Engine loop: re-check reminders, shareable proof, and first-save feedback',
       ['新增本地复查提醒：新建 / 编辑存档时可设置 7 / 30 / 90 天后或自定义天数复查；Android 首次设置提醒会请求通知权限，桌面端安全降级为仅保存提醒时间。',
@@ -4895,6 +5233,7 @@
       storeReady = true;
       render();
       Notify.syncAll();
+      scheduleMemoryNotifs();
       if (pendingDeepLink) { handleNotifyIntent(pendingDeepLink); pendingDeepLink = null; }
       hideSplash(bootStartedAt);
       // re-measure as layout + async safe-area insets settle. These all land while the

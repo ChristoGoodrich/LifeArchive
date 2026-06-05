@@ -301,6 +301,28 @@ body.native .view{flex:1 1 auto;width:100%;min-width:0;max-width:min(760px,100vw
   padding:48px 20px;text-align:center;font-size:14px}
 .tl-empty-ic{font-size:34px;opacity:.7}
 
+/* ---- resurface / review ---- */
+.review-entry{white-space:nowrap}
+.resurface-banner{position:relative;display:flex;align-items:center;width:100%;margin:2px 0 14px;
+  padding:14px 16px 14px 48px;border:1px solid color-mix(in srgb,var(--accent) 18%,var(--line));
+  border-radius:20px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--card)),
+    color-mix(in srgb,var(--accent-2) 10%,var(--card)));color:var(--text);font-family:inherit;
+  font-size:15px;font-weight:850;text-align:left;cursor:pointer;box-shadow:var(--shadow-sm);
+  -webkit-backdrop-filter:saturate(1.4) blur(16px);backdrop-filter:saturate(1.4) blur(16px)}
+.resurface-banner::before{content:"";position:absolute;left:16px;top:50%;width:18px;height:18px;
+  border-radius:999px;transform:translateY(-50%);
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 0 0 5px color-mix(in srgb,var(--accent) 12%,transparent)}
+.resurface-banner::after{content:"›";margin-left:auto;color:var(--accent);font-size:24px;line-height:1}
+.resurface-banner:active{transform:scale(.99)}
+.review-view-head{align-items:center;justify-content:flex-start}
+.review-sec{margin:18px 0 26px;min-width:0;max-width:100%}
+.review-sec-head{display:flex;align-items:baseline;gap:9px;margin:0 4px 12px;padding-left:2px}
+.review-sec-head h2{margin:0;font-size:17px;line-height:1.2;font-weight:900;letter-spacing:0}
+.review-sec-sub,.review-month-note{color:var(--muted);font-size:13px}
+.review-rail{padding-bottom:0}
+.review-month-note{margin:10px 2px 22px;padding:12px 14px;border-radius:16px;
+  background:var(--inset);border:1px solid var(--line)}
+
 /* ---- timeline date sections ---- */
 .tl-list{position:relative;min-width:0;max-width:100%}
 .timeline-stream{position:relative;min-width:0;max-width:100%}
@@ -507,11 +529,26 @@ textarea.field{resize:vertical}
 .no-chevron .choice-chevron{display:none}
 .tiny-choice .choice-trigger{min-height:40px;padding:9px 12px;font-size:14px}
 .time-select .choice-trigger{justify-content:flex-start}
-.time-panel{display:flex;flex-direction:column;gap:12px;min-width:min(280px,calc(100vw - 44px));padding:2px}
+.time-panel{display:flex;flex-direction:column;gap:12px;width:min(360px,calc(100vw - 32px));padding:4px}
+.time-hero{position:relative;overflow:hidden;border-radius:24px;padding:18px 18px 16px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 94%,#fff 6%),
+    color-mix(in srgb,var(--accent-2) 82%,#fff 18%));color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 16px 34px color-mix(in srgb,var(--accent) 24%,transparent)}
+.time-hero::after{content:"";position:absolute;right:-34px;top:-40px;width:140px;height:140px;border-radius:999px;
+  background:rgba(255,255,255,.18);filter:blur(2px)}
+.time-hero-kicker{position:relative;z-index:1;font-size:12px;font-weight:800;opacity:.78}
+.time-preview-main{position:relative;z-index:1;margin-top:4px;font-family:var(--mono);font-size:44px;
+  line-height:1.02;font-weight:800;letter-spacing:0}
+.time-preview-sub{position:relative;z-index:1;margin-top:7px;font-size:14px;font-weight:800;opacity:.9}
+.time-hero-sub{position:relative;z-index:1;margin-top:4px;font-size:12px;opacity:.68}
 .time-panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.time-panel .labeled{margin-bottom:0}
+.time-field-card{display:flex;flex-direction:column;gap:7px;margin:0;padding:11px;border-radius:18px;
+  background:var(--inset);border:1px solid var(--line)}
+.time-field-label{font-size:12px;font-weight:850;color:var(--muted)}
+.time-field-input{min-height:42px;border-radius:13px;background:var(--card);font-weight:800}
 .time-panel-actions,.time-quick{display:flex;gap:8px}
-.time-panel-actions .btn,.time-quick .btn{flex:1}
+.time-panel-actions .btn,.time-quick .btn{flex:1;min-width:0}
+.photo-time-btn{color:var(--accent);font-weight:850}
 /* ---- anchored dropdown menu (app-owned <select> + photo source) ----
    Replaces the old bottom sheet: the panel pops right at the trigger you tapped
    (drops below, flips above when cramped), clamped to the viewport. */
@@ -526,6 +563,7 @@ textarea.field{resize:vertical}
   transition:opacity .16s ease,transform .17s cubic-bezier(.22,.61,.36,1)}
 .popover-mask.open .popover-menu{opacity:1;transform:none}
 .popover-menu::-webkit-scrollbar{width:7px}
+.popover-menu.time-popover{overflow:visible}
 .popover-title{padding:8px 12px 6px;color:var(--muted);font-size:12.5px;font-weight:800}
 .popover-list{display:flex;flex-direction:column;gap:2px}
 .popover-option{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
