@@ -201,6 +201,10 @@ if (!m.includes('android.permission.CAMERA')) {
   m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.CAMERA" />\n</manifest>');
   console.log('AndroidManifest -> added CAMERA permission');
 }
+if (!m.includes('android.permission.POST_NOTIFICATIONS')) {
+  m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>');
+  console.log('AndroidManifest -> added POST_NOTIFICATIONS permission');
+}
 if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustResize"');
 } else {

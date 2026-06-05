@@ -90,7 +90,18 @@
       replicate: '照着再记一笔', replicate_now: '立即记一笔',
       replicate_meal_hint: '饮食记录无需回滚。你可以照着这一餐，快速再记一笔，或先存一条预存档（想吃／要点的），真正吃到后再标记完成。',
       replicate_item_hint: '也可以照着这个版本，把要补齐的东西先存成一条预存档，备齐后再标记完成。',
-      pick_multi: '选择多张图片', album_multi: '从相册选择多张', photos_added: '已添加 {n} 张图片'
+      pick_multi: '选择多张图片', album_multi: '从相册选择多张', photos_added: '已添加 {n} 张图片',
+      notif_recheck_title: '复查提醒', notif_due_title: '决策复盘到期',
+      remind_label: '复查提醒', remind_none: '不提醒',
+      remind_7: '7 天后', remind_30: '30 天后', remind_90: '90 天后',
+      remind_custom: '自定义天数', remind_custom_ph: '输入天数',
+      remind_native_only: '手机端会推送通知；桌面端会保存提醒时间并安全降级。',
+      remind_set_cta: '30 天后提醒我复查？', remind_set_done: '已设置复查提醒',
+      export_commit: '导出此存档', share_image: '系统分享',
+      onboard_step1_title: '选一个要盯住的东西', onboard_step1_text: '房间、冰箱、押金房况、行李箱都可以。',
+      onboard_step2_title: '拍第一张存档', onboard_step2_text: '照片、清单、文件会一起留在本机仓库。',
+      onboard_step3_title: '设一个复查提醒', onboard_step3_text: '到点回来看变化，直接进入现实对比。',
+      saved_value_prefix: '已存档'
     },
     en: {
       brand: 'Life Archive',
@@ -175,7 +186,18 @@
       replicate: 'Log it again', replicate_now: 'Log now',
       replicate_meal_hint: 'Meals don’t need a rollback. Log this one again, or save it as a plan (what you want / will order) and mark it done once you actually have it.',
       replicate_item_hint: 'You can also save this version as a plan for what to restock, then mark it done once everything is back.',
-      pick_multi: 'Pick multiple images', album_multi: 'Pick multiple from album', photos_added: 'Added {n} image(s)'
+      pick_multi: 'Pick multiple images', album_multi: 'Pick multiple from album', photos_added: 'Added {n} image(s)',
+      notif_recheck_title: 'Re-check reminder', notif_due_title: 'Decision review due',
+      remind_label: 'Re-check reminder', remind_none: 'Off',
+      remind_7: 'In 7 days', remind_30: 'In 30 days', remind_90: 'In 90 days',
+      remind_custom: 'Custom days', remind_custom_ph: 'Enter days',
+      remind_native_only: 'Mobile sends the notification; desktop saves the reminder time and degrades safely.',
+      remind_set_cta: 'Remind me to re-check in 30 days?', remind_set_done: 'Re-check reminder set',
+      export_commit: 'Export this archive', share_image: 'Share',
+      onboard_step1_title: 'Pick something to watch', onboard_step1_text: 'A room, fridge, deposit condition, or packed bag all work.',
+      onboard_step2_title: 'Take the first archive', onboard_step2_text: 'Photo, checklist, and files stay together in the local repo.',
+      onboard_step3_title: 'Set a re-check reminder', onboard_step3_text: 'Come back on time and jump straight into Reality Diff.',
+      saved_value_prefix: 'Saved'
     }
   };
 
@@ -304,10 +326,26 @@
   function realCommitsForScene(id) { return Store.commitsForScene(id).filter(notPlanned); }
   function toast(msg) {
     var node = $('#toast');
+    node.classList.remove('with-action');
     node.textContent = msg;
     node.classList.add('show');
     clearTimeout(node._t);
     node._t = setTimeout(function () { node.classList.remove('show'); }, 2200);
+  }
+  function toastAction(msg, label, onClick) {
+    var node = $('#toast');
+    node.innerHTML = '';
+    node.classList.add('with-action');
+    node.appendChild(el('span', { text: msg }));
+    node.appendChild(el('button', { type: 'button', class: 'toast-action', text: label,
+      onclick: function (e) {
+        e.stopPropagation();
+        node.classList.remove('show', 'with-action');
+        if (onClick) onClick();
+      } }));
+    node.classList.add('show');
+    clearTimeout(node._t);
+    node._t = setTimeout(function () { node.classList.remove('show', 'with-action'); }, 5200);
   }
 
   /* ---------------- image downscale (keep stored photos small) ----------------
@@ -511,6 +549,129 @@
     }
   };
 
+  /* ---------------- Local notifications (native return loop) ----------------
+     Kept pluggable like AI / Cloud. Desktop and web safely no-op so callers do
+     not branch on platform for every reminder action. */
+  var Notify = {
+    _p: function () {
+      var Cap = window.Capacitor;
+      if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() &&
+          Cap.Plugins && Cap.Plugins.LocalNotifications) return Cap.Plugins.LocalNotifications;
+      return null;
+    },
+    available: function () { return !!this._p(); },
+    idFor: function (key, kind) {
+      var s = (kind || '') + '|' + String(key || '');
+      var h = 5381;
+      for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+      return Math.abs(h) % 2000000000 + 1;
+    },
+    ensurePermission: function () {
+      var p = this._p();
+      if (!p) return Promise.resolve(false);
+      return p.checkPermissions().then(function (r) {
+        if (r && r.display === 'granted') return true;
+        return p.requestPermissions().then(function (q) { return !!(q && q.display === 'granted'); });
+      }).catch(function () { return false; });
+    },
+    scheduleAt: function (key, kind, whenMs, title, body, extra) {
+      var p = this._p();
+      if (!p || !whenMs || whenMs <= Date.now()) return Promise.resolve(false);
+      var id = this.idFor(key, kind);
+      return this.ensurePermission().then(function (ok) {
+        if (!ok) return false;
+        return p.schedule({ notifications: [{
+          id: id,
+          title: title,
+          body: body,
+          schedule: { at: new Date(whenMs), allowWhileIdle: true },
+          extra: extra || {}
+        }] }).then(function () { return true; });
+      }).catch(function () { return false; });
+    },
+    cancelFor: function (key, kind) {
+      var p = this._p();
+      if (!p) return Promise.resolve();
+      return p.cancel({ notifications: [{ id: this.idFor(key, kind) }] }).catch(function () {});
+    },
+    syncAll: function () {
+      var p = this._p();
+      if (!p) return Promise.resolve();
+      var jobs = [];
+      Store.commits().forEach(function (c) {
+        if (c.remindAt && !c.remindFired && !c.planned && c.remindAt > Date.now()) {
+          jobs.push(scheduleRecheckForCommit(c));
+        }
+      });
+      Store.branches().forEach(function (b) {
+        if (branchDueMs(b) > Date.now() && !b.followup) jobs.push(scheduleDueForBranch(b));
+      });
+      return Promise.all(jobs);
+    },
+    initClickRouting: function (onIntent) {
+      var p = this._p();
+      if (!p || !p.addListener) return;
+      p.addListener('localNotificationActionPerformed', function (ev) {
+        var ex = ev && ev.notification && ev.notification.extra;
+        if (ex) onIntent(ex);
+      });
+    }
+  };
+
+  var ShareOut = {
+    _p: function () {
+      var Cap = window.Capacitor;
+      if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins &&
+          Cap.Plugins.Share && Cap.Plugins.Filesystem) {
+        return { share: Cap.Plugins.Share, fs: Cap.Plugins.Filesystem };
+      }
+      return null;
+    },
+    available: function () { return !!this._p(); },
+    shareDataUrl: function (dataUrl, filename) {
+      var p = this._p();
+      if (!p || !dataUrl) return Promise.resolve(false);
+      var b64 = String(dataUrl).split(',')[1] || '';
+      var name = filename || ('life-archive-' + Date.now() + '.png');
+      return p.fs.writeFile({ path: name, data: b64, directory: 'CACHE' })
+        .then(function (r) {
+          var fileRef = (r && (r.uri || r.path)) || name;
+          return p.share.share({ title: 'Life Archive', files: [fileRef] }).then(function () { return true; });
+        }).catch(function () { return false; });
+    }
+  };
+
+  function reminderBodyForCommit(c) {
+    var sc = Store.sceneById(c && c.scene);
+    return (sc ? sceneName(sc) : t('brand')) + ' · ' + ((c && c.message) || '');
+  }
+  function scheduleRecheckForCommit(c) {
+    if (!c || !c.remindAt || c.planned) return Promise.resolve(false);
+    return Notify.scheduleAt(c.id, 'recheck', c.remindAt, t('notif_recheck_title'),
+      reminderBodyForCommit(c), { kind: 'recheck', route: 'diff', sceneId: c.scene, commitId: c.id });
+  }
+  function branchDueMs(b) {
+    if (!b || !b.dueAt) return 0;
+    var ts = new Date(b.dueAt + 'T09:00:00').getTime();
+    return isNaN(ts) ? 0 : ts;
+  }
+  function scheduleDueForBranch(b) {
+    var ts = branchDueMs(b);
+    if (!b || !ts || b.followup) return Promise.resolve(false);
+    return Notify.scheduleAt(b.id, 'due', ts, t('notif_due_title'), b.question || t('nav_branch'),
+      { kind: 'due', route: 'branch-detail', branchId: b.id });
+  }
+  function deleteCommitWithCleanup(id) {
+    Notify.cancelFor(id, 'recheck');
+    Store.deleteCommit(id);
+    autoSync(false);
+  }
+  function deleteBranchWithCleanup(id) {
+    Notify.cancelFor(id, 'due');
+    Store.deleteBranch(id);
+    autoSync(false);
+  }
+
   function mergeData(a, b) {
     a = a || {}; b = b || {};
     function stamp(it) { return (it && (it.updatedAt || it.createdAt)) || 0; }
@@ -574,6 +735,8 @@
   /* ---------------- routing ---------------- */
   var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats'];
   var current = 'timeline';
+  var storeReady = false;
+  var pendingDeepLink = null;
   // Bottom-nav routes are real peer tabs. Switching among them replaces the current
   // browser history entry, so Android edge-back does not treat Timeline as their parent.
   var TAB_ROUTES = ['timeline', 'diff', 'commit', 'rollback', 'branch'];
@@ -614,6 +777,32 @@
     writeRouteHash(route, viaBack || toTab);
     renderNav();
     render();
+  }
+
+  function routeOrRefresh(route) {
+    if (route === current) render();
+    else go(route);
+  }
+
+  function handleNotifyIntent(ex) {
+    if (!ex || !ex.route) return;
+    if (!storeReady) { pendingDeepLink = ex; return; }
+    if (ex.route === 'diff') {
+      var c = Store.getCommit(ex.commitId);
+      if (!c) { routeOrRefresh('timeline'); return; }
+      Store.updateCommit(c.id, { remindFired: true });
+      pendingDiff = { sceneId: ex.sceneId || c.scene, commitId: c.id };
+      var enough = realCommitsForScene(c.scene).length >= 2;
+      if (!enough) pendingDetail = c.id;
+      routeOrRefresh(enough ? 'diff' : 'detail');
+      return;
+    }
+    if (ex.route === 'branch-detail') {
+      var b = Store.getBranch(ex.branchId);
+      if (!b) { routeOrRefresh('branch'); return; }
+      pendingBranchDetail = b.id;
+      routeOrRefresh('branch-detail');
+    }
   }
 
   // Pop history until we reach a route we're not already on. Returns false when there's
@@ -811,6 +1000,23 @@
         el('div', { class: 'empty-emoji', text: '🌱' }),
         el('h2', { text: t('empty_title') }),
         el('p', { text: t('empty_sub') }),
+        el('div', { class: 'empty-steps' }, [
+          el('div', { class: 'empty-step' }, [
+            el('span', { class: 'empty-step-num', text: '1' }),
+            el('strong', { text: t('onboard_step1_title') }),
+            el('span', { text: t('onboard_step1_text') })
+          ]),
+          el('div', { class: 'empty-step' }, [
+            el('span', { class: 'empty-step-num', text: '2' }),
+            el('strong', { text: t('onboard_step2_title') }),
+            el('span', { text: t('onboard_step2_text') })
+          ]),
+          el('div', { class: 'empty-step' }, [
+            el('span', { class: 'empty-step-num', text: '3' }),
+            el('strong', { text: t('onboard_step3_title') }),
+            el('span', { text: t('onboard_step3_text') })
+          ])
+        ]),
         el('div', { class: 'empty-actions' }, [
           el('button', { class: 'btn primary', text: t('empty_cta'),
             onclick: function () { go('commit'); } }),
@@ -1175,6 +1381,11 @@
       card.appendChild(el('div', { class: 'commit-notes', text: c.notes }));
     }
     v.appendChild(card);
+    function exportThisCommit() {
+      buildCommitCardCanvas(c).then(function (cv) {
+        showImageModal(cv.toDataURL('image/png'), 'life-archive-' + shortId(c.id) + '.png');
+      });
+    }
 
     // a planned draft: the headline action is "mark done" (it becomes a real commit);
     // diff/rollback don't apply to something that hasn't happened yet.
@@ -1190,8 +1401,10 @@
       v.appendChild(el('div', { class: 'detail-actions' }, [
         el('button', { class: 'btn', text: '✏️ ' + (L ? '编辑' : 'Edit'),
           onclick: function () { pendingEdit = c.id; go('commit'); } }),
+        el('button', { class: 'btn', text: '⤴ ' + t('export_commit'),
+          onclick: exportThisCommit }),
         el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
-          onclick: function () { if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); go('timeline'); } } })
+          onclick: function () { if (confirm(t('confirm_delete'))) { deleteCommitWithCleanup(c.id); go('timeline'); } } })
       ]));
       return;
     }
@@ -1206,10 +1419,12 @@
           go('diff');
         } }) : el('button', { class: 'btn', text: '🔍 ' + t('nav_diff'),
         onclick: function () { pendingDiff = { sceneId: c.scene, commitId: c.id }; go('diff'); } }),
+      el('button', { class: 'btn', text: '⤴ ' + t('export_commit'),
+        onclick: exportThisCommit }),
       el('button', { class: 'btn', text: '⏮️ ' + t('nav_rollback'),
         onclick: function () { pendingRollback = c.id; go('rollback'); } }),
       el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
-        onclick: function () { if (confirm(t('confirm_delete'))) { Store.deleteCommit(c.id); go('timeline'); } } })
+        onclick: function () { if (confirm(t('confirm_delete'))) { deleteCommitWithCleanup(c.id); go('timeline'); } } })
     ]));
   }
 
@@ -1286,6 +1501,40 @@
     var msgInput = el('input', { class: 'field', type: 'text', placeholder: t('commit_placeholder') });
     if (src && src.message && src.message !== '(no message)') msgInput.value = src.message;
     var createdAtInput = timeSelect(datetimeLocalValue(editing ? editing.createdAt : Date.now()));
+    function initialRemindDays() {
+      if (!src || src.planned) return null;
+      if (src.remindDays) return Number(src.remindDays) || null;
+      if (src.remindAt && src.createdAt) {
+        var d = Math.round((Number(src.remindAt) - Number(src.createdAt)) / 86400000);
+        return d > 0 ? d : null;
+      }
+      return null;
+    }
+    var initialDays = initialRemindDays();
+    var presetValues = [7, 30, 90];
+    var remindPreset = initialDays && presetValues.indexOf(initialDays) < 0 ? 'custom' : String(initialDays || 0);
+    var remindSelect = choiceSelect([
+      { value: '0', text: t('remind_none') },
+      { value: '7', text: t('remind_7') },
+      { value: '30', text: t('remind_30') },
+      { value: '90', text: t('remind_90') },
+      { value: 'custom', text: t('remind_custom') }
+    ], remindPreset);
+    var remindCustom = el('input', { class: 'field remind-custom-field', type: 'number',
+      min: '1', step: '1', inputmode: 'numeric', placeholder: t('remind_custom_ph') });
+    if (remindPreset === 'custom' && initialDays) remindCustom.value = String(initialDays);
+    var remindHint = el('div', { class: 'form-hint remind-hint', text: t('remind_native_only') });
+    var remindBox = el('div', { class: 'remind-box' }, [remindSelect, remindCustom, remindHint]);
+    function syncRemindCustom() {
+      remindBox.classList.toggle('custom', remindSelect.getValue() === 'custom');
+    }
+    remindSelect.onChange(syncRemindCustom);
+    syncRemindCustom();
+    function readRemindDays() {
+      var v = remindSelect.getValue();
+      var n = v === 'custom' ? parseInt(remindCustom.value, 10) : parseInt(v, 10);
+      return n > 0 ? n : null;
+    }
     var notesInput = el('textarea', { class: 'field', rows: '2' });
     if (src && src.notes) notesInput.value = src.notes;
 
@@ -1641,10 +1890,13 @@
         var n = $('.item-name', r).value.trim();
         if (n) items.push({ name: n, qty: parseInt($('.item-qty', r).value, 10) || 1 });
       });
+      var createdAt = parseDatetimeLocal(createdAtInput.getValue(), editing ? editing.createdAt : Date.now());
+      var remindDays = planned ? null : readRemindDays();
+      var remindAt = remindDays ? (createdAt + remindDays * 86400000) : null;
       var payload = {
         scene: selectedScene,
         message: msgInput.value.trim() || '(no message)',
-        createdAt: parseDatetimeLocal(createdAtInput.getValue(), editing ? editing.createdAt : Date.now()),
+        createdAt: createdAt,
         photo: draftPhoto,
         // cover pixel size → timeline/detail reserve the image box so a freshly added
         // archive doesn't visibly "pop"/enlarge when its photo finishes decoding
@@ -1653,11 +1905,16 @@
         items: items,
         files: draftFiles.slice(),
         notes: notesInput.value.trim(),
-        planned: !!planned
+        planned: !!planned,
+        remindDays: remindDays,
+        remindAt: remindAt,
+        remindFired: remindAt && editing && editing.remindAt === remindAt ? !!editing.remindFired : false
       };
       if (editing) {
         payload.planned = !!editing.planned;
-        Store.updateCommit(editing.id, payload);
+        if (payload.planned) { payload.remindDays = null; payload.remindAt = null; payload.remindFired = false; }
+        var saved = Store.updateCommit(editing.id, payload);
+        Notify.cancelFor(editing.id, 'recheck').then(function () { if (saved) scheduleRecheckForCommit(saved); });
         toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
         autoSync(false);
         go('timeline');
@@ -1665,8 +1922,31 @@
       }
       var ok = Store.addCommit(payload);
       if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
+      if (ok.remindAt && !ok.planned) scheduleRecheckForCommit(ok);
       if (planned) { toast('📌 ' + t('planned_saved')); autoSync(false); }
-      else { toast('✅ ' + t('save_commit')); autoSync(true); } // auto-sync real archives to cloud
+      else {
+        var mine = Store.commitsForScene(ok.scene).filter(notPlanned);
+        var prev = mine.filter(function (x) { return x.id !== ok.id; })
+          .sort(function (a, b) { return b.createdAt - a.createdAt; })[0];
+        var gap = prev ? Math.round((ok.createdAt - prev.createdAt) / 86400000) : null;
+        var savedMsg = (lang === 'zh')
+          ? ('✅ ' + t('saved_value_prefix') + ' · 本场景第 ' + mine.length + ' 次'
+            + (gap != null ? ' · 距上次 ' + gap + ' 天' : '') + ' · ' + ((ok.items || []).length) + ' 件物品')
+          : ('✅ ' + t('saved_value_prefix') + ' · #' + mine.length + ' here'
+            + (gap != null ? ' · ' + gap + 'd since last' : '') + ' · ' + ((ok.items || []).length) + ' items');
+        if (!ok.remindAt) {
+          toastAction(savedMsg, '📌 ' + t('remind_set_cta'), function () {
+            var nextAt = ok.createdAt + 30 * 86400000;
+            var updated = Store.updateCommit(ok.id, { remindAt: nextAt, remindDays: 30, remindFired: false });
+            if (updated) scheduleRecheckForCommit(updated);
+            autoSync(false);
+            toast('📌 ' + t('remind_set_done'));
+          });
+        } else {
+          toast(savedMsg);
+        }
+        autoSync(true);
+      } // auto-sync real archives to cloud
       go('timeline');
     }
 
@@ -1684,6 +1964,7 @@
       ]),
       labeled(t('message'), msgInput),
       labeled(t('archive_time'), createdAtInput),
+      labeledBlock(t('remind_label'), remindBox),
       labeledBlock(t('scene'), scenePicker),
       moreDetails,
       el('div', { class: 'form-actions' }, [
@@ -1997,6 +2278,25 @@
     }
     ctx.restore();
   }
+  function drawImageStamp(ctx, text, x, y) {
+    ctx.save();
+    ctx.font = '700 18px sans-serif';
+    ctx.textBaseline = 'top';
+    var tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(9,14,28,.74)';
+    ctx.fillRect(x, y, tw + 22, 32);
+    ctx.fillStyle = '#f4f7ff';
+    ctx.fillText(text, x + 11, y + 7);
+    ctx.restore();
+  }
+  function drawWatermark(ctx, text, x, y) {
+    ctx.save();
+    ctx.font = '600 20px sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#7f8aaa';
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
   // Compose a before/after share card (Phase 5): two photos + change list + change %.
   function buildDiffCardCanvas(base, comp, d, changedPct) {
     var L = lang === 'zh';
@@ -2010,7 +2310,7 @@
       if (d.renamed && d.renamed.length) lines.push((L ? '可能同一物品：' : 'Likely same item: ')
         + d.renamed.map(function (x) { return x.from + '≈' + x.to; }).join('、'));
       var listTop = pad + 70 + imgH + 40 + 84;
-      var H = listTop + Math.max(1, lines.length) * 46 + pad;
+      var H = listTop + Math.max(1, lines.length) * 46 + pad + 42;
       var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       var ctx = cv.getContext('2d');
       ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
@@ -2026,6 +2326,8 @@
       ctx.fillStyle = '#cdd6f4'; ctx.font = '600 22px sans-serif';
       ctx.fillText(L ? '旧版' : 'Base', pad + 6, iy + 8);
       ctx.fillText(L ? '新版' : 'Compare', pad + imgW + gap + 6, iy + 8);
+      drawImageStamp(ctx, fmtDate(base.createdAt), pad + 12, iy + imgH - 44);
+      drawImageStamp(ctx, fmtDate(comp.createdAt), pad + imgW + gap + 12, iy + imgH - 44);
       // big change %
       var by = iy + imgH + 36;
       ctx.fillStyle = '#ff5a7a'; ctx.font = '800 56px sans-serif';
@@ -2036,22 +2338,73 @@
       ctx.font = '500 26px sans-serif';
       if (!lines.length) { ctx.fillStyle = '#7fd6a0'; ctx.fillText(L ? '两个版本几乎一致 👍' : 'Nearly identical 👍', pad, listTop); }
       else lines.forEach(function (ln, i) { ctx.fillStyle = '#e6e9f5'; ctx.fillText(ln, pad, listTop + i * 46); });
+      drawWatermark(ctx, 'Life Archive · ' + (L ? '生成于 ' : 'Generated ') + fmtDate(Date.now()), pad, H - pad);
+      return cv;
+    });
+  }
+  function buildCommitCardCanvas(c) {
+    var L = lang === 'zh';
+    return loadImgEl(commitThumbSrc(c)).then(function (img) {
+      var W = 1080, pad = 52, imgW = W - pad * 2, imgH = Math.round(imgW * 0.62);
+      var items = (c.items || []).slice(0, 10);
+      var H = pad + 76 + imgH + 36 + 86 + Math.max(1, items.length) * 42 + pad + 42;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#8ea2ff'; ctx.font = '700 30px sans-serif'; ctx.textBaseline = 'top';
+      ctx.fillText('Life Archive · ' + (L ? '生活存档' : 'Archive proof'), pad, pad);
+      ctx.fillStyle = '#9aa6c4'; ctx.font = '400 22px sans-serif';
+      ctx.fillText(sceneLabel(Store.sceneById(c.scene)) + ' · ' + fmtDate(c.createdAt), pad, pad + 38);
+      var iy = pad + 76;
+      drawContain(ctx, img, pad, iy, imgW, imgH);
+      drawImageStamp(ctx, fmtDate(c.createdAt), pad + 14, iy + imgH - 46);
+      var y = iy + imgH + 34;
+      ctx.fillStyle = '#f4f7ff'; ctx.font = '800 34px sans-serif';
+      ctx.fillText(c.message || '(no message)', pad, y);
+      y += 54;
+      ctx.fillStyle = '#9aa6c4'; ctx.font = '500 24px sans-serif';
+      ctx.fillText((c.items || []).length + ' ' + (Store.isMealScene(c.scene) ? (L ? '条食物/备注' : 'food item(s)') : t('items_count')), pad, y);
+      y += 48;
+      ctx.font = '500 26px sans-serif';
+      if (!items.length) {
+        ctx.fillStyle = '#7f8aaa';
+        ctx.fillText(L ? '未填写清单' : 'No checklist items', pad, y);
+      } else {
+        items.forEach(function (it, idx) {
+          ctx.fillStyle = '#e6e9f5';
+          ctx.fillText('• ' + it.name + ((it.qty || 1) > 1 ? ' ×' + (it.qty || 1) : ''), pad, y + idx * 42);
+        });
+        if ((c.items || []).length > items.length) {
+          ctx.fillStyle = '#9aa6c4';
+          ctx.fillText('+ ' + ((c.items || []).length - items.length), pad, y + items.length * 42);
+        }
+      }
+      drawWatermark(ctx, 'Life Archive · ' + (L ? '生成于 ' : 'Generated ') + fmtDate(Date.now()), pad, H - pad);
       return cv;
     });
   }
   // Show a generated image with save options (works on desktop + long-press on mobile).
-  function showImageModal(dataUrl) {
+  function showImageModal(dataUrl, filename) {
     var L = lang === 'zh';
     closePopover();
     var mask = el('div', { class: 'img-modal' });
     var img = el('img', { class: 'img-modal-img', src: dataUrl, alt: '' });
     var dl = el('a', { class: 'btn primary tiny', text: L ? '下载图片' : 'Download',
-      href: dataUrl, download: 'life-archive-diff.png' });
+      href: dataUrl, download: filename || 'life-archive-diff.png' });
+    var actions = [dl];
+    if (ShareOut.available()) {
+      actions.push(el('button', { type: 'button', class: 'btn tiny', text: t('share_image'),
+        onclick: function () {
+          ShareOut.shareDataUrl(dataUrl, filename || 'life-archive.png').then(function (ok) {
+            if (!ok) toast(L ? '分享失败，可先下载图片' : 'Share failed — download the image instead');
+          });
+        } }));
+    }
     var hint = el('div', { class: 'img-modal-hint', text: L ? '长按图片可保存 / 分享' : 'Long-press the image to save / share' });
     var closeB = el('button', { type: 'button', class: 'img-modal-close', text: '✕', onclick: function () { mask.remove(); } });
     mask.addEventListener('click', function (e) { if (e.target === mask) mask.remove(); });
     mask.appendChild(closeB);
-    mask.appendChild(el('div', { class: 'img-modal-body' }, [img, el('div', { class: 'img-modal-actions' }, [dl]), hint]));
+    mask.appendChild(el('div', { class: 'img-modal-body' }, [img, el('div', { class: 'img-modal-actions' }, actions), hint]));
     document.body.appendChild(mask);
     requestAnimationFrame(function () { mask.classList.add('open'); });
   }
@@ -2232,7 +2585,9 @@
       var base = lastDiff && lastDiff.base, comp = lastDiff && lastDiff.comp;
       if (!base || !comp) return;
       var d = lastDiff.d || Diff.itemDiff(base.items, comp.items);
-      function make(pct) { buildDiffCardCanvas(base, comp, d, pct).then(function (cv) { showImageModal(cv.toDataURL('image/png')); }); }
+      function make(pct) { buildDiffCardCanvas(base, comp, d, pct).then(function (cv) {
+        showImageModal(cv.toDataURL('image/png'), 'life-archive-diff-' + shortId(base.id) + '-' + shortId(comp.id) + '.png');
+      }); }
       if (lastDiff.changedPct != null || !(base.photo && comp.photo)) make(lastDiff.changedPct);
       else Diff.imageDiff(base.photo, comp.photo, document.createElement('canvas'), { threshold: diffThreshold })
         .then(function (r) { make(r.ok ? r.changedPct : null); });
@@ -3002,15 +3357,17 @@
           if (editing.chosenIndex != null && editing.chosenIndex >= nextBranches.length) {
             patch.chosenIndex = null; patch.followup = null; patch.actual = []; patch.hits = [];
           }
-          Store.updateBranch(editing.id, patch);
+          var savedBranch = Store.updateBranch(editing.id, patch);
+          Notify.cancelFor(editing.id, 'due').then(function () { if (savedBranch) scheduleDueForBranch(savedBranch); });
           branchEditingId = null;
           toast('✅ ' + t('save_branch'));
         } else {
-          Store.addBranch({
+          var newBranch = Store.addBranch({
             question: patch.question, branches: patch.branches, dueAt: patch.dueAt,
             confidence: patch.confidence, tags: patch.tags, contextCommitId: patch.contextCommitId,
             chosenIndex: null, followup: null, actual: [], hits: []
           });
+          scheduleDueForBranch(newBranch);
           toast('✅ ' + t('create_branch'));
         }
         renderNav();
@@ -3085,7 +3442,7 @@
         branchEditingId = b.id; go('branch');
       } }),
       el('button', { class: 'btn danger', text: '🗑 ' + t('delete'), onclick: function () {
-        if (confirm(t('confirm_delete_branch'))) { Store.deleteBranch(b.id); pendingBranchDetail = null; renderNav(); go('branch'); }
+        if (confirm(t('confirm_delete_branch'))) { deleteBranchWithCleanup(b.id); pendingBranchDetail = null; renderNav(); go('branch'); }
       } })
     ]));
   }
@@ -3207,6 +3564,7 @@
             recordedAt: Date.now()
           }
         });
+        Notify.cancelFor(b.id, 'due');
         renderNav(); render();
       } })
     ]);
@@ -3454,6 +3812,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.7.0', '2026-06-05', '引擎层闭环：复查提醒 + 可分享凭证 + 首存反馈',
+      'Engine loop: re-check reminders, shareable proof, and first-save feedback',
+      ['新增本地复查提醒：新建 / 编辑存档时可设置 7 / 30 / 90 天后或自定义天数复查；Android 首次设置提醒会请求通知权限，桌面端安全降级为仅保存提醒时间。',
+       '点通知会回到 Life Archive 并直接进入现实对比：同场景有两条以上正式存档时自动预选 compare 与 base；只有一条时落到详情页，方便再拍一张当前状态。',
+       '可分享凭证升级：现实对比导出图现在给两张图分别盖上存档时间戳并加生成水印；详情页新增「导出此存档」，单条存档也能生成带时间戳、场景、清单和水印的图片凭证。',
+       '手机端导出图片接入系统分享面板；桌面端继续保留下载 / 长按保存的降级路径。',
+       '首存即有值：保存正式存档后会提示本场景第 N 次、距上次 X 天、清单物品数；未设置提醒时提供一键 30 天复查入口。',
+       '空时间线改为三步引导，保留「载入示例数据」入口；分支到期日也会在手机端重排为本地提醒。'],
+      ['Add local re-check reminders: new/edit archive can schedule 7 / 30 / 90 days or custom days; Android asks for notification permission the first time, while desktop safely stores the reminder time without native push.',
+       'Tapping a notification returns to Life Archive and opens Reality Diff with compare/base preselected when the scene has enough real archives; otherwise it falls back to the detail page so the user can capture the next state.',
+       'Shareable proof is upgraded: Reality Diff export stamps each image with its archive timestamp plus a generated watermark; detail pages now export a single archive proof image with timestamp, scene, checklist, and watermark.',
+       'Native mobile image export now uses the system share sheet; desktop keeps download / long-press fallback behavior.',
+       'First-save feedback now shows the scene count, days since the previous archive, and checklist size; if no reminder was set, a one-tap 30-day re-check action appears.',
+       'The empty timeline is now a 3-step onboarding flow, demo data remains available, and branch due dates also re-register as native reminders on mobile.']],
     ['1.6.3', '2026-06-05', '应用图标焕新 + 开屏彻底去抖 + 键盘白色遮罩修复 + 时间线防溢出 + 存档时间统一',
       'App icon refresh, splash judder fix, keyboard white-mask fix, timeline containment, and archive-time picker',
       ['应用图标焕新：桌面 / 启动器图标改为与开屏画面一致的蓝紫渐变「卡片堆叠」标志（浅色磨砂底 + 三张由浅到深的层叠卡片），点开应用前后看到的是同一个标志。',
@@ -4229,6 +4601,10 @@
       // lock the document to the visual viewport and scroll ONLY the content area
       // (CSS `body.native`), so the Android IME can't pan the topbar off-screen.
       document.body.classList.add('native');
+      Notify.initClickRouting(function (ex) {
+        if (storeReady) handleNotifyIntent(ex);
+        else pendingDeepLink = ex;
+      });
       var SA = Cap.Plugins && Cap.Plugins.SafeArea;
       if (!SA || !SA.enable) { markSafeAreaSettled(); return; }
       var dark = themeIsDark();
@@ -4516,7 +4892,10 @@
     window.addEventListener('resize', syncTopbarHeight);
     // Hydrate the store (IndexedDB) before the first content render.
     Store.init().then(function () {
+      storeReady = true;
       render();
+      Notify.syncAll();
+      if (pendingDeepLink) { handleNotifyIntent(pendingDeepLink); pendingDeepLink = null; }
       hideSplash(bootStartedAt);
       // re-measure as layout + async safe-area insets settle. These all land while the
       // splash still covers the screen (~1.1s), so the topbar/content shift isn't visible.
