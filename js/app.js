@@ -3454,17 +3454,19 @@
   }
 
   var RELEASE_NOTES = [
-    ['1.6.3', '2026-06-04', '键盘白块收口 + 时间线防溢出 + 存档时间统一 + 开屏去抖',
-      'Keyboard gap fix, timeline containment, archive-time picker, and splash stability',
-      ['键盘弹出时再次收紧底部留白：底栏隐藏后不再继续把底栏高度垫进内容区，现代 Android 已经缩小 WebView 时只保留很小的输入兜底空间，减少搜索框下方出现整片空白的情况。',
+    ['1.6.3', '2026-06-05', '应用图标焕新 + 开屏彻底去抖 + 键盘白色遮罩修复 + 时间线防溢出 + 存档时间统一',
+      'App icon refresh, splash judder fix, keyboard white-mask fix, timeline containment, and archive-time picker',
+      ['应用图标焕新：桌面 / 启动器图标改为与开屏画面一致的蓝紫渐变「卡片堆叠」标志（浅色磨砂底 + 三张由浅到深的层叠卡片），点开应用前后看到的是同一个标志。',
+       '开屏彻底去抖：开屏只做淡入、不再上下位移；并且要等到安全区（状态栏高度）真正注入、顶栏高度落定后才揭开遮罩，把首屏的高度沉降全部藏在开屏下面，消除偶发的进入应用上下抖动。',
+       '键盘弹出时修复输入区整片白色遮罩：Android 原生层会同步调整 WebView 与父容器高度、禁用输入法全屏抽取，并在 IME 动画帧里强制重绘，HyperOS / 搜狗键盘下搜索框和时间线卡片都能正常显示。',
        '时间线增加移动端硬约束：列表、日期组、轨道、卡片和图片容器都限制在可用宽度内；页面切换回时间线时也会清掉横向滚动漂移，避免新建存档后卡片飞出屏幕。',
        '新建 / 编辑存档的「存档时间」改成应用内统一控件：表单里显示为同款圆角按钮，点开是锚定弹层，可选日期、时间，也可一键填入现在或昨天此时。',
-       '开屏去掉上下位移动画，只保留淡入；揭开遮罩前会再测一次顶栏并等待 safe-area 沉降，减少进入应用时上下抖动。',
        'Windows 发布取消免安装便携版，只保留支持自动更新的安装版，避免用户拿到不会自更新的包。'],
-      ['Keyboard-open spacing is tightened again: when the bottom tab bar is hidden, its height is no longer kept in the content padding, so already-resized Android WebViews do not show a large blank band under focused fields.',
+      ['App icon refresh: the desktop / launcher icon now uses the same blue→violet card-stack mark as the splash screen (a light frosted tile with three stacked cards), so the icon you tap matches the frame you see on open.',
+       'Splash judder fully fixed: the splash only fades (no vertical motion) and now waits until the safe-area insets have actually landed and the top bar has settled before revealing the app, so the first-paint height shift stays hidden under the splash and the open no longer jumps.',
+       'Fix the white mask over the input area when the keyboard opens: Android now resizes the WebView and parent container together, disables IME fullscreen extraction, and forces redraws during IME animation so HyperOS / Sogou keeps rendering the search field and timeline cards.',
        'Timeline containment is hardened on mobile: lists, date groups, rails, cards, and media are clamped to the available width, and route renders clear horizontal scroll drift after saving a new archive.',
        'The Archive time field now uses the app-owned picker style instead of the bare native datetime-local control, with date/time fields plus Now and Yesterday shortcuts.',
-       'The splash no longer translates vertically; it fades in place and re-measures the top bar before revealing the app so safe-area settling is hidden under the splash.',
        'Windows releases now ship only the auto-updating installer; the portable build target has been removed.']],
     ['1.6.2', '2026-06-04', '现实对比控件优化 + 开屏加长去抖动 + 键盘/宽度兜底',
       'Reality Diff controls, longer splash, and keyboard/width hardening',
@@ -4199,15 +4201,36 @@
     if (tb) document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px');
   }
 
+  // Splash-reveal gate. The safe-area insets (status-bar height) are injected by the
+  // native plugin AFTER the first paint; when they land the topbar grows and the whole
+  // page shifts DOWN. If that happens after the splash has faded, the app visibly judders
+  // up/down on open ("开屏上下抖动") — and because the insets land at a different moment
+  // each cold start, it only happens "sometimes". We hold the opaque splash until the
+  // insets have actually settled (or a deadline) so the shift is hidden underneath it.
+  var safeAreaSettled = false;
+  var safeAreaWaiters = [];
+  function markSafeAreaSettled() {
+    if (safeAreaSettled) return;
+    safeAreaSettled = true;
+    var fns = safeAreaWaiters; safeAreaWaiters = [];
+    fns.forEach(function (fn) { try { fn(); } catch (e) {} });
+  }
+  function whenSafeAreaSettled(fn) {
+    if (safeAreaSettled) { fn(); return; }
+    safeAreaWaiters.push(fn);
+  }
+
   function initNative() {
     try {
       var Cap = window.Capacitor;
-      if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+      // Desktop / web: env(safe-area-inset-*) is correct at first paint, nothing lands
+      // async, so the gate can release immediately.
+      if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) { markSafeAreaSettled(); return; }
       // lock the document to the visual viewport and scroll ONLY the content area
       // (CSS `body.native`), so the Android IME can't pan the topbar off-screen.
       document.body.classList.add('native');
       var SA = Cap.Plugins && Cap.Plugins.SafeArea;
-      if (!SA || !SA.enable) return;
+      if (!SA || !SA.enable) { markSafeAreaSettled(); return; }
       var dark = themeIsDark();
       SA.enable({ config: {
         customColorsForSystemBars: true,
@@ -4215,10 +4238,12 @@
         navigationBarColor: '#00000000', navigationBarContent: dark ? 'light' : 'dark'
       } }).then(function () {
         // the plugin injects --safe-area-inset-* asynchronously; re-measure the topbar the
-        // moment they land so the content doesn't visibly jump as the insets settle.
+        // moment they land so the content doesn't visibly jump as the insets settle, then
+        // release the splash gate once those values have flushed to layout.
         syncTopbarHeight(); setTimeout(syncTopbarHeight, 60);
-      }).catch(function () {});
-    } catch (e) {}
+        requestAnimationFrame(function () { requestAnimationFrame(markSafeAreaSettled); });
+      }).catch(function () { markSafeAreaSettled(); });
+    } catch (e) { markSafeAreaSettled(); }
   }
   try {
     if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)')
@@ -4234,11 +4259,10 @@
      resizes-content + visualViewport) relied on the WebView honoring interactive-widget;
      on the user's device it did NOT, so the pan still happened.
 
-     PRIMARY FIX (v1.5.0): Android uses @capacitor/keyboard resizeOnFullScreen:true
-     plus manifest adjustResize. Capacitor's `resize` option is iOS-only, so the Android
-     path must use resizeOnFullScreen; it resizes the WebView child in fullscreen/
-     edge-to-edge cases where plain adjustResize can be ignored. We removed
-     interactive-widget=resizes-content so the browser does not also shrink the layout.
+     PRIMARY FIX: Android uses manifest adjustResize and a native LifeArchiveWebView
+     input connection that disables IME extract/fullscreen panels. The native layer also
+     injects safe-area CSS vars from real WindowInsets, so the topbar clears HyperOS'
+     status bar even when CSS env() reports 0.
 
      BACKUP: visualViewport remains the first source of truth. If it visibly shrank, we
      trust it. If it did NOT shrink but Android native keyboard events report a height,
@@ -4271,26 +4295,39 @@
     keyboardInsetMode = keyboardInsetPx > 0 ? (mode || 'visual') : 'none';
     document.documentElement.style.setProperty('--keyboard-inset', keyboardInsetPx + 'px');
   }
-  var kbEnsureTimer = null;
-  function scheduleEnsureFieldVisible(ms) {
-    clearTimeout(kbEnsureTimer);
-    kbEnsureTimer = setTimeout(ensureFieldVisible, ms || 0);
+  function shouldGuardBottomNavForKeyboard() {
+    return document.body.classList.contains('native') ||
+      (window.matchMedia && window.matchMedia('(max-width:720px)').matches);
   }
-  // Poke the WebView to re-rasterize the scroll area: some Android WebViews leave the region
-  // vacated by the IME animation unpainted (a blank/white band under the focused field). An
-  // imperceptible 1px scroll round-trip forces a repaint without disturbing the layout.
-  function nudgeScrollerRepaint() {
-    var v = document.getElementById('view');
-    if (!v) return;
-    var s = v.scrollTop;
-    v.scrollTop = s + 1; v.scrollTop = s;
+  function primeKeyboardOpenUi() {
+    if (!shouldGuardBottomNavForKeyboard()) return;
+    document.body.classList.add('kb-preopen');
+  }
+  function clearKeyboardPreopenIfIdle() {
+    if (document.body.classList.contains('kb-open')) return;
+    if (isTextField(document.activeElement)) return;
+    document.body.classList.remove('kb-preopen');
+    clearEnsureFieldVisibleTimers();
+  }
+  function isTopTimelineSearchField(n) {
+    return !!(n && n.classList && n.classList.contains('tl-search-input'));
+  }
+  var kbEnsureTimers = [];
+  function clearEnsureFieldVisibleTimers() {
+    kbEnsureTimers.forEach(clearTimeout);
+    kbEnsureTimers = [];
+  }
+  function scheduleEnsureFieldVisible(ms) {
+    clearEnsureFieldVisibleTimers();
+    if (isTopTimelineSearchField(document.activeElement)) return;
+    kbEnsureTimers.push(setTimeout(ensureFieldVisible, ms || 0));
   }
   function scheduleEnsureFieldVisibleBurst() {
-    scheduleEnsureFieldVisible(0);
-    setTimeout(ensureFieldVisible, 90);
-    setTimeout(ensureFieldVisible, 240);
-    setTimeout(ensureFieldVisible, 420);
-    setTimeout(function () { ensureFieldVisible(); nudgeScrollerRepaint(); }, 700); // late tick for slow IME + repaint
+    clearEnsureFieldVisibleTimers();
+    if (isTopTimelineSearchField(document.activeElement)) return;
+    [0, 90, 240, 420, 700].forEach(function (ms) {
+      kbEnsureTimers.push(setTimeout(ensureFieldVisible, ms));
+    });
   }
   function fieldScrollHost(node) {
     if (!node || !node.closest) return null;
@@ -4345,8 +4382,11 @@
     var useNativeFallback = !viewportShrank && overlap < 40 && nativeKeyboardPx > 80;
     setKeyboardInset(useNativeFallback ? nativeKeyboardPx : overlap,
       useNativeFallback ? 'native-fallback' : 'visual');
-    document.body.classList.toggle('kb-open', overlap > 80 || nativeKeyboardPx > 80);
-    if (!document.body.classList.contains('kb-open')) {
+    var isOpen = overlap > 80 || nativeKeyboardPx > 80;
+    document.body.classList.toggle('kb-open', isOpen);
+    if (isOpen) document.body.classList.remove('kb-preopen');
+    else clearKeyboardPreopenIfIdle();
+    if (!isOpen) {
       kbBaselineHeight = window.innerHeight || kbBaselineHeight;
     }
     scheduleEnsureFieldVisibleBurst();
@@ -4363,9 +4403,13 @@
     window.addEventListener('resize', syncKeyboardState);
     document.addEventListener('focusin', function (e) {
       if (isTextField(e.target)) {
+        primeKeyboardOpenUi();
         resetHorizontalDrift();
         scheduleEnsureFieldVisibleBurst();
       }
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(clearKeyboardPreopenIfIdle, 80);
     });
     try {
       var Cap = window.Capacitor;
@@ -4376,6 +4420,7 @@
       KB.addListener('keyboardWillShow', function (info) {
         nativeKeyboardPx = nativeKeyboardHeight(info);
         document.body.classList.add('kb-open');
+        document.body.classList.remove('kb-preopen');
         scheduleEnsureFieldVisibleBurst();
       });
       KB.addListener('keyboardDidShow', function (info) {
@@ -4384,12 +4429,12 @@
       });
       KB.addListener('keyboardWillHide', function () {
         nativeKeyboardPx = 0;
-        document.body.classList.remove('kb-open');
       });
       KB.addListener('keyboardDidHide', function () {
         nativeKeyboardPx = 0;
         setKeyboardInset(0);
         document.body.classList.remove('kb-open');
+        document.body.classList.remove('kb-preopen');
         setTimeout(function () { kbBaselineHeight = window.innerHeight || kbBaselineHeight; }, 50);
       });
     } catch (e) {}
@@ -4427,13 +4472,18 @@
   function hideSplash(bootStartedAt) {
     var splash = $('#splash-screen');
     if (!splash) return;
-    var elapsed = Date.now() - (bootStartedAt || Date.now());
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    // static brand frame: hold it a beat, then fade. Keeping it up ~1.45s also hides the
-    // first-paint settle (async safe-area insets + topbar re-measure) so the app doesn't
-    // visibly jump as it appears. Floor at 700ms so a fast boot still shows the frame.
-    var wait = reduce ? 90 : Math.max(700, 1450 - elapsed);
-    setTimeout(function () {
+    var t0 = bootStartedAt || Date.now();
+    // Show the brand frame for at least MIN_SHOW, then reveal once the safe-area insets
+    // have settled (so the topbar/content shift happens UNDER the opaque splash, killing
+    // the open-time judder). MAX_WAIT is a hard cap so a device that never reports an
+    // inset still proceeds.
+    var MIN_SHOW = reduce ? 80 : 850;
+    var MAX_WAIT = reduce ? 600 : 2200;
+    var fired = false;
+    function reveal() {
+      if (fired) return;
+      fired = true;
       syncTopbarHeight();
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
@@ -4441,7 +4491,10 @@
           setTimeout(function () { if (splash && splash.parentNode) splash.parentNode.removeChild(splash); }, reduce ? 160 : 520);
         });
       });
-    }, wait);
+    }
+    var sinceBoot = Date.now() - t0;
+    setTimeout(reveal, Math.max(0, MAX_WAIT - sinceBoot));
+    setTimeout(function () { whenSafeAreaSettled(reveal); }, Math.max(0, MIN_SHOW - sinceBoot));
   }
 
   /* ---------------- boot ---------------- */

@@ -1,8 +1,12 @@
 /* Patch the Capacitor-generated Android project in CI (android/ is regenerated
    each build, so these tweaks must be re-applied every time):
    1. Sync versionName/versionCode from package.json (Capacitor hardcodes 1.0 / 1).
-   2. Keep the manifest on adjustResize; capacitor.config.ts enables Keyboard
-      resizeOnFullScreen, and the web layer has a bounded fallback. */
+   2. Keep the manifest on adjustResize; the native layer injects safe-area CSS
+      vars but lets Android/WebView own the IME resize.
+   3. Install LifeArchiveWebView to disable IME extract/fullscreen panels that can
+      cover app content with a blank white layer above the keyboard.
+   4. Keep the WebView and its parent container in the same resized frame, then
+      explicitly invalidate the native view tree while the IME is animating. */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 // --- 1) version ---
@@ -43,9 +47,141 @@ console.log(`Android appId "${appId}", versionName "${version}", versionCode ${c
 
 // --- Java package + Android string resources ---
 const mainActivityPath = `android/app/src/main/java/${appIdPath}/MainActivity.java`;
+const lifeArchiveWebViewPath = `android/app/src/main/java/${appIdPath}/LifeArchiveWebView.java`;
+const bridgeLayoutPath = 'android/app/src/main/res/layout/capacitor_bridge_layout_main.xml';
 mkdirSync(`android/app/src/main/java/${appIdPath}`, { recursive: true });
+mkdirSync('android/app/src/main/res/layout', { recursive: true });
 writeFileSync(mainActivityPath,
-  `package ${appId};\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n`);
+  `package ${appId};\n\n` +
+  `import android.view.View;\n` +
+  `import android.view.ViewGroup;\n` +
+  `import android.view.ViewParent;\n` +
+  `import android.webkit.WebView;\n` +
+  `import androidx.core.graphics.Insets;\n` +
+  `import androidx.core.view.ViewCompat;\n` +
+  `import androidx.core.view.WindowInsetsCompat;\n` +
+  `import com.getcapacitor.BridgeActivity;\n\n` +
+  `public class MainActivity extends BridgeActivity {\n` +
+  `    @Override\n` +
+  `    protected void load() {\n` +
+  `        super.load();\n` +
+  `        installImeInsetBridge();\n` +
+  `    }\n\n` +
+  `    private void installImeInsetBridge() {\n` +
+  `        WebView webView = getBridge() != null ? getBridge().getWebView() : null;\n` +
+  `        if (webView == null) return;\n\n` +
+  `        disableAncestorClipping(webView);\n` +
+  `        webView.setWillNotDraw(false);\n\n` +
+  `        ViewCompat.setOnApplyWindowInsetsListener(webView, (View v, WindowInsetsCompat insets) -> {\n` +
+  `            applyImeInsets(webView, insets);\n` +
+  `            return insets;\n` +
+  `        });\n` +
+  `        webView.post(() -> {\n` +
+  `            WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(webView);\n` +
+  `            if (insets != null) applyImeInsets(webView, insets);\n` +
+  `            ViewCompat.requestApplyInsets(webView);\n` +
+  `        });\n` +
+  `    }\n\n` +
+  `    private void applyImeInsets(WebView webView, WindowInsetsCompat insets) {\n` +
+  `        boolean imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime());\n` +
+  `        Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());\n` +
+  `        int targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;\n\n` +
+  `        if (imeVisible && ime.bottom > 0) {\n` +
+  `            int screenHeight = getResources().getDisplayMetrics().heightPixels;\n` +
+  `            int candidate = screenHeight - ime.bottom;\n` +
+  `            int minUsefulHeight = Math.round(280 * getResources().getDisplayMetrics().density);\n` +
+  `            if (candidate > minUsefulHeight) targetHeight = candidate;\n` +
+  `        }\n\n` +
+  `        applyCssSafeAreaVars(webView, insets, imeVisible);\n\n` +
+  `        ViewParent parent = webView.getParent();\n` +
+  `        if (parent instanceof View) applyLayoutHeight((View) parent, targetHeight);\n` +
+  `        applyLayoutHeight(webView, targetHeight);\n` +
+  `        forceWebViewRedraw(webView);\n` +
+  `    }\n` +
+  `\n` +
+  `    private void applyLayoutHeight(View view, int targetHeight) {\n` +
+  `        ViewGroup.LayoutParams lp = view.getLayoutParams();\n` +
+  `        if (lp != null && lp.height != targetHeight) {\n` +
+  `            lp.height = targetHeight;\n` +
+  `            view.setLayoutParams(lp);\n` +
+  `        }\n` +
+  `        view.requestLayout();\n` +
+  `    }\n\n` +
+  `    private void forceWebViewRedraw(WebView webView) {\n` +
+  `        invalidateTree(webView);\n` +
+  `        webView.post(() -> invalidateTree(webView));\n` +
+  `        webView.postDelayed(() -> invalidateTree(webView), 80);\n` +
+  `        webView.postDelayed(() -> invalidateTree(webView), 180);\n` +
+  `        webView.postDelayed(() -> invalidateTree(webView), 360);\n` +
+  `    }\n\n` +
+  `    private void invalidateTree(View view) {\n` +
+  `        view.invalidate();\n` +
+  `        view.postInvalidateOnAnimation();\n` +
+  `        ViewParent parent = view.getParent();\n` +
+  `        if (parent instanceof View) {\n` +
+  `            View parentView = (View) parent;\n` +
+  `            parentView.invalidate();\n` +
+  `            parentView.postInvalidateOnAnimation();\n` +
+  `        }\n` +
+  `    }\n\n` +
+  `    private void disableAncestorClipping(View view) {\n` +
+  `        ViewParent parent = view.getParent();\n` +
+  `        while (parent instanceof ViewGroup) {\n` +
+  `            ViewGroup group = (ViewGroup) parent;\n` +
+  `            group.setClipChildren(false);\n` +
+  `            group.setClipToPadding(false);\n` +
+  `            parent = group.getParent();\n` +
+  `        }\n` +
+  `    }\n\n` +
+  `    private void applyCssSafeAreaVars(WebView webView, WindowInsetsCompat insets, boolean imeVisible) {\n` +
+  `        Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());\n` +
+  `        int top = toCssPx(bars.top);\n` +
+  `        int bottom = imeVisible ? 0 : toCssPx(bars.bottom);\n` +
+  `        String js = \"(() => { const s = document.documentElement.style;\" +\n` +
+  `            \"s.setProperty('--safe-area-inset-top','\" + top + \"px');\" +\n` +
+  `            \"s.setProperty('--safe-area-inset-bottom','\" + bottom + \"px');\" +\n` +
+  `            \"window.dispatchEvent(new Event('resize')); })();\";\n` +
+  `        webView.evaluateJavascript(js, null);\n` +
+  `    }\n` +
+  `\n` +
+  `    private int toCssPx(int px) {\n` +
+  `        float density = getResources().getDisplayMetrics().density;\n` +
+  `        if (density <= 0) return px;\n` +
+  `        return Math.round(px / density);\n` +
+  `    }\n` +
+  `}\n`);
+writeFileSync(lifeArchiveWebViewPath,
+  `package ${appId};\n\n` +
+  `import android.content.Context;\n` +
+  `import android.util.AttributeSet;\n` +
+  `import android.view.inputmethod.EditorInfo;\n` +
+  `import android.view.inputmethod.InputConnection;\n` +
+  `import com.getcapacitor.CapacitorWebView;\n\n` +
+  `public class LifeArchiveWebView extends CapacitorWebView {\n` +
+  `    public LifeArchiveWebView(Context context, AttributeSet attrs) {\n` +
+  `        super(context, attrs);\n` +
+  `    }\n\n` +
+  `    @Override\n` +
+  `    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {\n` +
+  `        InputConnection connection = super.onCreateInputConnection(outAttrs);\n` +
+  `        if (outAttrs != null) {\n` +
+  `            outAttrs.imeOptions |= EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;\n` +
+  `        }\n` +
+  `        return connection;\n` +
+  `    }\n` +
+  `}\n`);
+writeFileSync(bridgeLayoutPath,
+  `<?xml version="1.0" encoding="utf-8"?>\n` +
+  `<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"\n` +
+  `    xmlns:tools="http://schemas.android.com/tools"\n` +
+  `    android:layout_width="match_parent"\n` +
+  `    android:layout_height="match_parent"\n` +
+  `    tools:context="${appId}.MainActivity">\n\n` +
+  `    <${appId}.LifeArchiveWebView\n` +
+  `        android:id="@+id/webview"\n` +
+  `        android:layout_width="fill_parent"\n` +
+  `        android:layout_height="fill_parent" />\n\n` +
+  `</androidx.coordinatorlayout.widget.CoordinatorLayout>\n`);
 if (existsSync('android/app/src/main/java/com/realitygit')) {
   rmSync('android/app/src/main/java/com/realitygit', { recursive: true, force: true });
 }
@@ -56,6 +192,7 @@ strings = strings.replace(/<string name="package_name">[^<]*<\/string>/, `<strin
                  .replace(/<string name="custom_url_scheme">[^<]*<\/string>/, `<string name="custom_url_scheme">${appId}</string>`);
 writeFileSync(stringsPath, strings);
 console.log(`Android Java package + string resources -> "${appId}"`);
+console.log('Android WebView -> LifeArchiveWebView layout + IME no-extract flags');
 
 // --- Android manifest: camera permission + stable IME viewport ---
 const manifestPath = 'android/app/src/main/AndroidManifest.xml';
@@ -70,7 +207,7 @@ if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustResize"');
 }
 writeFileSync(manifestPath, m);
-console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize" (pairs with Keyboard.resizeOnFullScreen)');
+console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize" (Android/WebView owns IME resize)');
 
 // Status-bar overlap is handled at runtime by @capacitor-community/safe-area
 // (reads real window insets, injects --safe-area-inset-* CSS vars) — see initNative().

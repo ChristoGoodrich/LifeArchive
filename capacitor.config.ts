@@ -10,11 +10,14 @@ const config: CapacitorConfig = {
   // CapacitorHttp.request() explicitly (see apiPost() in app.js).
   plugins: {
     CapacitorHttp: { enabled: false },
-    // Android reads resizeOnFullScreen, not resize. With edge-to-edge/safe-area system
-    // bars, adjustResize can be ignored unless this workaround resizes the WebView child.
-    // Keep resize:'native' for iOS, but the Android fix is resizeOnFullScreen + manifest
-    // adjustResize + the bounded visualViewport/native-height fallback in initKeyboard().
-    Keyboard: { resize: 'native' as any, resizeOnFullScreen: true }
+    // @capacitor-community/safe-area owns the edge-to-edge inset math. Let it
+    // pass the real insets through to CSS instead of Capacitor's SystemBars shim
+    // applying a second handling layer.
+    SystemBars: { insetsHandling: 'disable' as any },
+    // Android/WebView owns the IME resize through manifest adjustResize. The web
+    // layer only reconciles viewport/native keyboard events for focused-field
+    // visibility and bottom padding.
+    Keyboard: { resize: 'native' as any }
   }
 };
 

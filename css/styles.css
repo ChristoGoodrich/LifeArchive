@@ -90,7 +90,8 @@ body.native{height:100dvh;overflow:hidden;display:flex;flex-direction:column;
    syncTopbarHeight) keeps content clear of the bar; 66px is a safe fallback. */
 body.native .topbar{position:absolute;top:0;left:0;right:0;flex:0 0 auto}
 body.native .nav{position:static;flex:0 0 auto}
-body.native .view{flex:1 1 auto;min-height:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+body.native .view{flex:1 1 auto;width:100%;min-width:0;max-width:min(760px,100vw);min-height:0;
+  overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding-top:calc(var(--topbar-h, var(--native-topbar-h, 66px)) + 2px);
   /* when the browser scrolls a focused field into view, keep it BELOW the absolute topbar
      (otherwise a top field like the timeline search tucks behind the bar — only the chips
@@ -1005,7 +1006,7 @@ textarea.field{resize:vertical}
     box-shadow:0 -6px 24px rgba(0,0,0,.10);
     gap:0;justify-content:space-around;align-items:flex-start;overflow:visible;z-index:40;
     padding:8px 6px;padding-bottom:calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
-    transition:transform .24s cubic-bezier(.22,.61,.36,1);
+    transition:transform .24s cubic-bezier(.22,.61,.36,1),opacity .12s ease,visibility .12s ease;
   }
   body.native .nav{position:fixed}
   .nav-group{display:contents}
@@ -1013,8 +1014,10 @@ textarea.field{resize:vertical}
   .nav-btn[data-route="diff"]{order:2}
   .nav-btn[data-route="rollback"]{order:4}
   .nav-btn[data-route="branch"]{order:5}
-  /* hide the bottom bar while typing so it never floats over the keyboard */
-  body.kb-open .nav{transform:translateY(120%)}
+  /* Hide the bottom bar before Android resizes the WebView for the IME. If we wait
+     for the final kb-open state, the fixed bar gets one frame at the keyboard top. */
+  body.kb-preopen .nav,
+  body.kb-open .nav{transform:translateY(130%);opacity:0;visibility:hidden;pointer-events:none;transition:none}
   /* While the keyboard is up the bottom edge is the IME, not the home bar — drop the
      bottom safe-area term from the scroller's padding. On some Android builds the safe-area
      plugin folds the IME inset INTO --safe-area-inset-bottom, ballooning .view padding-bottom
