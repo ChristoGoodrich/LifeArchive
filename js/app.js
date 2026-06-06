@@ -118,6 +118,19 @@
       time_time_label: '时间',
       time_now: '现在',
       time_done: '完成',
+      quick_capture: '快速记录',
+      streak_none: '✅ 记录今天，开启连续打卡',
+      streak_keep: '🔥 连续 {n} 天 · 记录今天保持连续',
+      streak_done: '🔥 连续 {n} 天 · 今天已记录 ✅',
+      streak_done0: '✅ 今天已记录',
+      nudge_label: '每日记录提醒',
+      nudge_on: '已开启每日提醒',
+      nudge_off: '已关闭每日提醒',
+      nudge_hint: '当天还没有记录时，晚上 20:30 轻轻提醒一次。仅手机端推送，桌面端不发送。',
+      notif_nudge_title: '记录一下今天吧',
+      notif_nudge_body: '今天还没有存档 · 花 10 秒，给现在拍一张 →',
+      on: '开',
+      off: '关',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -231,6 +244,19 @@
       time_time_label: 'Time',
       time_now: 'Now',
       time_done: 'Done',
+      quick_capture: 'Quick capture',
+      streak_none: '✅ Log today, start a streak',
+      streak_keep: '🔥 {n}-day streak · log today to keep it',
+      streak_done: '🔥 {n}-day streak · logged today ✅',
+      streak_done0: '✅ Logged today',
+      nudge_label: 'Daily nudge',
+      nudge_on: 'Daily nudge on',
+      nudge_off: 'Daily nudge off',
+      nudge_hint: 'A gentle 8:30pm nudge on days you have not logged. Mobile push only.',
+      notif_nudge_title: 'Capture today',
+      notif_nudge_body: 'Nothing archived today · 10 seconds, snap one now →',
+      on: 'On',
+      off: 'Off',
       saved_value_prefix: 'Saved'
     }
   };
@@ -819,6 +845,28 @@
     }
     return Promise.all(jobs);
   }
+  function captureNudgeEnabled() { return Store.meta().captureNudge === true; }
+  function reconcileCaptureNudge() {
+    var base = startOfToday();
+    var cancels = [];
+    for (var i = 0; i < 3; i++) {
+      cancels.push(Notify.cancelFor('nudge:' + dayKey(base.getTime() + i * 86400000), 'nudge'));
+    }
+    return Promise.all(cancels).then(function () {
+      if (!Notify.available() || !captureNudgeEnabled()) return [];
+      var jobs = [];
+      for (var j = 0; j < 3; j++) {
+        var day = new Date(base.getTime() + j * 86400000);
+        if (j === 0 && hasCommitToday()) continue;
+        var when = new Date(day);
+        when.setHours(20, 30, 0, 0);
+        if (when.getTime() <= Date.now()) continue;
+        jobs.push(Notify.scheduleAt('nudge:' + dayKey(day.getTime()), 'nudge', when.getTime(),
+          t('notif_nudge_title'), t('notif_nudge_body'), { kind: 'nudge', route: 'commit', quick: true }));
+      }
+      return Promise.all(jobs);
+    });
+  }
   function branchDueMs(b) {
     if (!b || !b.dueAt) return 0;
     var ts = new Date(b.dueAt + 'T09:00:00').getTime();
@@ -957,6 +1005,11 @@
     if (!ex || !ex.route) return;
     if (!storeReady) { pendingDeepLink = ex; return; }
     if (ex.route === 'review') { routeOrRefresh('review'); return; }
+    if (ex.route === 'commit') {
+      if (ex.quick) pendingQuick = true;
+      routeOrRefresh('commit');
+      return;
+    }
     if (ex.route === 'diff') {
       var c = Store.getCommit(ex.commitId);
       if (!c) { routeOrRefresh('timeline'); return; }
@@ -1078,11 +1131,27 @@
       if (pending > 0) kids.push(el('span', { class: 'nav-badge', text: pending > 9 ? '9+' : String(pending) }));
     }
     // the label is always in the DOM; CSS hides it for the mobile "+" FAB
-    return el('button', {
+    var btn = el('button', {
       class: 'nav-btn' + (isCreate ? ' nav-btn-create' : '') + (current === route ? ' active' : ''),
       'data-route': route, 'aria-label': label, title: label,
       onclick: function () { go(route); }
     }, kids);
+    if (isCreate) {
+      var lpTimer = null;
+      function fireQuick() {
+        if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+        pendingQuick = true;
+        routeOrRefresh('commit');
+      }
+      btn.addEventListener('touchstart', function () { lpTimer = setTimeout(fireQuick, 500); }, { passive: true });
+      ['touchend', 'touchmove', 'touchcancel'].forEach(function (ev) {
+        btn.addEventListener(ev, function () {
+          if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+        });
+      });
+      btn.addEventListener('contextmenu', function (e) { e.preventDefault(); fireQuick(); });
+    }
+    return btn;
   }
 
   function renderNav() {
@@ -1203,6 +1272,19 @@
       el('button', { type: 'button', class: 'btn ghost tiny review-entry',
         text: t('review_open'), onclick: function () { go('review'); } })
     ]));
+    (function () {
+      var streak = computeStreak();
+      var done = hasCommitToday();
+      var label = done
+        ? (streak > 0 ? t('streak_done').replace('{n}', streak) : t('streak_done0'))
+        : (streak > 0 ? t('streak_keep').replace('{n}', streak) : t('streak_none'));
+      v.appendChild(el('button', {
+        type: 'button',
+        class: 'streak-chip' + (done ? ' is-done' : ''),
+        text: label,
+        onclick: function () { pendingQuick = true; routeOrRefresh('commit'); }
+      }));
+    })();
     var resurface = pickResurface(startOfToday());
     if (resurface) {
       var L = lang === 'zh';
@@ -1328,6 +1410,27 @@
   function dayKey(ts) {
     var d = new Date(ts);
     return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function commitDayCounts() {
+    var m = {};
+    Store.commits().filter(notPlanned).forEach(function (c) {
+      var k = dayKey(c.createdAt);
+      m[k] = (m[k] || 0) + 1;
+    });
+    return m;
+  }
+  function hasCommitToday() { return !!commitDayCounts()[dayKey(Date.now())]; }
+  function computeStreak() {
+    var counts = commitDayCounts();
+    var n = 0;
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    if (!counts[dayKey(d.getTime())]) d.setDate(d.getDate() - 1);
+    while (counts[dayKey(d.getTime())]) {
+      n++;
+      d.setDate(d.getDate() - 1);
+    }
+    return n;
   }
   function dayLabel(ts) {
     var d = new Date(ts), now = new Date();
@@ -1706,6 +1809,7 @@
   var draftPhotoTakenAt = null; // shooting timestamp from image EXIF/native metadata
   var draftFiles = [];
   var pendingEdit = null;
+  var pendingQuick = false;
   var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
   function renderCommitForm(v) {
     draftPhoto = null;
@@ -1714,16 +1818,20 @@
     draftFiles = [];
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
+    var quick = !editing && pendingQuick;
+    pendingQuick = false;
     var template = (!editing && pendingTemplate) ? pendingTemplate : null;
     pendingTemplate = null;
     var src = editing || template; // where prefilled values come from (edit OR replicate)
     draftPhotoTakenAt = src && src.photoTakenAt ? Number(src.photoTakenAt) || null : null;
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
-      text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : t('nav_commit') })]));
+      text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : (quick ? t('quick_capture') : t('nav_commit')) })]));
     if (template) v.appendChild(el('div', { class: 'form-template-hint',
       text: '↩︎ ' + (lang === 'zh' ? '已照着上一条带入内容，可改后「存档」或「预存档」。' : 'Copied from a previous entry — edit, then Archive or Pre-save.') }));
 
-    var selectedScene = (src && src.scene) || Store.SCENES[0].id;
+    var lastScene = quick && Store.meta().lastScene;
+    if (lastScene && !Store.SCENES.some(function (s) { return s.id === lastScene; })) lastScene = null;
+    var selectedScene = (src && src.scene) || lastScene || Store.SCENES[0].id;
     var scenePicker = el('div', { class: 'scene-picker' });
     var selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
     function buildSceneGrid(group) {
@@ -2232,6 +2340,8 @@
           toast(savedMsg);
         }
         autoSync(true);
+        Store.setMeta({ lastScene: ok.scene });
+        reconcileCaptureNudge();
       } // auto-sync real archives to cloud
       go('timeline');
     }
@@ -2265,6 +2375,13 @@
     ]);
     v.appendChild(form);
     syncMealUI(); // set initial food-aware wording (esp. when editing a meal commit)
+    if (quick) {
+      var Cap = window.Capacitor;
+      var nativeCam = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform() &&
+        Cap.Plugins && Cap.Plugins.Camera);
+      if (nativeCam) setTimeout(function () { nativeCamera('CAMERA'); }, 300);
+      else setTimeout(function () { if (msgInput) msgInput.focus(); }, 60);
+    }
   }
 
   function labeled(label, control) {
@@ -4136,6 +4253,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.9.0', '2026-06-06', '轻松记录：极速拍存 + 连续打卡 + 每日记录提醒',
+      'Effortless capture: quick snap-save, streaks, and a daily nudge',
+      ['时间线顶部新增连续打卡 chip：显示连续天数和今天是否已记录，点击即可进入快速记录。已有记录时变为绿色完成态，继续允许追加当天的新存档。',
+       '快速记录复用现有新建存档表单：手机端进入后自动打开相机，桌面端自动聚焦一句话输入；保存仍由用户确认，不新增自动保存风险。',
+       '快速记录会记住上次正式存档使用的场景，下一次默认带入，减少重复选择场景的摩擦。',
+       '底部新建存档按钮新增长按 / 右键快速记录入口；普通点击仍打开完整新建存档表单。',
+       '设置页新增「每日记录提醒」开关，默认关闭；开启后仅手机端在当天尚未记录时于 20:30 轻提醒，保存正式存档后会自动重排并取消今天不需要的提醒。',
+       'Android 构建脚本新增长按启动器图标的 Quick capture 快捷方式，冷启动或热启动都会进入快速记录。'],
+      ['Add a streak chip at the top of Timeline showing the current streak and whether today has been logged; tapping it opens quick capture, while logged days show a green done state.',
+       'Quick capture reuses the existing new-archive form: native mobile opens the camera automatically, desktop focuses the one-line message input, and the user still confirms save.',
+       'Quick capture remembers the last scene from a real archive and uses it as the next default, cutting repeat scene-picking friction.',
+       'The bottom New commit button now supports long-press / right-click quick capture while preserving the normal click path.',
+       'Settings adds an opt-in Daily nudge; when enabled, mobile schedules a gentle 20:30 reminder only on days without a real archive and reconciles it after saves.',
+       'Android build patching now adds a launcher Quick capture shortcut that routes cold and warm starts into the same quick form.']],
     ['1.8.0', '2026-06-05', '重温·那年今日：回顾页 + 图片时间 + HyperOS 时间面板',
       'On This Day memories, photo time, and HyperOS archive-time picker',
       ['时间线新增「回顾」入口和「那年今日 / 往月今日 / 随机重温」横幅：进 App 就能遇见过去的生活存档，点开进入回顾页继续翻看。',
@@ -4508,12 +4639,7 @@
   // session). null until first opened → defaults to the current month.
   var statsView = null;
   function dayCountMap() {
-    var map = {};
-    Store.commits().filter(notPlanned).forEach(function (c) {
-      var k = dayKey(c.createdAt);
-      map[k] = (map[k] || 0) + 1;
-    });
-    return map;
+    return commitDayCounts();
   }
   function heatLevel(n) {
     if (!n) return 0;
@@ -4549,13 +4675,7 @@
     var total = 0, busiest = 0;
     keys.forEach(function (k) { total += counts[k]; if (counts[k] > busiest) busiest = counts[k]; });
     var activeDays = keys.length;
-    // current streak: consecutive days (ending today or yesterday) with >=1 archive
-    var streak = 0;
-    (function () {
-      var d = new Date(); d.setHours(0, 0, 0, 0);
-      if (!counts[dayKey(d.getTime())]) d.setDate(d.getDate() - 1); // allow "yesterday" to keep a streak alive
-      while (counts[dayKey(d.getTime())]) { streak++; d.setDate(d.getDate() - 1); }
-    })();
+    var streak = computeStreak();
     function tile(label, value) {
       return el('div', { class: 'stat-tile' }, [
         el('span', { class: 'stat-tile-val', text: String(value) }),
@@ -4800,6 +4920,7 @@
   }
 
   function renderSettings(v) {
+    var L = lang === 'zh';
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: lang === 'zh' ? '设置' : 'Settings' })]));
 
     var updBtn = el('button', { class: 'btn', text: lang === 'zh' ? '检查更新' : 'Check for updates' });
@@ -4830,6 +4951,18 @@
         : 'Free: get a key at bigmodel.cn. Stored on this device only.' }),
       keyInput,
       el('div', { class: 'set-actions' }, [saveKey, clrKey])
+    ]);
+
+    var nudgeCard = settingsCard(t('nudge_label'), [
+      el('div', { class: 'set-row' }, [
+        el('span', { class: 'set-label', text: t('nudge_label') }),
+        segmented([['on', t('on')], ['off', t('off')]], captureNudgeEnabled() ? 'on' : 'off', function (val) {
+          Store.setMeta({ captureNudge: val === 'on' });
+          reconcileCaptureNudge();
+          toast(val === 'on' ? t('nudge_on') : t('nudge_off'));
+        })
+      ]),
+      el('p', { class: 'set-hint', text: t('nudge_hint') })
     ]);
 
     var account = accountCard();
@@ -4869,14 +5002,13 @@
 
     // grouped + reordered: account on top, about at the bottom (conventional settings order),
     // with section headers clustering related cards.
-    var L = lang === 'zh';
     function setGroup(zh, en, cards) {
       return el('section', { class: 'set-group' },
         [el('h2', { class: 'set-group-title', text: L ? zh : en })].concat(cards));
     }
     v.appendChild(el('div', { class: 'settings-wrap' }, [
       setGroup('账号与云同步', 'Account & sync', [account]),
-      setGroup('通用', 'General', [appearance, ai]),
+      setGroup('通用', 'General', [appearance, nudgeCard, ai]),
       setGroup('数据', 'Data', [data]),
       setGroup('关于', 'About', [about])
     ]));
@@ -5183,6 +5315,24 @@
     });
   }
 
+  function initQuickUrlIntent() {
+    var Cap = window.Capacitor;
+    if (!Cap || !Cap.isNativePlatform || !Cap.isNativePlatform()) return;
+    var App = Cap.Plugins && Cap.Plugins.App;
+    if (!App) return;
+    function handleUrl(url) {
+      if (!url || String(url).indexOf('//quick') < 0) return;
+      if (storeReady) handleNotifyIntent({ route: 'commit', quick: true });
+      else pendingDeepLink = { route: 'commit', quick: true };
+    }
+    if (App.getLaunchUrl) {
+      App.getLaunchUrl().then(function (r) { handleUrl(r && r.url); }).catch(function () {});
+    }
+    if (App.addListener) {
+      App.addListener('appUrlOpen', function (e) { handleUrl(e && e.url); });
+    }
+  }
+
   function hideSplash(bootStartedAt) {
     var splash = $('#splash-screen');
     if (!splash) return;
@@ -5223,6 +5373,7 @@
     initNative();
     initKeyboard();
     initBackButton();
+    initQuickUrlIntent();
     var r = location.hash.slice(1);
     if (routes.indexOf(r) >= 0) current = r;
     renderNav();
@@ -5234,6 +5385,7 @@
       render();
       Notify.syncAll();
       scheduleMemoryNotifs();
+      reconcileCaptureNudge();
       if (pendingDeepLink) { handleNotifyIntent(pendingDeepLink); pendingDeepLink = null; }
       hideSplash(bootStartedAt);
       // re-measure as layout + async safe-area insets settle. These all land while the

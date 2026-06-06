@@ -190,9 +190,36 @@ const stringsPath = 'android/app/src/main/res/values/strings.xml';
 let strings = readFileSync(stringsPath, 'utf8');
 strings = strings.replace(/<string name="package_name">[^<]*<\/string>/, `<string name="package_name">${appId}</string>`)
                  .replace(/<string name="custom_url_scheme">[^<]*<\/string>/, `<string name="custom_url_scheme">${appId}</string>`);
+if (!strings.includes('name="shortcut_quick_capture"')) {
+  strings = strings.replace('</resources>',
+    `    <string name="shortcut_quick_capture">Quick capture</string>\n` +
+    `    <string name="shortcut_quick_capture_long">Quick capture in Life Archive</string>\n` +
+    `</resources>`);
+}
 writeFileSync(stringsPath, strings);
 console.log(`Android Java package + string resources -> "${appId}"`);
 console.log('Android WebView -> LifeArchiveWebView layout + IME no-extract flags');
+
+// --- Android launcher shortcut: long-press app icon -> quick capture ---
+const shortcutsPath = 'android/app/src/main/res/xml/shortcuts.xml';
+mkdirSync('android/app/src/main/res/xml', { recursive: true });
+writeFileSync(shortcutsPath,
+  `<?xml version="1.0" encoding="utf-8"?>\n` +
+  `<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">\n` +
+  `    <shortcut\n` +
+  `        android:shortcutId="quick"\n` +
+  `        android:enabled="true"\n` +
+  `        android:icon="@mipmap/ic_launcher"\n` +
+  `        android:shortcutShortLabel="@string/shortcut_quick_capture"\n` +
+  `        android:shortcutLongLabel="@string/shortcut_quick_capture_long">\n` +
+  `        <intent\n` +
+  `            android:action="android.intent.action.VIEW"\n` +
+  `            android:targetPackage="${appId}"\n` +
+  `            android:targetClass="${appId}.MainActivity"\n` +
+  `            android:data="${appId}://quick" />\n` +
+  `    </shortcut>\n` +
+  `</shortcuts>\n`);
+console.log('Android shortcuts -> quick capture launcher shortcut');
 
 // --- Android manifest: camera permission + stable IME viewport ---
 const manifestPath = 'android/app/src/main/AndroidManifest.xml';
@@ -209,6 +236,21 @@ if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustResize"');
 } else {
   m = m.replace(/<activity\b/, '<activity android:windowSoftInputMode="adjustResize"');
+}
+if (!m.includes('android.app.shortcuts')) {
+  m = m.replace(/\n\s*<\/activity>/,
+    `            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />\n` +
+    `        </activity>`);
+}
+if (!m.includes(`android:scheme="${appId}"`)) {
+  m = m.replace(/\n\s*<\/activity>/,
+    `            <intent-filter>\n` +
+    `                <action android:name="android.intent.action.VIEW" />\n` +
+    `                <category android:name="android.intent.category.DEFAULT" />\n` +
+    `                <category android:name="android.intent.category.BROWSABLE" />\n` +
+    `                <data android:scheme="${appId}" android:host="quick" />\n` +
+    `            </intent-filter>\n` +
+    `        </activity>`);
 }
 writeFileSync(manifestPath, m);
 console.log('AndroidManifest -> Activity windowSoftInputMode="adjustResize" (Android/WebView owns IME resize)');
