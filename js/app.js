@@ -144,6 +144,14 @@
       growth_most_stable: '最稳定',
       growth_most_gone: '最常消失',
       growth_most_added: '最常出现',
+      import_restore: '导入 / 恢复备份',
+      backup_done: '已导出备份文件',
+      import_working: '导入中...',
+      import_done: '已导入 · 共 {n} 条存档',
+      import_bad: '文件无法识别，请选择 Life Archive 导出的备份',
+      last_sync: '上次同步',
+      last_sync_never: '从未',
+      backup_nudge: '还没有云同步，先导出一份本地备份更安心',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -283,6 +291,14 @@
       growth_most_stable: 'Most stable',
       growth_most_gone: 'Most gone',
       growth_most_added: 'Most added',
+      import_restore: 'Import / restore',
+      backup_done: 'Backup file exported',
+      import_working: 'Importing...',
+      import_done: 'Imported · {n} archives total',
+      import_bad: 'Unrecognized file - pick a Life Archive backup',
+      last_sync: 'Last synced',
+      last_sync_never: 'Never',
+      backup_nudge: 'No cloud sync yet - export a local backup to be safe',
       saved_value_prefix: 'Saved'
     }
   };
@@ -950,7 +966,10 @@
     return Cloud.pull().then(function (remote) {
       var merged = mergeData(local, remote);
       Store.replaceAll(merged);
-      return Cloud.push(merged).then(function () { return merged; });
+      return Cloud.push(merged).then(function () {
+        Store.setMeta({ lastSyncAt: Date.now() });
+        return merged;
+      });
     });
   }
 
@@ -1310,6 +1329,17 @@
         class: 'streak-chip' + (done ? ' is-done' : ''),
         text: label,
         onclick: function () { pendingQuick = true; routeOrRefresh('commit'); }
+      }));
+    })();
+    (function () {
+      if (Cloud.configured()) return;
+      var last = Store.meta().lastBackupAt || 0;
+      if (Date.now() - last <= 14 * 86400000 || Store.isEmpty()) return;
+      v.appendChild(el('button', {
+        type: 'button',
+        class: 'backup-banner',
+        text: t('backup_nudge'),
+        onclick: function () { go('settings'); }
       }));
     })();
     var resurface = pickResurface(startOfToday());
@@ -4244,10 +4274,128 @@
   /* ---------------- shared bits ---------------- */
   function noticeCard(text) { return el('div', { class: 'notice-card', text: text }); }
 
+  var BACKUP_SCHEMA = 1;
+  function ymd(d) {
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result).split(',')[1] || ''); };
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+  function base64ToBlob(b64, mime) {
+    var bin = atob(b64 || ''), n = bin.length, u8 = new Uint8Array(n);
+    for (var i = 0; i < n; i++) u8[i] = bin.charCodeAt(i);
+    return new Blob([u8], { type: mime || 'application/octet-stream' });
+  }
+  function collectBackupBlobs() {
+    var ids = {};
+    Store.commits().forEach(function (c) {
+      (c.media || []).forEach(function (m) {
+        if (m && m.blobId) ids[m.blobId] = 1;
+      });
+    });
+    var keys = Object.keys(ids);
+    if (!keys.length || !Store.getBlob) return Promise.resolve(null);
+    var out = {};
+    return keys.reduce(function (p, id) {
+      return p.then(function () {
+        return Store.getBlob(id).then(function (b) {
+          return b ? blobToBase64(b) : null;
+        }).then(function (b64) {
+          if (b64 != null) out[id] = b64;
+        });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  }
+  function normalizeBackupData(raw) {
+    var incoming = (raw && raw.data && Array.isArray(raw.data.commits)) ? raw.data : raw;
+    if (!incoming || !Array.isArray(incoming.commits)) return null;
+    return {
+      commits: incoming.commits || [],
+      branches: Array.isArray(incoming.branches) ? incoming.branches : [],
+      tombstones: incoming.tombstones || {},
+      blobs: incoming.blobs || null
+    };
+  }
   function exportData() {
-    var blob = new Blob([Store.exportJSON()], { type: 'application/json' });
-    var a = el('a', { href: URL.createObjectURL(blob), download: 'lifearchive-export.json' });
-    document.body.appendChild(a); a.click(); a.remove();
+    toast(lang === 'zh' ? '正在打包备份...' : 'Packing backup...');
+    collectBackupBlobs().then(function (blobs) {
+      var data = Store.exportRaw();
+      if (blobs) data.blobs = blobs;
+      var envelope = {
+        app: 'life-archive',
+        schema: BACKUP_SCHEMA,
+        version: window.APP_VERSION || '',
+        exportedAt: Date.now(),
+        data: data
+      };
+      var name = 'lifearchive-backup-' + ymd(new Date()) + '.json';
+      var url = URL.createObjectURL(new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' }));
+      var a = el('a', { href: url, download: name });
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 0);
+      Store.setMeta({ lastBackupAt: Date.now() });
+      toast('✓ ' + t('backup_done'));
+    }).catch(function (e) {
+      toast('⚠ ' + (e && e.message || (lang === 'zh' ? '备份失败' : 'Backup failed')));
+    });
+  }
+  function importData(file) {
+    if (!file) return;
+    toast(t('import_working'));
+    var reader = new FileReader();
+    reader.onload = function () {
+      var raw, incoming;
+      try {
+        raw = JSON.parse(reader.result);
+        incoming = normalizeBackupData(raw);
+      } catch (e) {
+        toast('⚠ ' + t('import_bad'));
+        return;
+      }
+      if (!incoming) { toast('⚠ ' + t('import_bad')); return; }
+
+      function applyData() {
+        var restored = Store.isEmpty();
+        var next = restored ? incoming : mergeData(Store.exportRaw(), incoming);
+        Store.replaceAll(next);
+        renderNav();
+        render();
+        autoSync(false);
+        toast('✓ ' + t('import_done').replace('{n}', Store.commits().length));
+        if (typeof Notify !== 'undefined' && Notify.syncAll) Notify.syncAll();
+      }
+
+      var blobs = incoming.blobs;
+      if (blobs && Store.putBlob) {
+        Object.keys(blobs).reduce(function (p, id) {
+          return p.then(function () {
+            var mime = mimeForBlobId(incoming.commits, id) || 'application/octet-stream';
+            return Store.putBlob(id, base64ToBlob(blobs[id], mime));
+          });
+        }, Promise.resolve()).then(applyData).catch(function () { toast('⚠ ' + t('import_bad')); });
+      } else {
+        applyData();
+      }
+    };
+    reader.onerror = function () { toast('⚠ ' + t('import_bad')); };
+    reader.readAsText(file);
+  }
+  function mimeForBlobId(commits, id) {
+    var hit = null;
+    (commits || []).some(function (c) {
+      return (c.media || []).some(function (m) {
+        if (m && m.blobId === id) { hit = m.mime; return true; }
+        return false;
+      });
+    });
+    return hit;
   }
   function clearAll() {
     if (confirm(t('confirm_clear'))) { Store.clearAll(); render(); toast('🧹'); }
@@ -4422,6 +4570,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.11.0', '2026-06-06', '数据可托付：备份恢复 + 同步状态 + 媒体存储地基',
+      'Trust your data: backup restore, sync status, and media-storage foundation',
+      ['设置页新增「备份到文件」和「导入 / 恢复备份」：导出文件带 app、schema、version、exportedAt 信封，导入同时兼容旧裸 JSON。',
+       '导入会复用现有合并逻辑：有本机数据时只合并不覆盖，空库恢复时会完整采用备份内容，避免清空后被本机删除墓碑挡掉。',
+       '云同步成功后会记录本机 lastSyncAt，并在账号卡显示「上次同步」时间，让用户确认数据已经推到云端。',
+       'IndexedDB 升级到 v2，新增独立 blobs 仓和 putBlob/getBlob/deleteBlob API，为之后语音、视频等大媒体落地做准备；旧照片和文件继续保持兼容。',
+       '备份导出会预留 data.blobs 路径，把未来 media[] 引用的 Blob 打包成 base64；当前版本不改 Supabase 表结构，也不迁移已有内联照片。',
+       '未配置云同步且超过 14 天未备份时，时间线会给出轻量本地备份提醒，点按即可进入设置页。'],
+      ['Settings adds Backup to file and Import / restore. Exports now include app, schema, version, and exportedAt metadata while imports still accept old raw JSON.',
+       'Import reuses the merge path when local data exists, but restores directly into an empty archive so a clear-all tombstone cannot block a backup restore.',
+       'Successful cloud sync now records local lastSyncAt and shows the last synced time on the account card.',
+       'IndexedDB moves to v2 with a separate blobs store plus putBlob/getBlob/deleteBlob APIs for future audio and video media; existing inline photos and files remain compatible.',
+       'Backups reserve data.blobs and package future media[] Blob references as base64. This release does not change the Supabase schema or migrate existing inline photos.',
+       'If cloud sync is not configured and no backup has been exported for 14 days, Timeline shows a lightweight local-backup reminder linking to Settings.']],
     ['1.10.0', '2026-06-06', '时光历程：看见同一场景的变化 + 一键时光回顾片',
       'Time-lapse: watch one scene evolve + one-tap montage',
       ['新增「时光历程」子页：选择一个场景后，会把该场景所有真实存档按时间从旧到新铺成横向 filmstrip，一眼看到同一个生活状态怎样变化。',
@@ -5072,6 +5234,11 @@
           el('span', { class: 'set-label', text: L ? '已登录' : 'Signed in' }),
           el('span', { class: 'set-value', text: u.email || u.id })
         ]),
+        el('div', { class: 'set-row' }, [
+          el('span', { class: 'set-label', text: t('last_sync') }),
+          el('span', { class: 'set-value', text: Store.meta().lastSyncAt
+            ? fmtDate(Store.meta().lastSyncAt) : t('last_sync_never') })
+        ]),
         el('p', { class: 'set-hint', text: L
           ? '「立即同步」会把本机存档与云端合并，登录其他设备即可共享。'
           : 'Sync merges this device with the cloud; sign in elsewhere to share.' }),
@@ -5150,8 +5317,16 @@
 
     var account = accountCard();
 
-    var expBtn = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '导出 JSON' : 'Export JSON' });
+    var expBtn = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '备份到文件' : 'Backup to file' });
     expBtn.addEventListener('click', exportData);
+    var impInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none' });
+    impInput.addEventListener('change', function () {
+      var f = impInput.files && impInput.files[0];
+      importData(f);
+      impInput.value = '';
+    });
+    var impBtn = el('button', { class: 'btn ghost tiny', text: t('import_restore') });
+    impBtn.addEventListener('click', function () { impInput.click(); });
     var clrBtn = el('button', { class: 'btn danger-ghost tiny', text: lang === 'zh' ? '清空全部' : 'Clear all' });
     clrBtn.addEventListener('click', clearAll);
     var onIdb = Store.backend() === 'indexeddb';
@@ -5165,7 +5340,8 @@
                  : '当前回退到本地存储（约 5MB 上限），照片较多时可能存不下。')
         : (onIdb ? 'Photos are stored in IndexedDB (hundreds of MB to GBs) — no longer capped at the old ~5MB limit.'
                  : 'Falling back to localStorage (~5MB cap); many photos may not fit.') }),
-      el('div', { class: 'set-actions' }, [expBtn, clrBtn])
+      el('div', { class: 'set-actions' }, [expBtn, impBtn, clrBtn]),
+      impInput
     ]);
 
     var appearance = settingsCard(lang === 'zh' ? '外观与语言' : 'Appearance & language', [

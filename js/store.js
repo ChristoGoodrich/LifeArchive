@@ -15,6 +15,7 @@
   var KEY_META = 'lifearchive.meta.v1';
   var IDB_NAME = 'lifearchive';
   var IDB_STORE = 'kv';
+  var IDB_BLOBS = 'blobs';
 
   /* ---- localStorage (meta + fallback when IndexedDB is unavailable) ---- */
   function lsRead(key, fallback) {
@@ -32,9 +33,11 @@
     return new Promise(function (resolve) {
       try {
         if (!global.indexedDB) return resolve(null);
-        var req = indexedDB.open(IDB_NAME, 1);
+        var req = indexedDB.open(IDB_NAME, 2);
         req.onupgradeneeded = function () {
-          if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+          var db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+          if (!db.objectStoreNames.contains(IDB_BLOBS)) db.createObjectStore(IDB_BLOBS);
         };
         req.onsuccess = function () { resolve(req.result); };
         req.onerror = function () { resolve(null); };
@@ -54,6 +57,35 @@
   function idbSet(key, value) {
     try { idb.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).put(value, key); }
     catch (e) { console.error('store.idbSet failed', e); }
+  }
+  function idbGetBlob(key) {
+    return new Promise(function (resolve) {
+      try {
+        var r = idb.transaction(IDB_BLOBS, 'readonly').objectStore(IDB_BLOBS).get(key);
+        r.onsuccess = function () { resolve(r.result); };
+        r.onerror = function () { resolve(undefined); };
+      } catch (e) { resolve(undefined); }
+    });
+  }
+  function idbPutBlob(key, blob) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = idb.transaction(IDB_BLOBS, 'readwrite');
+        tx.objectStore(IDB_BLOBS).put(blob, key);
+        tx.oncomplete = function () { resolve(true); };
+        tx.onerror = function () { resolve(false); };
+      } catch (e) { resolve(false); }
+    });
+  }
+  function idbDelBlob(key) {
+    return new Promise(function (resolve) {
+      try {
+        var tx = idb.transaction(IDB_BLOBS, 'readwrite');
+        tx.objectStore(IDB_BLOBS).delete(key);
+        tx.oncomplete = function () { resolve(true); };
+        tx.onerror = function () { resolve(true); };
+      } catch (e) { resolve(true); }
+    });
   }
 
   /* ---- in-memory cache (authoritative after init) ---- */
@@ -292,6 +324,10 @@
     },
 
     deleteCommit: function (id) {
+      var c = this.getCommit(id);
+      if (c && c.media && idb) {
+        c.media.forEach(function (m) { if (m && m.blobId) idbDelBlob(m.blobId); });
+      }
       cache.commits = cache.commits.filter(function (c) { return c.id !== id; });
       tombstone(id);
       persist();
@@ -371,6 +407,18 @@
       catch (e) { return 0; }
     },
     backend: function () { return idb ? 'indexeddb' : 'localstorage'; },
+    putBlob: function (id, blob) {
+      if (!idb) return Promise.resolve(false);
+      return idbPutBlob(id, blob);
+    },
+    getBlob: function (id) {
+      if (!idb) return Promise.resolve(null);
+      return idbGetBlob(id).then(function (b) { return b || null; });
+    },
+    deleteBlob: function (id) {
+      if (!idb) return Promise.resolve(true);
+      return idbDelBlob(id);
+    },
 
     /* ---------- Cloud sync helpers (raw data in/out) ---------- */
     exportRaw: function () {

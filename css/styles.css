@@ -1040,6 +1040,11 @@ textarea.field{resize:vertical}
 .streak-chip:hover{box-shadow:0 7px 18px rgba(255,94,126,.24)}
 .streak-chip.is-done:hover{box-shadow:0 7px 18px rgba(16,185,129,.20)}
 .streak-chip:active{transform:scale(.99)}
+.backup-banner{display:block;width:100%;margin:8px 0 4px;padding:11px 14px;border:1px solid color-mix(in srgb,var(--accent) 26%,var(--line));
+  border-radius:14px;background:color-mix(in srgb,var(--accent) 10%,var(--card));color:var(--text);
+  font-weight:700;text-align:left;cursor:pointer;box-shadow:var(--shadow-sm);transition:transform .12s ease,box-shadow .16s ease}
+.backup-banner:hover{box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 18%,transparent)}
+.backup-banner:active{transform:scale(.99)}
 
 /* ---- v1.10 time-lapse: scene history filmstrip + export card ---- */
 .growth-head{align-items:center}
