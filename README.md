@@ -1,8 +1,8 @@
 <h1 align="center">Life Archive · 生活存档</h1>
 
 <p align="center">
-  <b>给现实生活装一个 Git —— 存档、对比、回滚、分支。</b><br>
-  <i>Version control for everyday life — commit, diff, rollback, branch.</i>
+  <b>给现实生活装一个 Git —— 存档、对比、历程、回滚、分支。</b><br>
+  <i>Version control for everyday life — commit, diff, time-lapse, rollback, branch.</i>
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
   &nbsp;<img alt="android" src="https://img.shields.io/badge/Android-APK-3ddc84?style=for-the-badge&logo=android&logoColor=white">
 </p>
 
-<p align="center"><img src="docs/screenshots/1-timeline.png" width="80%"></p>
+<p align="center"><img src="docs/screenshots/5-growth.png" width="80%"></p>
 
 ---
 
@@ -41,15 +41,22 @@
 
 ---
 
-## 五个功能
+## 六个功能
+
+### 🌳 时间线
+按日期整理的 git 式生活存档，每条 commit 都有场景、时间、清单和一句 commit message。当天有饮食记录时，还会显示「🍽 N 餐」徽标。顶部支持**搜索**（描述 / 物品 / 备注）和**按场景一键筛选**，存档再多也能秒找到。
+
+<p align="center"><img src="docs/screenshots/1-timeline.png" width="85%"></p>
+
+### 📈 时光历程
+选一个场景，Life Archive 会把它所有真实存档按时间从旧到新铺成一条 filmstrip。你可以点任意一张回到详情，点「首尾对比」直接看最早和最新的变化，也可以一键导出带时间戳、水印和跨度信息的时光回顾片。
+
+<p align="center"><img src="docs/screenshots/5-growth.png" width="85%"></p>
 
 ### 🔍 现实对比（核心）
 拍「之前」和「现在」两张照片，自动告诉你哪里变了：**①像素热力图 / 滑块 / 闪烁**标出画面变化，**②语义清单 diff**列出少了什么 / 多了什么 / 数量变化，**③可选 AI 解读**用你自己的免费智谱 key 总结“新增 / 消失 / 移动”。也可以跨场景任意两条存档对比，并导出 before/after 卡片或复制文字总结。
 
 <p align="center"><img src="docs/screenshots/2-diff.png" width="85%"></p>
-
-### 🌳 时间线
-按日期整理的 git 式生活存档，每条 commit 都有场景、时间、清单和一句 commit message。当天有饮食记录时，还会显示「🍽 N 餐」徽标。顶部支持**搜索**（描述 / 物品 / 备注）和**按场景一键筛选**，存档再多也能秒找到。
 
 ### ⏮️ 回滚
 选一个旧存档当目标，自动生成「恢复到这个状态」的分步清单（拿走 X、放回 Y），可逐项打勾。

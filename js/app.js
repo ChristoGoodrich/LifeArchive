@@ -131,6 +131,19 @@
       notif_nudge_body: '今天还没有存档 · 花 10 秒，给现在拍一张 →',
       on: '开',
       off: '关',
+      nav_growth: '时光历程',
+      growth_open: '📈 时光历程',
+      growth_pick_scene: '选择场景',
+      growth_need_two: '这个场景至少要有两个真实存档，才能查看时光历程。',
+      growth_count_span: '{n} 次存档 · 跨度 {span}',
+      growth_first_last: '首尾对比',
+      growth_export: '导出时光回顾片',
+      growth_oldest: '最早',
+      growth_newest: '最新',
+      growth_insights: '历程洞察',
+      growth_most_stable: '最稳定',
+      growth_most_gone: '最常消失',
+      growth_most_added: '最常出现',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -257,6 +270,19 @@
       notif_nudge_body: 'Nothing archived today · 10 seconds, snap one now →',
       on: 'On',
       off: 'Off',
+      nav_growth: 'Time-lapse',
+      growth_open: '📈 Time-lapse',
+      growth_pick_scene: 'Pick a scene',
+      growth_need_two: 'This scene needs at least two real archives to show a time-lapse.',
+      growth_count_span: '{n} archives · {span} span',
+      growth_first_last: 'First vs latest',
+      growth_export: 'Export time-lapse card',
+      growth_oldest: 'first',
+      growth_newest: 'latest',
+      growth_insights: 'Timeline insights',
+      growth_most_stable: 'Most stable',
+      growth_most_gone: 'Most gone',
+      growth_most_added: 'Most added',
       saved_value_prefix: 'Saved'
     }
   };
@@ -950,7 +976,7 @@
   }
 
   /* ---------------- routing ---------------- */
-  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats', 'review'];
+  var routes = ['timeline', 'commit', 'diff', 'rollback', 'branch', 'branch-detail', 'settings', 'changelog', 'detail', 'stats', 'review', 'growth'];
   var current = 'timeline';
   var storeReady = false;
   var pendingDeepLink = null;
@@ -959,7 +985,7 @@
   var TAB_ROUTES = ['timeline', 'diff', 'commit', 'rollback', 'branch'];
   function isTabRoute(route) { return TAB_ROUTES.indexOf(route) >= 0; }
   // nav depth drives page animation (tabs fade; subpages push/pop)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1, review: 1 };
+  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1, review: 1, growth: 1 };
   var prevDepth = 0;
   // Subpage return stack for hardware/gesture back. Tabs never go here; they are peers.
   var navStack = [];
@@ -1195,6 +1221,7 @@
     else if (current === 'changelog') renderChangelog(v);
     else if (current === 'stats') renderStats(v);
     else if (current === 'review') renderReview(v);
+    else if (current === 'growth') renderGrowth(v);
     else if (current === 'detail') renderDetail(v);
     // directional entrance animation: push (deeper), pop (back), or fade (sibling tab)
     var d = ROUTE_DEPTH[current] || 0;
@@ -1356,6 +1383,13 @@
             : (lang === 'zh' ? '没有匹配的存档' : 'No matching commits') })
         ]));
         return;
+      }
+
+      if (tlScene !== null && realCommitsForScene(tlScene).length >= 2) {
+        var gscene = tlScene;
+        listWrap.appendChild(el('button', { type: 'button', class: 'btn ghost growth-entry',
+          text: t('growth_open') + ' · ' + sceneName(Store.sceneById(gscene)),
+          onclick: function () { openGrowthForScene(gscene); } }));
       }
 
       // ---- 计划中 (planned drafts) float to the top, like a to-do list ----
@@ -1761,6 +1795,10 @@
         showImageModal(cv.toDataURL('image/png'), 'life-archive-' + shortId(c.id) + '.png');
       });
     }
+    function growthAction() {
+      return el('button', { class: 'btn', text: t('growth_open'),
+        onclick: function () { openGrowthForScene(c.scene); } });
+    }
 
     // a planned draft: the headline action is "mark done" (it becomes a real commit);
     // diff/rollback don't apply to something that hasn't happened yet.
@@ -1778,6 +1816,7 @@
           onclick: function () { pendingEdit = c.id; go('commit'); } }),
         el('button', { class: 'btn', text: '⤴ ' + t('export_commit'),
           onclick: exportThisCommit }),
+        growthAction(),
         el('button', { class: 'btn danger', text: '🗑 ' + t('delete'),
           onclick: function () { if (confirm(t('confirm_delete'))) { deleteCommitWithCleanup(c.id); go('timeline'); } } })
       ]));
@@ -1794,6 +1833,7 @@
           go('diff');
         } }) : el('button', { class: 'btn', text: '🔍 ' + t('nav_diff'),
         onclick: function () { pendingDiff = { sceneId: c.scene, commitId: c.id }; go('diff'); } }),
+      growthAction(),
       el('button', { class: 'btn', text: '⤴ ' + t('export_commit'),
         onclick: exportThisCommit }),
       el('button', { class: 'btn', text: '⏮️ ' + t('nav_rollback'),
@@ -2815,6 +2855,43 @@
       return cv;
     });
   }
+  function buildGrowthMontageCanvas(commitsOldToNew, sceneId) {
+    var L = lang === 'zh';
+    var picks = sampleEvenly(commitsOldToNew, 9);
+    var sc = Store.sceneById(sceneId);
+    return Promise.all(picks.map(function (c) { return loadImgEl(commitThumbSrc(c)); })).then(function (imgs) {
+      var W = 1080, pad = 48, cols = 3;
+      var rows = Math.ceil(picks.length / cols);
+      var gap = 18, cellW = Math.floor((W - pad * 2 - gap * (cols - 1)) / cols);
+      var cellH = Math.round(cellW * 0.75), capH = 34;
+      var headH = 102, footH = 64;
+      var H = headH + rows * (cellH + capH + gap) - gap + footH;
+      var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#0b1020'; ctx.fillRect(0, 0, W, H);
+      ctx.textBaseline = 'top';
+
+      ctx.fillStyle = '#8ea2ff'; ctx.font = '700 30px sans-serif';
+      ctx.fillText('Life Archive · ' + sceneLabel(sc) + ' · ' + (L ? '时光历程' : 'Time-lapse'), pad, pad);
+      ctx.fillStyle = '#9aa6c4'; ctx.font = '400 22px sans-serif';
+      ctx.fillText(t('growth_count_span').replace('{n}', commitsOldToNew.length)
+        .replace('{span}', spanLabel(commitsOldToNew[0].createdAt, commitsOldToNew[commitsOldToNew.length - 1].createdAt)),
+        pad, pad + 38);
+
+      picks.forEach(function (c, i) {
+        var r = Math.floor(i / cols), col = i % cols;
+        var x = pad + col * (cellW + gap), y = headH + r * (cellH + capH + gap);
+        ctx.fillStyle = '#141a30'; ctx.fillRect(x, y, cellW, cellH);
+        if (imgs[i]) drawContain(ctx, imgs[i], x, y, cellW, cellH);
+        drawImageStamp(ctx, fmtDate(c.createdAt), x + 10, y + cellH - 42);
+        ctx.fillStyle = '#9aa6c4'; ctx.font = '500 18px sans-serif';
+        var tag = i === 0 ? t('growth_oldest') : (i === picks.length - 1 ? t('growth_newest') : '');
+        ctx.fillText(fmtDate(c.createdAt) + (tag ? ' · ' + tag : ''), x + 2, y + cellH + 8);
+      });
+      drawWatermark(ctx, 'Life Archive · ' + (L ? '生成于 ' : 'Generated ') + fmtDate(Date.now()), pad, H - 28);
+      return cv;
+    });
+  }
   // Show a generated image with save options (works on desktop + long-press on mobile).
   function showImageModal(dataUrl, filename) {
     var L = lang === 'zh';
@@ -2839,6 +2916,94 @@
     mask.appendChild(el('div', { class: 'img-modal-body' }, [img, el('div', { class: 'img-modal-actions' }, actions), hint]));
     document.body.appendChild(mask);
     requestAnimationFrame(function () { mask.classList.add('open'); });
+  }
+
+  /* ---------------- Time-lapse ---------------- */
+  var pendingGrowth = null;
+  function sampleEvenly(arr, n) {
+    if (!arr.length || n <= 0) return [];
+    if (arr.length <= n) return arr.slice();
+    if (n === 1) return [arr[0]];
+    var out = [], step = (arr.length - 1) / (n - 1);
+    for (var i = 0; i < n; i++) out.push(arr[Math.round(i * step)]);
+    return out;
+  }
+  function spanLabel(oldestTs, newestTs) {
+    var days = Math.max(0, Math.round((newestTs - oldestTs) / 86400000));
+    if (lang === 'zh') return days >= 60 ? (Math.round(days / 30) + ' 个月') : (days + ' 天');
+    return days >= 60 ? (Math.round(days / 30) + ' months') : (days + ' days');
+  }
+  function openGrowthForScene(sceneId) {
+    if (realCommitsForScene(sceneId).length < 2) { toast(t('growth_need_two')); return; }
+    pendingGrowth = sceneId;
+    routeOrRefresh('growth');
+  }
+  function renderGrowth(v) {
+    var L = lang === 'zh';
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head growth-head' }, [back, el('h1', { text: t('nav_growth') })]));
+
+    var scenes = Store.SCENES.filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
+    if (!scenes.length) { v.appendChild(noticeCard(t('growth_need_two'))); return; }
+
+    var sceneId = pendingGrowth && scenes.some(function (s) { return s.id === pendingGrowth; })
+      ? pendingGrowth : scenes[0].id;
+    pendingGrowth = null;
+
+    var sel = choiceSelect(scenes.map(function (s) { return { value: s.id, text: sceneLabel(s) }; }), sceneId);
+    sel.onChange(function () { pendingGrowth = sel.getValue(); routeOrRefresh('growth'); });
+    v.appendChild(el('div', { class: 'labeled growth-picker' }, [
+      el('span', { class: 'label-text', text: t('growth_pick_scene') }), sel
+    ]));
+
+    var list = realCommitsForScene(sceneId).slice().reverse();
+    var oldest = list[0], newest = list[list.length - 1];
+    v.appendChild(el('div', { class: 'growth-summary',
+      text: t('growth_count_span').replace('{n}', list.length).replace('{span}', spanLabel(oldest.createdAt, newest.createdAt)) }));
+
+    v.appendChild(el('div', { class: 'growth-actions' }, [
+      el('button', { class: 'btn', text: '🔍 ' + t('growth_first_last'), onclick: function () {
+        pendingDiff = { sceneId: sceneId, commitId: newest.id, baseId: oldest.id };
+        go('diff');
+      } }),
+      el('button', { class: 'btn primary', text: '⤴ ' + t('growth_export'), onclick: function () {
+        toast(L ? '正在生成…' : 'Building…');
+        buildGrowthMontageCanvas(list, sceneId).then(function (cv) {
+          showImageModal(cv.toDataURL('image/png'), 'life-archive-growth-' + sceneId + '.png');
+        });
+      } })
+    ]));
+
+    var strip = el('div', { class: 'growth-strip' });
+    list.forEach(function (c, i) {
+      var frame = el('button', { type: 'button', class: 'growth-frame' });
+      var thumb = commitThumbSrc(c);
+      if (thumb) frame.appendChild(el('img', { class: 'growth-frame-img', src: thumb, loading: 'lazy', decoding: 'async', alt: '' }));
+      else frame.appendChild(el('div', { class: 'growth-frame-noimg', text: '📷' }));
+      var tag = i === 0 ? t('growth_oldest') : (i === list.length - 1 ? t('growth_newest') : '');
+      frame.appendChild(el('div', { class: 'growth-frame-cap',
+        text: fmtDate(c.createdAt) + (tag ? ' · ' + tag : '') }));
+      frame.addEventListener('click', function () { pendingDetail = c.id; go('detail'); });
+      strip.appendChild(frame);
+    });
+    v.appendChild(strip);
+
+    var tr = sceneTrend(sceneId);
+    function chips(label, arr) {
+      if (!arr || !arr.length) return null;
+      return el('div', { class: 'growth-insight-row' }, [
+        el('span', { class: 'growth-insight-label', text: label }),
+        el('span', { class: 'growth-insight-values', text: arr.map(function (x) { return x.name + '×' + x.count; }).join('  ') })
+      ]);
+    }
+    var ins = [chips(t('growth_most_stable'), tr.mostStable),
+      chips(t('growth_most_gone'), tr.mostDisappeared),
+      chips(t('growth_most_added'), tr.mostAdded)].filter(Boolean);
+    if (ins.length) {
+      v.appendChild(el('section', { class: 'set-card growth-insights' },
+        [el('div', { class: 'growth-insights-head', text: '📈 ' + t('growth_insights') })].concat(ins)));
+    }
   }
 
   /* ---------------- Reality Diff ---------------- */
@@ -3033,7 +3198,11 @@
       if (tr.count < 2) return;
       if (!tr.steps.length && !tr.mostDisappeared.length && !tr.mostStable.length) return;
       var card = el('section', { class: 'set-card trend-card' });
-      card.appendChild(el('div', { class: 'trend-head', text: '📈 ' + (L ? '场景趋势与洞察' : 'Scene trend & insights') }));
+      card.appendChild(el('div', { class: 'trend-head trend-head-actions' }, [
+        el('span', { text: '📈 ' + (L ? '场景趋势与洞察' : 'Scene trend & insights') }),
+        el('button', { type: 'button', class: 'btn tiny ghost trend-growth-btn',
+          text: t('growth_open'), onclick: function () { openGrowthForScene(sceneSel.getValue()); } })
+      ]));
       if (tr.steps.length) {
         var spark = el('div', { class: 'trend-spark' });
         var trendCap = el('div', { class: 'trend-spark-cap' });
@@ -4253,6 +4422,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.10.0', '2026-06-06', '时光历程：看见同一场景的变化 + 一键时光回顾片',
+      'Time-lapse: watch one scene evolve + one-tap montage',
+      ['新增「时光历程」子页：选择一个场景后，会把该场景所有真实存档按时间从旧到新铺成横向 filmstrip，一眼看到同一个生活状态怎样变化。',
+       '详情页、时间线单场景筛选和现实对比的场景趋势卡都新增入口；场景不足两个真实存档时会给出提示，不把预存档混入历程。',
+       'filmstrip 上每张图带存档时间，首张 / 末张标注「最早 / 最新」；点击任意一张可回到对应存档详情。',
+       '新增「首尾对比」：自动以最早存档为 base、最新存档为 compare，复用现有现实对比页查看变化。',
+       '新增「导出时光回顾片」：最多均匀采样 9 张缩略图，生成带时间戳、水印和跨度信息的分享拼图，桌面可下载，手机端继续接入系统分享。',
+       '本次不改数据结构和 Supabase 表结构，只复用现有存档照片、清单 diff、导出图片和本地路由能力。'],
+      ['Add a Time-lapse subpage: pick a scene and see all real archives for that scene laid out oldest-to-newest as a horizontal filmstrip.',
+       'Add entry points from archive detail, single-scene timeline filters, and the Reality Diff trend card; scenes with fewer than two real archives show a clear fallback and drafts are excluded.',
+       'Each filmstrip frame shows the archive timestamp, marks the first and latest frames, and opens the original archive detail on click.',
+       'Add First vs latest: the app automatically uses the oldest archive as base and the newest as compare, reusing the existing Reality Diff page.',
+       'Add Export time-lapse card: up to 9 evenly sampled thumbnails become a timestamped, watermarked share montage with download on desktop and native sharing on mobile.',
+       'No data model or Supabase schema change; this release reuses existing archive photos, item diff, export image, and local routing infrastructure.']],
     ['1.9.0', '2026-06-06', '轻松记录：极速拍存 + 连续打卡 + 每日记录提醒',
       'Effortless capture: quick snap-save, streaks, and a daily nudge',
       ['时间线顶部新增连续打卡 chip：显示连续天数和今天是否已记录，点击即可进入快速记录。已有记录时变为绿色完成态，继续允许追加当天的新存档。',

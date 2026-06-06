@@ -62,6 +62,7 @@ async function run() {
 
   const shots = [
     { hash: '#timeline', name: '1-timeline' },
+    { hash: '#growth', name: '5-growth' },
     { hash: '#diff', name: '2-diff', pre: `
         var s = document.querySelector('main .choice-select');
         if (s && s._choices && s._choices.length) {
