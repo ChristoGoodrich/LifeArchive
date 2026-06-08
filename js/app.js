@@ -152,6 +152,12 @@
       last_sync: '上次同步',
       last_sync_never: '从未',
       backup_nudge: '还没有云同步，先导出一份本地备份更安心',
+      mood: '心情', people: '人物', tags: '标签',
+      mood_great: '很棒', mood_good: '不错', mood_meh: '一般', mood_down: '低落', mood_bad: '糟糕',
+      people_ph: '和谁？回车添加', tags_ph: '#标签，回车添加',
+      voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除', voice_missing: '语音文件丢失',
+      voice_unsupported: '此设备不支持录音', voice_denied: '麦克风权限被拒', voice_save_fail: '语音保存失败',
+      custom_scene_add: '＋ 自定义主体', custom_scene_emoji: '主体图标（一个 emoji）', custom_scene_name: '主体名字',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -299,6 +305,12 @@
       last_sync: 'Last synced',
       last_sync_never: 'Never',
       backup_nudge: 'No cloud sync yet - export a local backup to be safe',
+      mood: 'Mood', people: 'People', tags: 'Tags',
+      mood_great: 'Great', mood_good: 'Good', mood_meh: 'Meh', mood_down: 'Down', mood_bad: 'Bad',
+      people_ph: 'Who with? Enter to add', tags_ph: '#tag, Enter to add',
+      voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete', voice_missing: 'Voice file missing',
+      voice_unsupported: 'Recording not supported here', voice_denied: 'Microphone permission denied', voice_save_fail: 'Voice save failed',
+      custom_scene_add: '＋ Custom subject', custom_scene_emoji: 'Icon (one emoji)', custom_scene_name: 'Subject name',
       saved_value_prefix: 'Saved'
     }
   };
@@ -958,6 +970,7 @@
       }).map(function (id) { return m[id]; });
     }
     return { commits: union(a.commits, b.commits), branches: union(a.branches, b.branches),
+             customScenes: union(a.customScenes, b.customScenes),
              tombstones: tombs };
   }
 
@@ -1145,6 +1158,13 @@
     };
   })();
   function sceneIconSVG(id) { return SCENE_ICONS[id] || SCENE_ICONS.other; }
+  function sceneIcEl(scene) {
+    var span = el('span', { class: 'scene-ic' });
+    if (scene && SCENE_ICONS[scene.id]) span.innerHTML = SCENE_ICONS[scene.id];
+    else span.textContent = (scene && scene.emoji) || '🏷️';
+    return span;
+  }
+  function fmtDur(s) { s = Math.max(0, Math.round(s)); return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2); }
 
   /* flat line icons for the in-app photo-source sheet + file rows */
   var UI_ICONS = (function () {
@@ -1163,8 +1183,7 @@
 
   function sceneName(scene) { return lang === 'zh' ? scene.zh : scene.en; }
   function sceneTag(scene) {
-    var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(scene.id);
-    return el('span', { class: 'commit-scene' }, [ic, el('span', { text: sceneName(scene) })]);
+    return el('span', { class: 'commit-scene' }, [sceneIcEl(scene), el('span', { text: sceneName(scene) })]);
   }
 
   function navButton(route, label, isCreate) {
@@ -1255,6 +1274,7 @@
   var tlQuery = '';     // timeline search text (persists across renders this session)
   var tlScene = null;   // timeline scene filter (null = all scenes)
   var tlStarOnly = false; // when true, show only starred (important) commits
+  var tlTag = null;       // timeline tag filter (null = all tags)
   var TL_PAGE_SIZE = 24;
   var tlVisible = TL_PAGE_SIZE;
   var tlRerender = null;       // set to the current renderList() so card actions can refresh it
@@ -1275,6 +1295,8 @@
     var sc = Store.sceneById(c.scene);
     var hay = [c.message || '', c.notes || '', sc.zh, sc.en]
       .concat((c.items || []).map(function (it) { return it.name; }))
+      .concat(c.people || [])
+      .concat((c.tags || []).map(function (t) { return '#' + t; }))
       .join(' ').toLowerCase();
     return hay.indexOf(q) >= 0;
   }
@@ -1370,7 +1392,7 @@
     function chipBtn(id, label, withIcon) {
       var on = id === tlScene || (id === null && tlScene === null);
       var kids = [];
-      if (withIcon) { var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(id); kids.push(ic); }
+      if (withIcon) { kids.push(sceneIcEl(Store.sceneById(id))); }
       kids.push(el('span', { text: label }));
       var b = el('button', { type: 'button', class: 'tl-chip' + (on ? ' active' : '') }, kids);
       b.addEventListener('click', function () { tlScene = id; tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
@@ -1391,6 +1413,15 @@
       if (tlStarOnly || commits.some(function (c) { return c.starred; })) chipsRow.appendChild(starChip());
       chipsRow.appendChild(chipBtn(null, lang === 'zh' ? '全部' : 'All', false));
       scenesPresent.forEach(function (id) { chipsRow.appendChild(chipBtn(id, sceneName(Store.sceneById(id)), true)); });
+      // tag chips: collect all tags that appear in any commit
+      var tagSet = {};
+      commits.forEach(function (c) { (c.tags || []).forEach(function (tg) { tagSet[tg] = 1; }); });
+      Object.keys(tagSet).sort().forEach(function (tg) {
+        var on = tlTag === tg;
+        var b = el('button', { type: 'button', class: 'tl-chip tag-chip' + (on ? ' active' : ''), text: '#' + tg });
+        b.addEventListener('click', function () { tlTag = on ? null : tg; tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
+        chipsRow.appendChild(b);
+      });
     }
     renderChips();
 
@@ -1402,7 +1433,8 @@
     function renderList() {
       listWrap.innerHTML = '';
       var matched = commits.filter(function (c) {
-        return (!tlStarOnly || c.starred) && (tlScene === null || c.scene === tlScene) && commitMatches(c, tlQuery);
+        return (!tlStarOnly || c.starred) && (tlScene === null || c.scene === tlScene)
+          && (tlTag === null || (c.tags || []).indexOf(tlTag) >= 0) && commitMatches(c, tlQuery);
       });
       var plannedList = matched.filter(function (c) { return c.planned; });
       var realList = matched.filter(notPlanned);
@@ -1768,6 +1800,28 @@
       });
       card.appendChild(list);
     }
+    if (c.mood) {
+      var moodMap = { great:'😄', good:'🙂', meh:'😐', down:'😔', bad:'😣' };
+      card.appendChild(el('div', { class: 'detail-sub detail-mood' }, [
+        el('span', { text: (moodMap[c.mood] || '') + ' ' + t('mood_' + c.mood) })
+      ]));
+    }
+    if (c.people && c.people.length) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: '👥 ' + t('people') }));
+      var pw = el('div', { class: 'chip-row' });
+      c.people.forEach(function (p) { pw.appendChild(el('span', { class: 'chip-tag static', text: p })); });
+      card.appendChild(pw);
+    }
+    if (c.tags && c.tags.length) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: '🏷️ ' + t('tags') }));
+      var tw = el('div', { class: 'chip-row' });
+      c.tags.forEach(function (tg) {
+        var b = el('button', { class: 'chip-tag tap', text: '#' + tg });
+        b.addEventListener('click', function () { tlTag = tg; tlScene = null; go('timeline'); });
+        tw.appendChild(b);
+      });
+      card.appendChild(tw);
+    }
     if (c.fromBranchId) {
       var linkedBranch = Store.getBranch(c.fromBranchId);
       if (linkedBranch) {
@@ -1814,6 +1868,19 @@
         ]));
       });
       card.appendChild(fl);
+    }
+    var audioM = (c.media || []).filter(function (m) { return m.kind === 'audio'; })[0];
+    if (audioM) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: '🎙 ' + t('voice') }));
+      var player = el('audio', { controls: 'controls', class: 'detail-audio', preload: 'none' });
+      card.appendChild(el('div', { class: 'detail-voice' }, [player,
+        el('span', { class: 'file-size', text: fmtDur(audioM.dur || 0) + ' · ' + fmtBytes(audioM.size || 0) })]));
+      Store.getBlob(audioM.blobId).then(function (b) {
+        if (!b) { player.replaceWith(el('div', { class: 'commit-notes', text: t('voice_missing') })); return; }
+        var url = URL.createObjectURL(b);
+        player.src = url;
+        player.addEventListener('emptied', function () { URL.revokeObjectURL(url); });
+      });
     }
     if (c.notes) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '备注' : 'Notes' }));
@@ -1878,6 +1945,11 @@
   var draftPhotoDims = null; // {w,h} of the cover, so timeline cards can reserve its box
   var draftPhotoTakenAt = null; // shooting timestamp from image EXIF/native metadata
   var draftFiles = [];
+  var draftMood = '';
+  var draftPeople = [];
+  var draftTags = [];
+  var draftAudio = null;
+  var audioDeletedBlobId = null;
   var pendingEdit = null;
   var pendingQuick = false;
   var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
@@ -1886,6 +1958,11 @@
     draftPhotoDims = null;
     draftPhotoTakenAt = null;
     draftFiles = [];
+    draftMood = '';
+    draftPeople = [];
+    draftTags = [];
+    draftAudio = null;
+    audioDeletedBlobId = null;
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
     var quick = !editing && pendingQuick;
@@ -1894,28 +1971,43 @@
     pendingTemplate = null;
     var src = editing || template; // where prefilled values come from (edit OR replicate)
     draftPhotoTakenAt = src && src.photoTakenAt ? Number(src.photoTakenAt) || null : null;
+    if (src) {
+      draftMood = src.mood || '';
+      draftPeople = src.people ? src.people.slice() : [];
+      draftTags = src.tags ? src.tags.slice() : [];
+      var srcAudio = (src.media || []).filter(function (x) { return x.kind === 'audio'; })[0];
+      if (srcAudio) draftAudio = { blobId: srcAudio.blobId, mime: srcAudio.mime, size: srcAudio.size, dur: srcAudio.dur };
+    }
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : (quick ? t('quick_capture') : t('nav_commit')) })]));
     if (template) v.appendChild(el('div', { class: 'form-template-hint',
       text: '↩︎ ' + (lang === 'zh' ? '已照着上一条带入内容，可改后「存档」或「预存档」。' : 'Copied from a previous entry — edit, then Archive or Pre-save.') }));
 
     var lastScene = quick && Store.meta().lastScene;
-    if (lastScene && !Store.SCENES.some(function (s) { return s.id === lastScene; })) lastScene = null;
+    if (lastScene && !Store.allScenes().some(function (s) { return s.id === lastScene; })) lastScene = null;
     var selectedScene = (src && src.scene) || lastScene || Store.SCENES[0].id;
     var scenePicker = el('div', { class: 'scene-picker' });
     var selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
     function buildSceneGrid(group) {
       var grid = el('div', { class: 'scene-grid' });
-      Store.SCENES.filter(function (sc) { return sc.group === group; }).forEach(function (sc) {
-        var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(sc.id);
+      Store.allScenes().filter(function (sc) { return sc.group === group; }).forEach(function (sc) {
         var opt = el('button', { type: 'button',
           class: 'scene-opt' + (sc.id === selectedScene ? ' active' : '') },
-          [ic, el('span', { class: 'scene-opt-label', text: sceneName(sc) })]);
+          [sceneIcEl(sc), el('span', { class: 'scene-opt-label', text: sceneName(sc) })]);
         opt.addEventListener('click', function () {
           selectedScene = sc.id; renderScenePicker(); syncMealUI();
         });
         grid.appendChild(opt);
       });
+      // add custom scene entry for item group
+      if (group === 'item') {
+        var addBtn = el('button', { type: 'button', class: 'scene-opt scene-opt-add',
+          text: '＋ ' + t('custom_scene_add') });
+        addBtn.addEventListener('click', function () {
+          promptCustomScene(function (id) { selectedScene = id; renderScenePicker(); syncMealUI(); });
+        });
+        grid.appendChild(addBtn);
+      }
       return grid;
     }
     function renderScenePicker() {
@@ -1930,7 +2022,7 @@
             if (selectedGroup === group) return;
             selectedGroup = group;
             if (Store.sceneById(selectedScene).group !== group) {
-              selectedScene = Store.SCENES.filter(function (sc) { return sc.group === group; })[0].id;
+              selectedScene = Store.allScenes().filter(function (sc) { return sc.group === group; })[0].id;
             }
             renderScenePicker(); syncMealUI();
           }
@@ -1940,6 +2032,15 @@
       scenePicker.appendChild(buildSceneGrid(selectedGroup));
     }
     renderScenePicker();
+
+    function promptCustomScene(onPick) {
+      var emoji = (window.prompt(t('custom_scene_emoji'), '🪴') || '').trim();
+      var name  = (window.prompt(t('custom_scene_name')) || '').trim();
+      if (!name) return;
+      var s = Store.addCustomScene({ emoji: emoji || '🏷️', zh: name, en: name });
+      autoSync(false);
+      onPick(s.id);
+    }
 
     // food-aware wording: when a meal scene is selected, the form talks about food
     function syncMealUI() {
@@ -2314,7 +2415,7 @@
           res.items.forEach(function (it) { addItemRow(it.name, parseInt(it.qty, 10) || 1); });
           moreDetails.open = true;
         }
-        if (res.scene && Store.SCENES.some(function (x) { return x.id === res.scene; })) {
+        if (res.scene && Store.allScenes().some(function (x) { return x.id === res.scene; })) {
           selectedScene = res.scene;
           selectedGroup = Store.isMealScene(selectedScene) ? 'meal' : 'item';
           renderScenePicker(); syncMealUI();
@@ -2338,15 +2439,159 @@
       el('button', { class: 'btn tiny ghost', text: t('add_item'),
         onclick: function () { addItemRow(); } })]));
     var itemsLabelText = $('.label-text', itemsLabel);
+
+    // ---- mood ----
+    var MOODS = [
+      { id: 'great', emoji: '😄' }, { id: 'good', emoji: '🙂' },
+      { id: 'meh', emoji: '😐' }, { id: 'down', emoji: '😔' }, { id: 'bad', emoji: '😣' }
+    ];
+    var moodRow = el('div', { class: 'mood-row' });
+    MOODS.forEach(function (m) {
+      var b = el('button', { type: 'button', class: 'mood-chip' + (draftMood === m.id ? ' on' : ''),
+        text: m.emoji, title: t('mood_' + m.id) });
+      b.addEventListener('click', function () {
+        draftMood = (draftMood === m.id) ? '' : m.id;
+        moodRow.querySelectorAll('.mood-chip').forEach(function (x) { x.classList.remove('on'); });
+        if (draftMood) b.classList.add('on');
+      });
+      moodRow.appendChild(b);
+    });
+
+    // ---- people / tags chips input ----
+    function chipsInput(seed, placeholder) {
+      var list = seed.slice();
+      var wrap = el('div', { class: 'chips-input' });
+      var input = el('input', { class: 'chips-text', type: 'text', placeholder: placeholder });
+      function render() {
+        wrap.querySelectorAll('.chip-tag').forEach(function (n) { n.remove(); });
+        list.forEach(function (val, i) {
+          var x = el('button', { type: 'button', class: 'chip-x', text: '×' });
+          x.addEventListener('click', function () { list.splice(i, 1); render(); input.focus(); });
+          wrap.insertBefore(el('span', { class: 'chip-tag static' }, [el('span', { text: val }), x]), input);
+        });
+      }
+      function commit() {
+        (input.value || '').split(/[,，]/).forEach(function (raw) {
+          var v = raw.trim().replace(/^#/, '');
+          if (v && list.indexOf(v) < 0 && list.length < 24) list.push(v);
+        });
+        input.value = ''; render();
+      }
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ',' || e.key === '，') { e.preventDefault(); commit(); }
+      });
+      input.addEventListener('blur', commit);
+      wrap.appendChild(input); render();
+      return { el: wrap, get: function () { commit(); return list.slice(); } };
+    }
+    var peopleInput = chipsInput(draftPeople, t('people_ph'));
+    var tagsInput   = chipsInput(draftTags,   t('tags_ph'));
+
+    // ---- voice ----
+    function pickAudioMime() {
+      var prefs = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      for (var i = 0; i < prefs.length; i++) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported(prefs[i])) return prefs[i];
+      }
+      return '';
+    }
+    function makeRecorder(onState) {
+      var rec = null, chunks = [], stream = null, t0 = 0, timer = null;
+      function stopTracks() { if (stream) { stream.getTracks().forEach(function (tr) { tr.stop(); }); stream = null; } }
+      return {
+        start: function () {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+            toast('⚠ ' + t('voice_unsupported')); return;
+          }
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (s) {
+            stream = s; chunks = [];
+            var mime = pickAudioMime();
+            rec = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s);
+            rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+            rec.onstop = function () {
+              var blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+              var dur = (Date.now() - t0) / 1000;
+              stopTracks(); clearInterval(timer);
+              draftAudio = { _blob: blob, mime: blob.type, size: blob.size, dur: Math.round(dur * 10) / 10 };
+              onState('done');
+            };
+            t0 = Date.now(); rec.start();
+            onState('recording', 0);
+            timer = setInterval(function () { onState('recording', (Date.now() - t0) / 1000); }, 200);
+          }).catch(function (err) {
+            toast('⚠ ' + t('voice_denied'));
+            console.error('[voice] getUserMedia ' + (err && err.name));
+          });
+        },
+        stop: function () { try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (e) {} },
+        cancel: function () { try { if (rec && rec.state !== 'inactive') rec.stop(); } catch (e) {} stopTracks(); clearInterval(timer); }
+      };
+    }
+    var audioBox = el('div', { class: 'voice-box' });
+    function renderAudio(state, elapsed) {
+      audioBox.innerHTML = '';
+      if (state === 'recording') {
+        var stopBtn = el('button', { class: 'btn rec-stop', type: 'button',
+          text: '⏹ ' + t('voice_stop') + ' · ' + fmtDur(elapsed || 0) });
+        stopBtn.addEventListener('click', function () { recorder.stop(); });
+        audioBox.appendChild(stopBtn);
+        return;
+      }
+      if (draftAudio) {
+        var au = el('audio', { controls: 'controls', class: 'voice-player' });
+        if (draftAudio._blob) au.src = URL.createObjectURL(draftAudio._blob);
+        else if (draftAudio.blobId) Store.getBlob(draftAudio.blobId).then(function (b) { if (b) au.src = URL.createObjectURL(b); });
+        var del = el('button', { class: 'btn ghost tiny', type: 'button', text: '🗑 ' + t('voice_delete') });
+        del.addEventListener('click', function () {
+          if (draftAudio && draftAudio.blobId && !draftAudio._blob) audioDeletedBlobId = draftAudio.blobId;
+          draftAudio = null; renderAudio('idle');
+        });
+        audioBox.appendChild(el('div', { class: 'voice-done' }, [au,
+          el('span', { class: 'voice-dur', text: '· ' + fmtDur(draftAudio.dur || 0) }), del]));
+        return;
+      }
+      var startBtn = el('button', { class: 'btn ghost', type: 'button', text: '🎙 ' + t('voice_record') });
+      startBtn.addEventListener('click', function () { recorder.start(); });
+      audioBox.appendChild(startBtn);
+    }
+    var recorder = makeRecorder(renderAudio);
+    renderAudio('idle');
+
     var moreDetails = el('details', { class: 'more-details' }, [
       moreSummary, itemsLabel,
       labeledBlock(lang === 'zh' ? '文件' : 'Files', filesBlock),
+      labeledBlock('😊 ' + t('mood'), moodRow),
+      labeledBlock('👥 ' + t('people'), peopleInput.el),
+      labeledBlock('🏷️ ' + t('tags'), tagsInput.el),
+      labeledBlock('🎙 ' + t('voice'), audioBox),
       labeled(t('notes'), notesInput)
     ]);
-    if ((src && src.items && src.items.length) || (src && src.files && src.files.length)) moreDetails.open = true;
+    if ((src && src.items && src.items.length) || (src && src.files && src.files.length) ||
+        (src && (src.mood || (src.people||[]).length || (src.tags||[]).length))) moreDetails.open = true;
 
     // collect + persist. `planned` only matters for NEW commits; editing preserves the
     // commit's existing planned/real state.
+    function persistDraftMedia(prevMedia) {
+      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio'; });
+      var dels = [];
+      if (audioDeletedBlobId) dels.push(Store.deleteBlob(audioDeletedBlobId));
+      if (draftAudio && !draftAudio._blob && draftAudio.blobId) {
+        media.push({ kind: 'audio', blobId: draftAudio.blobId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
+        return Promise.all(dels).then(function () { return media; });
+      }
+      if (draftAudio && draftAudio._blob) {
+        var blobId = 'au_' + Store.uid('a');
+        return Promise.all(dels)
+          .then(function () { return Store.putBlob(blobId, draftAudio._blob); })
+          .then(function (ok) {
+            if (ok) media.push({ kind: 'audio', blobId: blobId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
+            else toast('⚠ ' + t('voice_save_fail'));
+            return media;
+          });
+      }
+      return Promise.all(dels).then(function () { return media; });
+    }
+
     function doSave(planned) {
       var items = [];
       itemsWrap.querySelectorAll('.item-row').forEach(function (r) {
@@ -2356,64 +2601,68 @@
       var createdAt = parseDatetimeLocal(createdAtInput.getValue(), editing ? editing.createdAt : Date.now());
       var remindDays = planned ? null : readRemindDays();
       var remindAt = remindDays ? (createdAt + remindDays * 86400000) : null;
-      var payload = {
-        scene: selectedScene,
-        message: msgInput.value.trim() || '(no message)',
-        createdAt: createdAt,
-        photo: draftPhoto,
-        // cover pixel size → timeline/detail reserve the image box so a freshly added
-        // archive doesn't visibly "pop"/enlarge when its photo finishes decoding
-        photoW: draftPhoto && draftPhotoDims ? draftPhotoDims.w : null,
-        photoH: draftPhoto && draftPhotoDims ? draftPhotoDims.h : null,
-        photoTakenAt: draftPhoto && draftPhotoTakenAt ? draftPhotoTakenAt : null,
-        items: items,
-        files: draftFiles.slice(),
-        notes: notesInput.value.trim(),
-        planned: !!planned,
-        remindDays: remindDays,
-        remindAt: remindAt,
-        remindFired: remindAt && editing && editing.remindAt === remindAt ? !!editing.remindFired : false
-      };
-      if (editing) {
-        payload.planned = !!editing.planned;
-        if (payload.planned) { payload.remindDays = null; payload.remindAt = null; payload.remindFired = false; }
-        var saved = Store.updateCommit(editing.id, payload);
-        Notify.cancelFor(editing.id, 'recheck').then(function () { if (saved) scheduleRecheckForCommit(saved); });
-        toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
-        autoSync(false);
-        go('timeline');
-        return;
-      }
-      var ok = Store.addCommit(payload);
-      if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
-      if (ok.remindAt && !ok.planned) scheduleRecheckForCommit(ok);
-      if (planned) { toast('📌 ' + t('planned_saved')); autoSync(false); }
-      else {
-        var mine = Store.commitsForScene(ok.scene).filter(notPlanned);
-        var prev = mine.filter(function (x) { return x.id !== ok.id; })
-          .sort(function (a, b) { return b.createdAt - a.createdAt; })[0];
-        var gap = prev ? Math.round((ok.createdAt - prev.createdAt) / 86400000) : null;
-        var savedMsg = (lang === 'zh')
-          ? ('✅ ' + t('saved_value_prefix') + ' · 本场景第 ' + mine.length + ' 次'
-            + (gap != null ? ' · 距上次 ' + gap + ' 天' : '') + ' · ' + ((ok.items || []).length) + ' 件物品')
-          : ('✅ ' + t('saved_value_prefix') + ' · #' + mine.length + ' here'
-            + (gap != null ? ' · ' + gap + 'd since last' : '') + ' · ' + ((ok.items || []).length) + ' items');
-        if (!ok.remindAt) {
-          toastAction(savedMsg, '📌 ' + t('remind_set_cta'), function () {
-            var nextAt = ok.createdAt + 30 * 86400000;
-            var updated = Store.updateCommit(ok.id, { remindAt: nextAt, remindDays: 30, remindFired: false });
-            if (updated) scheduleRecheckForCommit(updated);
-            autoSync(false);
-            toast('📌 ' + t('remind_set_done'));
-          });
-        } else {
-          toast(savedMsg);
+      persistDraftMedia(editing ? editing.media : null).then(function (media) {
+        var payload = {
+          scene: selectedScene,
+          message: msgInput.value.trim() || '(no message)',
+          createdAt: createdAt,
+          photo: draftPhoto,
+          photoW: draftPhoto && draftPhotoDims ? draftPhotoDims.w : null,
+          photoH: draftPhoto && draftPhotoDims ? draftPhotoDims.h : null,
+          photoTakenAt: draftPhoto && draftPhotoTakenAt ? draftPhotoTakenAt : null,
+          items: items,
+          files: draftFiles.slice(),
+          notes: notesInput.value.trim(),
+          mood: draftMood || null,
+          people: peopleInput.get(),
+          tags: tagsInput.get(),
+          media: media,
+          planned: !!planned,
+          remindDays: remindDays,
+          remindAt: remindAt,
+          remindFired: remindAt && editing && editing.remindAt === remindAt ? !!editing.remindFired : false
+        };
+        if (editing) {
+          payload.planned = !!editing.planned;
+          if (payload.planned) { payload.remindDays = null; payload.remindAt = null; payload.remindFired = false; }
+          var saved = Store.updateCommit(editing.id, payload);
+          Notify.cancelFor(editing.id, 'recheck').then(function () { if (saved) scheduleRecheckForCommit(saved); });
+          toast('✅ ' + (lang === 'zh' ? '已保存修改' : 'Saved'));
+          autoSync(false);
+          go('timeline');
+          return;
         }
-        autoSync(true);
-        Store.setMeta({ lastScene: ok.scene });
-        reconcileCaptureNudge();
-      } // auto-sync real archives to cloud
-      go('timeline');
+        var ok = Store.addCommit(payload);
+        if (!ok) { toast('⚠ ' + (lang === 'zh' ? '存储空间不足，请删除旧照片' : 'Storage full')); return; }
+        if (ok.remindAt && !ok.planned) scheduleRecheckForCommit(ok);
+        if (planned) { toast('📌 ' + t('planned_saved')); autoSync(false); }
+        else {
+          var mine = Store.commitsForScene(ok.scene).filter(notPlanned);
+          var prev = mine.filter(function (x) { return x.id !== ok.id; })
+            .sort(function (a, b) { return b.createdAt - a.createdAt; })[0];
+          var gap = prev ? Math.round((ok.createdAt - prev.createdAt) / 86400000) : null;
+          var savedMsg = (lang === 'zh')
+            ? ('✅ ' + t('saved_value_prefix') + ' · 本场景第 ' + mine.length + ' 次'
+              + (gap != null ? ' · 距上次 ' + gap + ' 天' : '') + ' · ' + ((ok.items || []).length) + ' 件物品')
+            : ('✅ ' + t('saved_value_prefix') + ' · #' + mine.length + ' here'
+              + (gap != null ? ' · ' + gap + 'd since last' : '') + ' · ' + ((ok.items || []).length) + ' items');
+          if (!ok.remindAt) {
+            toastAction(savedMsg, '📌 ' + t('remind_set_cta'), function () {
+              var nextAt = ok.createdAt + 30 * 86400000;
+              var updated = Store.updateCommit(ok.id, { remindAt: nextAt, remindDays: 30, remindFired: false });
+              if (updated) scheduleRecheckForCommit(updated);
+              autoSync(false);
+              toast('📌 ' + t('remind_set_done'));
+            });
+          } else {
+            toast(savedMsg);
+          }
+          autoSync(true);
+          Store.setMeta({ lastScene: ok.scene });
+          reconcileCaptureNudge();
+        } // auto-sync real archives to cloud
+        go('timeline');
+      });
     }
 
     photoTools = el('div', { class: 'photo-tools' }, [
@@ -2974,7 +3223,7 @@
     back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
     v.appendChild(el('div', { class: 'view-head growth-head' }, [back, el('h1', { text: t('nav_growth') })]));
 
-    var scenes = Store.SCENES.filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
+    var scenes = Store.allScenes().filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
     if (!scenes.length) { v.appendChild(noticeCard(t('growth_need_two'))); return; }
 
     var sceneId = pendingGrowth && scenes.some(function (s) { return s.id === pendingGrowth; })
@@ -3043,7 +3292,7 @@
     var allReal = Store.commits().filter(notPlanned);
     if (allReal.length < 2) { v.appendChild(noticeCard(t('need_two'))); return; }
 
-    var scenesWith2 = Store.SCENES.filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
+    var scenesWith2 = Store.allScenes().filter(function (s) { return realCommitsForScene(s.id).length >= 2; });
     var L = lang === 'zh';
     var diffContext = pendingDiff;
     pendingDiff = null;
@@ -3460,7 +3709,7 @@
     var pre = Store.getCommit(pendingRollback);
     var initialCommit = (pre && !pre.planned) ? pre : commits[0];
     pendingRollback = null;
-    var scenes = Store.SCENES.filter(function (s) {
+    var scenes = Store.allScenes().filter(function (s) {
       return realCommitsForScene(s.id).length > 0;
     });
     // 'no-chevron' hides the dropdown caret on the rollback pickers (the user found the
@@ -4570,6 +4819,26 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.12.0', '2026-06-09', '立体维度四件套：人物/心情/标签/自定义主体 + 语音备注',
+      'Four-dimensional archive: people, mood, tags, custom subjects + voice notes',
+      ['新增「自定义主体」：用户可自建长期盯住的场景（如「阳台的花」），存为同步集合随云同步，在场景选择器、时间线筛选、diff/历程/回滚中均可使用；预设 20 个场景保留不动。',
+       '新增「人物」字段：commit 记录「和谁」，输入即成 chip，支持回车/逗号添加，详情页展示。',
+       '新增「心情」字段：五档 emoji 单选（😄🙂😐😔😣），记录当时感受，详情页展示。',
+       '新增「标签」字段：跨场景自由标签（如 #周末 #旅行），输入即成 chip；时间线新增标签筛选 chip，可点标签从详情页直接筛回时间线。',
+       '人物和标签都会进入搜索框匹配范围，搜人名或 #标签 可命中对应存档。',
+       '新增「语音备注」：表单内可录一段语音（最长无硬上限），录音存进 IndexedDB blobs 仓，commit 上仅挂 media 引用；详情页可回放，编辑态可重录/删除；删 commit 时自动回收语音 Blob。',
+       '备份导出已包含 customScenes 集合；语音 Blob 通过 v1.11 的 data.blobs base64 路径打包，导入后可完整恢复语音。',
+       '桌面端 Electron 已配置麦克风权限放行；Android 构建脚本注入 RECORD_AUDIO 权限。',
+       '场景图标统一：预设场景用内联 SVG，自定义主体显示 emoji，所有展示点自动适配。'],
+      ['Add custom subjects: users can create their own long-term scenes (e.g. "Balcony flowers"), stored as a synced collection alongside commits/branches; appears in scene picker, filters, diff/time-lapse/rollback. 20 presets remain unchanged.',
+       'Add people field: log who you were with on a commit; type-to-chip with Enter/comma, shown on detail cards.',
+       'Add mood field: five emoji choices (😄🙂😐😔😣) to capture how you felt; displayed on detail cards.',
+       'Add tags field: cross-scene freeform tags (e.g. #weekend #travel) as chips; timeline adds tag filter chips; clicking a tag on detail navigates to filtered timeline.',
+       'People and tags are indexed by the search box — typing a name or #tag will match relevant archives.',
+       'Add voice notes: record audio in the commit form via MediaRecorder; stored in the IndexedDB blobs store with only a media[] reference on the commit; playback on detail; re-record/delete during edit; auto-cleanup on commit deletion.',
+       'Backup export now includes customScenes; voice blobs are packed via v1.11\'s data.blobs base64 path so a full restore brings voice back.',
+       'Desktop Electron grants microphone permission; Android build script injects RECORD_AUDIO permission.',
+       'Scene icons unified: presets use inline SVG, custom subjects show emoji; all display points adapt automatically.']],
     ['1.11.0', '2026-06-06', '数据可托付：备份恢复 + 同步状态 + 媒体存储地基',
       'Trust your data: backup restore, sync status, and media-storage foundation',
       ['设置页新增「备份到文件」和「导入 / 恢复备份」：导出文件带 app、schema、version、exportedAt 信封，导入同时兼容旧裸 JSON。',
@@ -5104,12 +5373,11 @@
         var list = el('div', { class: 'day-panel-list' });
         starred.forEach(function (c) {
           var sc = Store.sceneById(c.scene);
-          var ic = el('span', { class: 'scene-ic' }); ic.innerHTML = sceneIconSVG(sc.id);
           list.appendChild(el('button', {
             type: 'button', class: 'day-panel-item',
             onclick: function () { closePopover(); pendingDetail = c.id; go('detail'); }
           }, [
-            ic,
+            sceneIcEl(sc),
             el('span', { class: 'day-panel-msg', text: c.message || sceneName(sc) }),
             el('span', { class: 'day-panel-time', text: fmtTime(c.createdAt) })
           ]));

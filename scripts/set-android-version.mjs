@@ -232,6 +232,10 @@ if (!m.includes('android.permission.POST_NOTIFICATIONS')) {
   m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>');
   console.log('AndroidManifest -> added POST_NOTIFICATIONS permission');
 }
+if (!m.includes('android.permission.RECORD_AUDIO')) {
+  m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n</manifest>');
+  console.log('AndroidManifest -> added RECORD_AUDIO permission');
+}
 if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustResize"');
 } else {

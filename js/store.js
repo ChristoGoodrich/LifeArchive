@@ -12,6 +12,7 @@
   var KEY_COMMITS = 'lifearchive.commits.v1';
   var KEY_BRANCHES = 'lifearchive.branches.v1';
   var KEY_TOMBSTONES = 'lifearchive.tombstones.v1';
+  var KEY_SCENES = 'lifearchive.scenes';
   var KEY_META = 'lifearchive.meta.v1';
   var IDB_NAME = 'lifearchive';
   var IDB_STORE = 'kv';
@@ -92,17 +93,19 @@
   // tombstones: { id: deletedAtMs } — a record of what was deleted, so the deletion
   // survives a cloud round-trip. Without them the id-union merge would re-download a
   // locally-deleted commit from the cloud and "un-delete" it. Synced like the rest.
-  var cache = { commits: [], branches: [], tombstones: {} };
+  var cache = { commits: [], branches: [], tombstones: {}, customScenes: [] };
   function persist() {
     if (idb) {
       idbSet(KEY_COMMITS, cache.commits);
       idbSet(KEY_BRANCHES, cache.branches);
       idbSet(KEY_TOMBSTONES, cache.tombstones);
+      idbSet(KEY_SCENES, cache.customScenes);
       return true;
     }
     var a = lsWrite(KEY_COMMITS, cache.commits);
     var b = lsWrite(KEY_BRANCHES, cache.branches);
     lsWrite(KEY_TOMBSTONES, cache.tombstones);
+    lsWrite(KEY_SCENES, cache.customScenes);
     return a && b;
   }
 
@@ -201,6 +204,9 @@
     for (var i = 0; i < SCENES.length; i++) {
       if (SCENES[i].id === id) return SCENES[i];
     }
+    for (var j = 0; j < cache.customScenes.length; j++) {
+      if (cache.customScenes[j].id === id) return cache.customScenes[j];
+    }
     return SCENES[SCENES.length - 1];
   }
 
@@ -209,6 +215,21 @@
     sceneById: sceneById,
     isMealScene: isMealScene,
     uid: uid,
+    allScenes: function () { return SCENES.concat(cache.customScenes); },
+    customScenes: function () { return cache.customScenes.slice(); },
+    addCustomScene: function (def) {
+      var s = {
+        id: 'cs_' + uid('s'),
+        emoji: (def.emoji || '🏷️').slice(0, 4),
+        zh: (def.zh || def.name || '自定义').slice(0, 24),
+        en: (def.en || def.name || 'Custom').slice(0, 24),
+        group: 'item',
+        createdAt: Date.now(), updatedAt: Date.now()
+      };
+      cache.customScenes.push(s);
+      persist();
+      return s;
+    },
 
     /* Hydrate the cache from IndexedDB (migrating old localStorage data on first
        run). Resolves before the app renders. */
@@ -219,25 +240,28 @@
           cache.commits = lsRead(KEY_COMMITS, []);
           cache.branches = lsRead(KEY_BRANCHES, []);
           cache.tombstones = lsRead(KEY_TOMBSTONES, {}) || {};
+          cache.customScenes = lsRead(KEY_SCENES, []) || [];
           return;
         }
-        return Promise.all([idbGet(KEY_COMMITS), idbGet(KEY_BRANCHES), idbGet(KEY_TOMBSTONES)]).then(function (res) {
+        return Promise.all([idbGet(KEY_COMMITS), idbGet(KEY_BRANCHES), idbGet(KEY_TOMBSTONES), idbGet(KEY_SCENES)]).then(function (res) {
           if (res[0] === undefined && res[1] === undefined) {
             // first run on IDB — migrate anything already saved in localStorage
             cache.commits = lsRead(KEY_COMMITS, []);
             cache.branches = lsRead(KEY_BRANCHES, []);
             cache.tombstones = lsRead(KEY_TOMBSTONES, {}) || {};
+            cache.customScenes = lsRead(KEY_SCENES, []) || [];
             if (cache.commits.length || cache.branches.length || Object.keys(cache.tombstones).length) {
               persist();
               try {
                 localStorage.removeItem(KEY_COMMITS); localStorage.removeItem(KEY_BRANCHES);
-                localStorage.removeItem(KEY_TOMBSTONES);
+                localStorage.removeItem(KEY_TOMBSTONES); localStorage.removeItem(KEY_SCENES);
               } catch (e) {}
             }
           } else {
             cache.commits = res[0] || [];
             cache.branches = res[1] || [];
             cache.tombstones = res[2] || {};
+            cache.customScenes = res[3] || [];
           }
         });
       });
@@ -423,14 +447,14 @@
     /* ---------- Cloud sync helpers (raw data in/out) ---------- */
     exportRaw: function () {
       return { commits: cache.commits.slice(), branches: cache.branches.slice(),
-               tombstones: copyMap(cache.tombstones) };
+               tombstones: copyMap(cache.tombstones),
+               customScenes: cache.customScenes.slice() };
     },
     replaceAll: function (data) {
       data = data || {};
       cache.commits = data.commits || [];
       cache.branches = data.branches || [];
-      // keep local tombstones if the incoming blob predates the feature (old backup),
-      // otherwise adopt the merged set; then enforce them so nothing deleted lingers.
+      if (data.customScenes) cache.customScenes = data.customScenes;
       if (data.tombstones) cache.tombstones = data.tombstones;
       applyTombstones();
       persist();

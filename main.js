@@ -1,6 +1,6 @@
 /* Life Archive desktop shell — loads the existing static app inside Electron.
    No app logic lives here; the web files (index.html / css / js) are untouched. */
-const { app, BrowserWindow, Menu, dialog, nativeTheme, ipcMain, desktopCapturer, screen } = require('electron');
+const { app, BrowserWindow, Menu, dialog, nativeTheme, ipcMain, desktopCapturer, screen, session } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 
@@ -84,6 +84,10 @@ function createWindow() {
 
 app.whenReady().then(function () {
   Menu.setApplicationMenu(null); // no native menu bar; the app has its own nav
+  // grant microphone access so voice notes work on desktop
+  session.defaultSession.setPermissionRequestHandler(function (wc, permission, cb) {
+    cb(permission === 'media' || permission === 'audioCapture');
+  });
   setupScreenshot();
   createWindow();
   setupAutoUpdate();
