@@ -236,6 +236,12 @@ if (!m.includes('android.permission.RECORD_AUDIO')) {
   m = m.replace('</manifest>', '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n</manifest>');
   console.log('AndroidManifest -> added RECORD_AUDIO permission');
 }
+if (!m.includes('android.permission.ACCESS_FINE_LOCATION')) {
+  m = m.replace('</manifest>',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n' +
+    '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n</manifest>');
+  console.log('AndroidManifest -> added location permissions');
+}
 if (/android:windowSoftInputMode="[^"]*"/.test(m)) {
   m = m.replace(/android:windowSoftInputMode="[^"]*"/, 'android:windowSoftInputMode="adjustResize"');
 } else {

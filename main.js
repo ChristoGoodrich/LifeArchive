@@ -86,7 +86,7 @@ app.whenReady().then(function () {
   Menu.setApplicationMenu(null); // no native menu bar; the app has its own nav
   // grant microphone access so voice notes work on desktop
   session.defaultSession.setPermissionRequestHandler(function (wc, permission, cb) {
-    cb(permission === 'media' || permission === 'audioCapture');
+    cb(permission === 'media' || permission === 'audioCapture' || permission === 'geolocation');
   });
   setupScreenshot();
   createWindow();

@@ -5,6 +5,17 @@
 
 ---
 
+## v1.13.0 · 七维收官：视频 + 定位 — 2026-06-09
+
+- **新增「视频」**：表单内可拍/选一段视频（用系统相机），自动抽取封面帧存为内联 poster，视频本体存进 IndexedDB `blobs` 仓，commit 上挂 `media[kind:video]` 引用；时间线卡显示封面 + ▶ 角标，详情页可播放；删除 commit 时自动回收视频 Blob。
+- **新增「定位」**：`commit.location = {lat,lng,acc,label,at}` 轻字段，可「📍取当前位置」（opt-in GPS）或手填地点名；详情页可点外链地图（OpenStreetMap）查看；桌面定位失败时静默回落手填，不打断。
+- **搜索扩到地点**：搜地点名可命中对应存档。
+- **备份完整性**：语音和视频 Blob 通过 v1.11 的 `data.blobs` base64 路径打包进备份；选超 60MB 视频时给出提醒。
+- **权限适配**：桌面 Electron 加 `geolocation` 权限放行；Android 构建脚本注入 `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`。
+- **七维收官**：location / voice / video / people / mood / tags / custom_subject 全部落地。下一柱应转向 Supabase Storage 云端媒体桶，让多媒体跨设备真同步。
+
+> 本次 store.js 零改动——视频复用 v1.12 语音的 `media[] + blobs` 管道，定位是搭 commit 顺风车的纯字段。发布后请重点验证：视频封面帧抽取、时间线 ▶ 角标、详情播放、视频删除后 Blob 回收、桌面和 Android 定位权限、多维度共存（视频+语音+照片+定位同一条存档）、跨设备视频缺失占位。
+
 ## v1.12.0 · 立体维度四件套：人物/心情/标签/自定义主体 + 语音备注 — 2026-06-09
 
 - **新增「自定义主体」**：用户可自建长期盯住的场景（如「阳台的花」），存为同步集合 `customScenes` 随 commits/branches 一起云同步；场景选择器、时间线筛选、diff/历程/回滚均可使用自定义主体；预设 20 个场景保留不动。

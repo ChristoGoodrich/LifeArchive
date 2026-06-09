@@ -158,6 +158,11 @@
       voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除', voice_missing: '语音文件丢失',
       voice_unsupported: '此设备不支持录音', voice_denied: '麦克风权限被拒', voice_save_fail: '语音保存失败',
       custom_scene_add: '＋ 自定义主体', custom_scene_emoji: '主体图标（一个 emoji）', custom_scene_name: '主体名字',
+      video: '视频', video_add: '加视频', video_delete: '删除', video_processing: '处理中…',
+      video_missing: '视频文件缺失（仅在录制设备上，或用备份恢复）', video_save_fail: '视频保存失败',
+      video_big: '视频较大，备份文件会显著变大',
+      location: '地点', loc_ph: '在哪？填地点名', loc_use: '取当前位置', loc_locating: '定位中…',
+      loc_got: '已记录位置', loc_denied: '定位失败，可手填地点名', loc_unsupported: '此设备不支持定位',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -311,6 +316,11 @@
       voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete', voice_missing: 'Voice file missing',
       voice_unsupported: 'Recording not supported here', voice_denied: 'Microphone permission denied', voice_save_fail: 'Voice save failed',
       custom_scene_add: '＋ Custom subject', custom_scene_emoji: 'Icon (one emoji)', custom_scene_name: 'Subject name',
+      video: 'Video', video_add: 'Add video', video_delete: 'Delete', video_processing: 'Processing…',
+      video_missing: 'Video file missing (only on the recording device, or restore from backup)', video_save_fail: 'Video save failed',
+      video_big: 'Large video — your backup file will grow a lot',
+      location: 'Location', loc_ph: 'Where? Add a place name', loc_use: 'Use current location', loc_locating: 'Locating…',
+      loc_got: 'Location saved', loc_denied: 'Location failed — type a place instead', loc_unsupported: 'Location not supported here',
       saved_value_prefix: 'Saved'
     }
   };
@@ -388,9 +398,12 @@
     }
     return null;
   }
+  function videoMedia(c) { return (c && c.media || []).filter(function (m) { return m.kind === 'video'; })[0] || null; }
+
   function commitThumbSrc(c) {
     var img = firstImageFile(c.files);
-    return c.photo || (img && img.data) || '';
+    var v = videoMedia(c);
+    return c.photo || (img && img.data) || (v && v.poster) || '';
   }
   function imageFiles(c) {
     return (c && c.files || []).filter(isImageFile);
@@ -411,7 +424,9 @@
   function commitCoverDims(c) {
     if (c.photo) return (c.photoW && c.photoH) ? { w: c.photoW, h: c.photoH } : null;
     var img = firstImageFile(c.files);
-    return (img && img.w && img.h) ? { w: img.w, h: img.h } : null;
+    if (img && img.w && img.h) return { w: img.w, h: img.h };
+    var v = videoMedia(c);
+    return (v && v.w && v.h) ? { w: v.w, h: v.h } : null;
   }
   function timelineMediaAttrs(dims) {
     var attrs = { class: 'commit-media' };
@@ -1297,6 +1312,7 @@
       .concat((c.items || []).map(function (it) { return it.name; }))
       .concat(c.people || [])
       .concat((c.tags || []).map(function (t) { return '#' + t; }))
+      .concat(c.location && c.location.label ? [c.location.label] : [])
       .join(' ').toLowerCase();
     return hay.indexOf(q) >= 0;
   }
@@ -1581,6 +1597,7 @@
       // commitCoverDims covers multi-photo archives too (incl. cover-removed → file image).
       if (coverDims) { img.setAttribute('width', coverDims.w); img.setAttribute('height', coverDims.h); }
       media = el('div', timelineMediaAttrs(coverDims), [img, starBtn]);
+      if (videoMedia(c)) media.appendChild(el('span', { class: 'commit-video-badge', text: '▶' }));
       if (imageEntries.length > 1) {
         media.appendChild(el('span', { class: 'commit-img-count', text: '🖼 ' + imageEntries.length }));
       }
@@ -1882,6 +1899,43 @@
         player.addEventListener('emptied', function () { URL.revokeObjectURL(url); });
       });
     }
+    var videoM = (c.media || []).filter(function (m) { return m.kind === 'video'; })[0];
+    if (videoM) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: '🎬 ' + t('video') }));
+      var vp = el('video', { class: 'detail-video', controls: 'controls', preload: 'none', playsinline: 'playsinline' });
+      if (videoM.poster) vp.setAttribute('poster', videoM.poster);
+      if (videoM.w && videoM.h) { vp.setAttribute('width', videoM.w); vp.setAttribute('height', videoM.h); }
+      card.appendChild(el('div', { class: 'detail-videowrap' }, [vp,
+        el('span', { class: 'file-size', text: fmtDur(videoM.dur || 0) + ' · ' + fmtBytes(videoM.size || 0) })]));
+      Store.getBlob(videoM.blobId).then(function (b) {
+        if (!b) {
+          vp.replaceWith(el('div', { class: 'video-missing' }, [
+            videoM.poster ? el('img', { class: 'detail-image', src: videoM.poster, alt: '' }) : null,
+            el('div', { class: 'commit-notes', text: t('video_missing') })]));
+          return;
+        }
+        var url = URL.createObjectURL(b);
+        vp.src = url;
+        vp.addEventListener('emptied', function () { URL.revokeObjectURL(url); });
+      });
+    }
+    function geoMapUrl(loc) {
+      if (!loc || loc.lat == null) return null;
+      var la = loc.lat, lo = loc.lng;
+      return 'https://www.openstreetmap.org/?mlat=' + la + '&mlon=' + lo + '#map=16/' + la + '/' + lo;
+    }
+    if (c.location && (c.location.label || c.location.lat != null)) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: '📍 ' + t('location') }));
+      var url = geoMapUrl(c.location);
+      var locText = (c.location.label || '')
+        + (c.location.lat != null ? (c.location.label ? ' · ' : '') + c.location.lat.toFixed(4) + ', ' + c.location.lng.toFixed(4) : '');
+      if (url) {
+        card.appendChild(el('a', { class: 'detail-link-btn btn ghost', href: url, target: '_blank',
+          rel: 'noopener', text: '🗺 ' + locText }));
+      } else {
+        card.appendChild(el('div', { class: 'commit-notes', text: '📍 ' + locText }));
+      }
+    }
     if (c.notes) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '备注' : 'Notes' }));
       card.appendChild(el('div', { class: 'commit-notes', text: c.notes }));
@@ -1950,6 +2004,9 @@
   var draftTags = [];
   var draftAudio = null;
   var audioDeletedBlobId = null;
+  var draftVideo = null;
+  var videoDeletedBlobId = null;
+  var draftLocation = null;
   var pendingEdit = null;
   var pendingQuick = false;
   var pendingTemplate = null; // a commit to copy from for "照着再记一笔" (new commit, not an edit)
@@ -1963,6 +2020,9 @@
     draftTags = [];
     draftAudio = null;
     audioDeletedBlobId = null;
+    draftVideo = null;
+    videoDeletedBlobId = null;
+    draftLocation = null;
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
     var quick = !editing && pendingQuick;
@@ -1977,6 +2037,9 @@
       draftTags = src.tags ? src.tags.slice() : [];
       var srcAudio = (src.media || []).filter(function (x) { return x.kind === 'audio'; })[0];
       if (srcAudio) draftAudio = { blobId: srcAudio.blobId, mime: srcAudio.mime, size: srcAudio.size, dur: srcAudio.dur };
+      var srcVideo = (src.media || []).filter(function (x) { return x.kind === 'video'; })[0];
+      if (srcVideo) draftVideo = { blobId: srcVideo.blobId, mime: srcVideo.mime, size: srcVideo.size, dur: srcVideo.dur, w: srcVideo.w, h: srcVideo.h, poster: srcVideo.poster };
+      if (src.location) draftLocation = { lat: src.location.lat, lng: src.location.lng, acc: src.location.acc, label: src.location.label || '', at: src.location.at };
     }
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : (quick ? t('quick_capture') : t('nav_commit')) })]));
@@ -2557,6 +2620,106 @@
     var recorder = makeRecorder(renderAudio);
     renderAudio('idle');
 
+    // ---- video ----
+    var VIDEO_WARN_BYTES = 60 * 1024 * 1024;
+    function probeVideo(blob) {
+      return new Promise(function (resolve) {
+        var url = URL.createObjectURL(blob);
+        var vid = document.createElement('video');
+        vid.preload = 'metadata'; vid.muted = true; vid.playsInline = true; vid.src = url;
+        var done = false;
+        function finish(meta) { if (done) return; done = true; URL.revokeObjectURL(url); resolve(meta); }
+        vid.onloadedmetadata = function () {
+          var dur = isFinite(vid.duration) ? Math.round(vid.duration * 10) / 10 : 0;
+          var w = vid.videoWidth || 0, h = vid.videoHeight || 0;
+          var seekTo = Math.min(0.1, (vid.duration || 1) / 2);
+          vid.onseeked = function () {
+            try {
+              var scale = w ? Math.min(1, 640 / w) : 1;
+              var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+              var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+              cv.getContext('2d').drawImage(vid, 0, 0, cw, ch);
+              finish({ dur: dur, w: w, h: h, poster: cv.toDataURL('image/jpeg', 0.7) });
+            } catch (e) { finish({ dur: dur, w: w, h: h, poster: '' }); }
+          };
+          try { vid.currentTime = seekTo; } catch (e) { finish({ dur: dur, w: w, h: h, poster: '' }); }
+        };
+        vid.onerror = function () { finish({ dur: 0, w: 0, h: 0, poster: '' }); };
+        setTimeout(function () { finish({ dur: 0, w: 0, h: 0, poster: '' }); }, 8000);
+      });
+    }
+    var videoBox = el('div', { class: 'video-box' });
+    var videoInput = el('input', { type: 'file', accept: 'video/*', capture: 'environment', class: 'hidden-file' });
+    videoInput.addEventListener('change', function () {
+      var f = videoInput.files && videoInput.files[0];
+      videoInput.value = '';
+      if (!f) return;
+      if (f.size > VIDEO_WARN_BYTES) toast('⚠ ' + t('video_big'));
+      renderVideo('busy');
+      probeVideo(f).then(function (meta) {
+        draftVideo = { _blob: f, mime: f.type || 'video/mp4', size: f.size,
+          dur: meta.dur, w: meta.w, h: meta.h, poster: meta.poster };
+        renderVideo('done');
+      });
+    });
+    function renderVideo(state) {
+      videoBox.innerHTML = '';
+      videoBox.appendChild(videoInput);
+      if (state === 'busy') { videoBox.appendChild(el('span', { class: 'video-busy', text: t('video_processing') })); return; }
+      if (draftVideo) {
+        var thumb = el('div', { class: 'video-thumb' + (draftVideo.poster ? '' : ' no-poster') });
+        if (draftVideo.poster) thumb.style.backgroundImage = 'url(' + draftVideo.poster + ')';
+        thumb.appendChild(el('span', { class: 'video-play', text: '▶' }));
+        var del = el('button', { class: 'btn ghost tiny', type: 'button', text: '🗑 ' + t('video_delete') });
+        del.addEventListener('click', function () {
+          if (draftVideo && draftVideo.blobId && !draftVideo._blob) videoDeletedBlobId = draftVideo.blobId;
+          draftVideo = null; renderVideo('idle');
+        });
+        videoBox.appendChild(el('div', { class: 'video-done' }, [thumb,
+          el('span', { class: 'video-meta', text: fmtDur(draftVideo.dur || 0) + ' · ' + fmtBytes(draftVideo.size || 0) }), del]));
+        return;
+      }
+      var pick = el('button', { class: 'btn ghost', type: 'button', text: '🎬 ' + t('video_add') });
+      pick.addEventListener('click', function () { videoInput.click(); });
+      videoBox.appendChild(pick);
+    }
+    renderVideo('idle');
+
+    // ---- location ----
+    var locLabel = el('input', { class: 'loc-label', type: 'text', placeholder: t('loc_ph'),
+      value: (draftLocation && draftLocation.label) || '' });
+    var locCoord = el('span', { class: 'loc-coord' });
+    function renderLocCoord() {
+      locCoord.textContent = (draftLocation && draftLocation.lat != null)
+        ? '📍 ' + draftLocation.lat.toFixed(4) + ', ' + draftLocation.lng.toFixed(4)
+          + (draftLocation.acc ? ' ±' + Math.round(draftLocation.acc) + 'm' : '')
+        : '';
+    }
+    renderLocCoord();
+    var gpsBtn = el('button', { class: 'btn ghost tiny', type: 'button', text: '📍 ' + t('loc_use') });
+    gpsBtn.addEventListener('click', function () {
+      if (!navigator.geolocation) { toast('⚠ ' + t('loc_unsupported')); return; }
+      gpsBtn.disabled = true; gpsBtn.textContent = '… ' + t('loc_locating');
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        draftLocation = draftLocation || {};
+        draftLocation.lat = pos.coords.latitude;
+        draftLocation.lng = pos.coords.longitude;
+        draftLocation.acc = pos.coords.accuracy;
+        draftLocation.at = Date.now();
+        renderLocCoord();
+        gpsBtn.disabled = false; gpsBtn.textContent = '📍 ' + t('loc_use');
+        toast('📍 ' + t('loc_got'));
+      }, function (err) {
+        gpsBtn.disabled = false; gpsBtn.textContent = '📍 ' + t('loc_use');
+        toast('⚠ ' + t('loc_denied'));
+        console.warn('[loc] ' + (err && err.code) + ' ' + (err && err.message));
+      }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+    });
+    var clearLocBtn = el('button', { class: 'btn ghost tiny', type: 'button', text: '✕' });
+    clearLocBtn.addEventListener('click', function () { draftLocation = null; locLabel.value = ''; renderLocCoord(); });
+    var locationBox = el('div', { class: 'loc-box' }, [locLabel,
+      el('div', { class: 'loc-row' }, [gpsBtn, clearLocBtn, locCoord])]);
+
     var moreDetails = el('details', { class: 'more-details' }, [
       moreSummary, itemsLabel,
       labeledBlock(lang === 'zh' ? '文件' : 'Files', filesBlock),
@@ -2564,6 +2727,8 @@
       labeledBlock('👥 ' + t('people'), peopleInput.el),
       labeledBlock('🏷️ ' + t('tags'), tagsInput.el),
       labeledBlock('🎙 ' + t('voice'), audioBox),
+      labeledBlock('🎬 ' + t('video'), videoBox),
+      labeledBlock('📍 ' + t('location'), locationBox),
       labeled(t('notes'), notesInput)
     ]);
     if ((src && src.items && src.items.length) || (src && src.files && src.files.length) ||
@@ -2572,24 +2737,46 @@
     // collect + persist. `planned` only matters for NEW commits; editing preserves the
     // commit's existing planned/real state.
     function persistDraftMedia(prevMedia) {
-      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio'; });
+      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio' && m.kind !== 'video'; });
       var dels = [];
       if (audioDeletedBlobId) dels.push(Store.deleteBlob(audioDeletedBlobId));
-      if (draftAudio && !draftAudio._blob && draftAudio.blobId) {
-        media.push({ kind: 'audio', blobId: draftAudio.blobId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
-        return Promise.all(dels).then(function () { return media; });
-      }
-      if (draftAudio && draftAudio._blob) {
-        var blobId = 'au_' + Store.uid('a');
-        return Promise.all(dels)
-          .then(function () { return Store.putBlob(blobId, draftAudio._blob); })
-          .then(function (ok) {
-            if (ok) media.push({ kind: 'audio', blobId: blobId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
+      if (videoDeletedBlobId) dels.push(Store.deleteBlob(videoDeletedBlobId));
+
+      var chain = Promise.all(dels);
+
+      // ----- audio -----
+      chain = chain.then(function () {
+        if (draftAudio && !draftAudio._blob && draftAudio.blobId) {
+          media.push({ kind: 'audio', blobId: draftAudio.blobId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
+          return;
+        }
+        if (draftAudio && draftAudio._blob) {
+          var aId = 'au_' + Store.uid('a');
+          return Store.putBlob(aId, draftAudio._blob).then(function (ok) {
+            if (ok) media.push({ kind: 'audio', blobId: aId, mime: draftAudio.mime, size: draftAudio.size, dur: draftAudio.dur });
             else toast('⚠ ' + t('voice_save_fail'));
-            return media;
           });
-      }
-      return Promise.all(dels).then(function () { return media; });
+        }
+      });
+
+      // ----- video -----
+      chain = chain.then(function () {
+        if (draftVideo && !draftVideo._blob && draftVideo.blobId) {
+          media.push({ kind: 'video', blobId: draftVideo.blobId, mime: draftVideo.mime, size: draftVideo.size,
+            dur: draftVideo.dur, w: draftVideo.w, h: draftVideo.h, poster: draftVideo.poster });
+          return;
+        }
+        if (draftVideo && draftVideo._blob) {
+          var vId = 'vd_' + Store.uid('v');
+          return Store.putBlob(vId, draftVideo._blob).then(function (ok) {
+            if (ok) media.push({ kind: 'video', blobId: vId, mime: draftVideo.mime, size: draftVideo.size,
+              dur: draftVideo.dur, w: draftVideo.w, h: draftVideo.h, poster: draftVideo.poster });
+            else toast('⚠ ' + t('video_save_fail'));
+          });
+        }
+      });
+
+      return chain.then(function () { return media; });
     }
 
     function doSave(planned) {
@@ -2617,6 +2804,17 @@
           people: peopleInput.get(),
           tags: tagsInput.get(),
           media: media,
+          location: (function () {
+            var lbl = locLabel.value.trim();
+            var hasLoc = lbl || (draftLocation && draftLocation.lat != null);
+            return hasLoc ? {
+              label: lbl || null,
+              lat: draftLocation ? draftLocation.lat : null,
+              lng: draftLocation ? draftLocation.lng : null,
+              acc: draftLocation ? draftLocation.acc : null,
+              at: draftLocation ? draftLocation.at : null
+            } : null;
+          })(),
           planned: !!planned,
           remindDays: remindDays,
           remindAt: remindAt,
@@ -4819,6 +5017,22 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.13.0', '2026-06-09', '七维收官：视频 + 定位',
+      'Seven dimensions complete: video + location',
+      ['新增「视频」：表单内可拍/选一段视频（用系统相机），自动抽取封面帧存为内联 poster，视频本体存进 IndexedDB blobs 仓，commit 上挂 media[kind:video] 引用；时间线卡显示封面 + ▶ 角标，详情页可播放。',
+       '删除带视频的 commit 时自动回收视频 Blob（与语音回收同一通道）。',
+       '新增「定位」：commit.location = {lat,lng,acc,label,at} 轻字段，可「📍取当前位置」（opt-in GPS）或手填地点名；详情页可点外链地图查看；桌面定位失败时静默回落手填，不打断。',
+       '备份导出已支持视频 Blob（通过 v1.11 data.blobs base64），导入可完整恢复视频；注意大视频会显著增大备份文件（选超 60MB 时提醒）。',
+       '定位进入搜索匹配：搜地点名可找到对应存档。',
+       '桌面 Electron 加 geolocation 权限放行；Android 构建脚本注入 ACCESS_FINE/COARSE_LOCATION。',
+       '至此，location / voice / video / people / mood / tags / custom_subject 七维全部落地。下一柱应转向云端媒体桶（Supabase Storage）让多媒体跨设备真同步。'],
+      ['Add video: capture or pick a video using the system camera, auto-extract a poster frame, store the video blob in IndexedDB with a media[kind:video] reference; timeline card shows the poster + ▶ badge, detail page plays the video inline.',
+       'Deleting a commit with video auto-recycles its blob (same cleanup path as voice).',
+       'Add location: commit.location = {lat,lng,acc,label,at} as a light field; opt-in GPS via "Use current location" or type a place name; detail shows a map link (OpenStreetMap); desktop gracefully falls back to manual entry if geolocation fails.',
+       'Backup export already packages video blobs via the v1.11 data.blobs base64 path so a full restore brings video back; a toast warns when selecting videos over 60MB.',
+       'Location labels are indexed in search — type a place name to surface matching archives.',
+       'Desktop Electron now grants geolocation; Android build injects ACCESS_FINE/COARSE_LOCATION.',
+       'All seven dimensions — location, voice, video, people, mood, tags, custom subjects — are now live. Next priority: Supabase Storage for true cross-device media sync.']],
     ['1.12.0', '2026-06-09', '立体维度四件套：人物/心情/标签/自定义主体 + 语音备注',
       'Four-dimensional archive: people, mood, tags, custom subjects + voice notes',
       ['新增「自定义主体」：用户可自建长期盯住的场景（如「阳台的花」），存为同步集合随云同步，在场景选择器、时间线筛选、diff/历程/回滚中均可使用；预设 20 个场景保留不动。',
