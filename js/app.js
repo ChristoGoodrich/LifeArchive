@@ -155,7 +155,8 @@
       mood: '心情', people: '人物', tags: '标签',
       mood_great: '很棒', mood_good: '不错', mood_meh: '一般', mood_down: '低落', mood_bad: '糟糕',
       people_ph: '和谁？回车添加', tags_ph: '#标签，回车添加',
-      voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除',       voice_missing: '语音文件丢失', media_fetching: '拉取媒体…', media_upload: '上传媒体', media_uploaded: '媒体已上传',
+      voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除',       voice_missing: '语音文件丢失',       media_fetching: '拉取媒体…', media_upload: '上传媒体', media_uploaded: '媒体已上传',
+      photo_save_fail: '照片保存失败', photo_fetching: '加载原图…', photo_need_online: '原图需联网或在录制设备查看',
       voice_unsupported: '此设备不支持录音', voice_denied: '麦克风权限被拒', voice_save_fail: '语音保存失败',
       custom_scene_add: '＋ 自定义主体', custom_scene_emoji: '主体图标（一个 emoji）', custom_scene_name: '主体名字',
       video: '视频', video_add: '加视频', video_delete: '删除', video_processing: '处理中…',
@@ -314,7 +315,8 @@
       mood: 'Mood', people: 'People', tags: 'Tags',
       mood_great: 'Great', mood_good: 'Good', mood_meh: 'Meh', mood_down: 'Down', mood_bad: 'Bad',
       people_ph: 'Who with? Enter to add', tags_ph: '#tag, Enter to add',
-      voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete',       voice_missing: 'Voice file missing', media_fetching: 'Fetching media…', media_upload: 'Upload media', media_uploaded: 'Media uploaded',
+      voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete',       voice_missing: 'Voice file missing',       media_fetching: 'Fetching media…', media_upload: 'Upload media', media_uploaded: 'Media uploaded',
+      photo_save_fail: 'Photo save failed', photo_fetching: 'Loading full image…', photo_need_online: 'Full image needs network or the original device',
       voice_unsupported: 'Recording not supported here', voice_denied: 'Microphone permission denied', voice_save_fail: 'Voice save failed',
       custom_scene_add: '＋ Custom subject', custom_scene_emoji: 'Icon (one emoji)', custom_scene_name: 'Subject name',
       video: 'Video', video_add: 'Add video', video_delete: 'Delete', video_processing: 'Processing…',
@@ -401,8 +403,36 @@
     return null;
   }
   function videoMedia(c) { return (c && c.media || []).filter(function (m) { return m.kind === 'video'; })[0] || null; }
+  function photoMedia(c) { return (c && c.media || []).filter(function (m) { return m.kind === 'photo'; }); }
+  function coverPhoto(c) { var ps = photoMedia(c); return ps.filter(function (m) { return m.cover; })[0] || ps[0] || null; }
+
+  var THUMB_MAX = 640;
+  function makeThumb(blobOrFile) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(blobOrFile);
+      var img = new Image();
+      img.onload = function () {
+        var w = img.naturalWidth || 0, h = img.naturalHeight || 0;
+        var scale = w ? Math.min(1, THUMB_MAX / w) : 1;
+        var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+        var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+        try {
+          cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          resolve({ thumb: cv.toDataURL('image/jpeg', 0.7), w: w, h: h });
+        } catch (e) { resolve({ thumb: '', w: w, h: h }); }
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve({ thumb: '', w: 0, h: 0 }); };
+      img.src = url;
+    });
+  }
+  function dataUrlToBlob(dataUrl) {
+    return fetch(dataUrl).then(function (r) { return r.blob(); });
+  }
 
   function commitThumbSrc(c) {
+    var cv = coverPhoto(c);
+    if (cv && cv.thumb) return cv.thumb;
     var img = firstImageFile(c.files);
     var v = videoMedia(c);
     return c.photo || (img && img.data) || (v && v.poster) || '';
@@ -413,17 +443,19 @@
   function commitImageEntries(c) {
     var out = [];
     if (!c) return out;
-    if (c.photo) out.push({ data: c.photo, name: c.message || 'cover.jpg',
-      w: c.photoW || null, h: c.photoH || null, cover: true });
-    imageFiles(c).forEach(function (f) {
-      out.push({ data: f.data, name: f.name || 'image.jpg', w: f.w || null, h: f.h || null, file: f });
+    photoMedia(c).forEach(function (m) {
+      out.push({ thumb: m.thumb, blobId: m.blobId, name: m.name || 'image.jpg', w: m.w, h: m.h, cover: !!m.cover });
     });
+    if (!out.length) {
+      if (c.photo) out.push({ data: c.photo, name: c.message || 'cover.jpg', w: c.photoW || null, h: c.photoH || null, cover: true });
+      imageFiles(c).forEach(function (f) {
+        out.push({ data: f.data, name: f.name || 'image.jpg', w: f.w || null, h: f.h || null, file: f });
+      });
+    }
     return out;
   }
-  // Pixel size of whatever image commitThumbSrc shows, so timeline/detail can reserve its
-  // box (no decode-time "pop"). Cover photo first; else the first image attachment (e.g. a
-  // multi-photo archive whose cover was removed). Legacy commits without stored dims → null.
   function commitCoverDims(c) {
+    var cv = coverPhoto(c); if (cv && cv.w && cv.h) return { w: cv.w, h: cv.h };
     if (c.photo) return (c.photoW && c.photoH) ? { w: c.photoW, h: c.photoH } : null;
     var img = firstImageFile(c.files);
     if (img && img.w && img.h) return { w: img.w, h: img.h };
@@ -971,9 +1003,19 @@
     Store.deleteCommit(id);
     autoSync(false);
     var u = Cloud.currentUser();
-    if (u) blobIds.forEach(function (bid) {
-      Cloud.removeBlob(u.id + '/' + bid); markUploaded(bid, false);
-    });
+    if (u && blobIds.length) {
+      var allCommits = Store.commits();
+      var usedElsewhere = {};
+      allCommits.forEach(function (oc) {
+        (oc.media || []).forEach(function (m) { if (m && m.blobId) usedElsewhere[m.blobId] = true; });
+      });
+      blobIds.forEach(function (bid) {
+        if (!usedElsewhere[bid]) {
+          Cloud.removeBlob(u.id + '/' + bid);
+        }
+        markUploaded(bid, false);
+      });
+    }
   }
   function deleteBranchWithCleanup(id) {
     Notify.cancelFor(id, 'due');
@@ -1053,6 +1095,44 @@
         });
       });
     }, Promise.resolve());
+  }
+  function migrateCommitPhotos(c) {
+    if (!c) return Promise.resolve(false);
+    var jobs = [], newMedia = (c.media || []).slice();
+    function addPhoto(dataUrl, dims, name, cover) {
+      return dataUrlToBlob(dataUrl).then(function (blob) {
+        return makeThumb(blob).then(function (tm) {
+          var id = 'ph_' + Store.uid('p');
+          return Store.putBlob(id, blob).then(function (ok) {
+            if (ok) newMedia.push({ kind: 'photo', cover: !!cover, blobId: id, thumb: tm.thumb || '',
+              w: (dims && dims.w) || tm.w, h: (dims && dims.h) || tm.h, mime: blob.type || 'image/jpeg', size: blob.size, name: name || 'image.jpg' });
+          });
+        });
+      });
+    }
+    if (c.photo && !photoMedia(c).some(function (m) { return m.cover; }))
+      jobs.push(addPhoto(c.photo, { w: c.photoW, h: c.photoH }, c.message || 'cover.jpg', true));
+    (c.files || []).filter(isImageFile).forEach(function (f) { jobs.push(addPhoto(f.data, { w: f.w, h: f.h }, f.name, false)); });
+    if (!jobs.length) return Promise.resolve(false);
+    return Promise.all(jobs).then(function () {
+      var keepFiles = (c.files || []).filter(function (f) { return !isImageFile(f); });
+      Store.updateCommit(c.id, { media: newMedia, photo: null, photoW: null, photoH: null, files: keepFiles });
+      return true;
+    });
+  }
+  function migrateInlinePhotos() {
+    var pending = Store.commits().filter(function (c) {
+      return c.photo || (c.files || []).some(isImageFile);
+    });
+    if (!pending.length) return;
+    var i = 0;
+    function step() {
+      if (i >= pending.length) { autoSync(false); return; }
+      migrateCommitPhotos(pending[i++]).then(function () {
+        (window.requestIdleCallback || function (f) { setTimeout(f, 400); })(step);
+      });
+    }
+    step();
   }
   function cloudSync() {
     var local = Store.exportRaw();
@@ -1718,7 +1798,7 @@
     var media = null, thumbStrip = null;
     if (thumbSrc) {
       var imageEntries = commitImageEntries(c);
-      if (!imageEntries.length) imageEntries = [{ data: thumbSrc, name: c.message || '' }];
+      if (!imageEntries.length) imageEntries = [{ thumb: thumbSrc, data: thumbSrc, name: c.message || '' }];
       var coverDims = commitCoverDims(c);
       var img = el('img', { class: 'commit-img', src: thumbSrc, alt: c.message || '',
         loading: 'lazy', decoding: 'async' });
@@ -1740,7 +1820,7 @@
         thumbStrip = el('div', { class: 'commit-thumbs' });
         var MAXT = 8;
         extras.slice(0, MAXT).forEach(function (entry) {
-          var thumbAttrs = { class: 'commit-thumb-img', src: entry.data, alt: '',
+          var thumbAttrs = { class: 'commit-thumb-img', src: entry.thumb || entry.data, alt: '',
             loading: 'lazy', decoding: 'async' };
           if (entry.w && entry.h) { thumbAttrs.width = entry.w; thumbAttrs.height = entry.h; }
           thumbStrip.appendChild(el('div', { class: 'commit-thumb' }, [
@@ -1922,11 +2002,17 @@
 
     var card = el('div', { class: 'detail-card' + (c.planned ? ' is-planned' : '') });
     if (c.planned) card.appendChild(el('div', { class: 'detail-plan-banner', text: t('planned_tag') }));
-    // photo at its natural aspect ratio (no cropping), matching the timeline cards
-    if (c.photo) {
-      var detailPhoto = el('img', { class: 'detail-photo', src: c.photo, alt: c.message || '', decoding: 'async' });
-      if (c.photoW && c.photoH) { detailPhoto.setAttribute('width', c.photoW); detailPhoto.setAttribute('height', c.photoH); }
+    var cv = coverPhoto(c);
+    var coverThumb = cv ? cv.thumb : c.photo;
+    if (coverThumb) {
+      var detailPhoto = el('img', { class: 'detail-photo', src: coverThumb, alt: c.message || '', decoding: 'async' });
+      var dims = commitCoverDims(c); if (dims) { detailPhoto.setAttribute('width', dims.w); detailPhoto.setAttribute('height', dims.h); }
       card.appendChild(detailPhoto);
+      if (cv && cv.blobId) {
+        resolveMediaBlob(cv.blobId).then(function (b) {
+          if (b) { var u = URL.createObjectURL(b); detailPhoto.src = u; }
+        });
+      }
     }
     card.appendChild(el('div', { class: 'detail-title', text: c.message || '(no message)' }));
     card.appendChild(el('div', { class: 'detail-sub' }, [
@@ -1992,26 +2078,37 @@
         text: '↩︎ ' + (linkedTarget ? (linkedTarget.message || shortId(linkedTarget.id)) : shortId(c.rollbackTargetId)),
         onclick: function () { if (linkedTarget) { pendingDetail = linkedTarget.id; go('detail'); } } }));
     }
-    if (c.files && c.files.length) {
+    var allImgEntries = commitImageEntries(c);
+    var imgEntries = allImgEntries.filter(function (e) { return e.thumb || e.data; });
+    if (imgEntries.length) {
+      card.appendChild(el('div', { class: 'detail-section-title', text: L ? '图片' : 'Photos' }));
+      var gallery = el('div', { class: 'detail-gallery' });
+      imgEntries.slice(0, 12).forEach(function (entry) {
+        var src = entry.thumb || entry.data;
+        var imageAttrs = { class: 'detail-image', src: src, alt: entry.name || '', loading: 'lazy', decoding: 'async' };
+        if (entry.w && entry.h) { imageAttrs.width = entry.w; imageAttrs.height = entry.h; }
+        var link = el('a', { class: 'detail-image-link', href: src, download: entry.name || 'image.jpg', title: entry.name || '' }, [
+          el('img', imageAttrs)
+        ]);
+        if (entry.blobId) {
+          link.addEventListener('click', function (e) {
+            e.preventDefault();
+            resolveMediaBlob(entry.blobId).then(function (b) {
+              if (b) { var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = entry.name || 'image.jpg'; a.click(); URL.revokeObjectURL(u); }
+              else { toast(t('photo_need_online')); }
+            });
+          });
+        }
+        gallery.appendChild(link);
+      });
+      if (imgEntries.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more', text: '+' + (imgEntries.length - 12) }));
+      card.appendChild(gallery);
+    }
+    var nonImgFiles = (c.files || []).filter(function (f) { return !isImageFile(f); });
+    if (nonImgFiles.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
-      var imgs = (c.files || []).filter(isImageFile);
-      if (imgs.length) {
-        var gallery = el('div', { class: 'detail-gallery' });
-        imgs.slice(0, 12).forEach(function (f) {
-          var imageAttrs = { class: 'detail-image', src: f.data, alt: f.name,
-            loading: 'lazy', decoding: 'async' };
-          if (f.w && f.h) { imageAttrs.width = f.w; imageAttrs.height = f.h; }
-          gallery.appendChild(el('a', { class: 'detail-image-link', href: f.data,
-            download: f.name, title: f.name }, [
-            el('img', imageAttrs)
-          ]));
-        });
-        if (imgs.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more',
-          text: '+' + (imgs.length - 12) }));
-        card.appendChild(gallery);
-      }
       var fl = el('div', { class: 'detail-files' });
-      c.files.forEach(function (f) {
+      nonImgFiles.forEach(function (f) {
         var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
         fl.appendChild(el('a', { class: 'detail-file', href: f.data, download: f.name }, [
           ic,
@@ -2158,6 +2255,10 @@
   var audioDeletedBlobId = null;
   var draftVideo = null;
   var videoDeletedBlobId = null;
+  var draftCover = null;
+  var coverDeletedBlobId = null;
+  var draftPhotos = [];
+  var photoDeletedBlobIds = [];
   var draftLocation = null;
   var pendingEdit = null;
   var pendingQuick = false;
@@ -2174,6 +2275,10 @@
     audioDeletedBlobId = null;
     draftVideo = null;
     videoDeletedBlobId = null;
+    draftCover = null;
+    coverDeletedBlobId = null;
+    draftPhotos = [];
+    photoDeletedBlobIds = [];
     draftLocation = null;
     var editing = pendingEdit ? Store.getCommit(pendingEdit) : null;
     pendingEdit = null;
@@ -2318,16 +2423,17 @@
     function setPhoto(dataUrl, dims, takenAt) {
       draftPhoto = dataUrl;
       if (takenAt !== undefined) draftPhotoTakenAt = takenAt ? Number(takenAt) || null : null;
-      // prefer dims known up-front (from downscale) so a fast save never loses them; the
-      // onload below is only a fallback for paths that didn't supply a size (e.g. edit).
       draftPhotoDims = (dims && dims.w && dims.h) ? { w: dims.w, h: dims.h } : null;
+      // also create draftCover for media[] pipeline
+      dataUrlToBlob(dataUrl).then(function (blob) {
+        return makeThumb(blob).then(function (tm) {
+          draftCover = { _blob: blob, thumb: tm.thumb, w: (dims && dims.w) || tm.w, h: (dims && dims.h) || tm.h,
+            mime: blob.type || 'image/jpeg', size: blob.size, name: 'cover.jpg' };
+        });
+      }).catch(function () {});
       preview.innerHTML = '';
       preview.style.backgroundImage = 'none';
-      // show the cover at its natural aspect ratio (no cropping) — the dropzone grows
-      // to fit, matching how the timeline now displays photos
       var coverImg = el('img', { class: 'photo-drop-img', src: dataUrl, alt: '' });
-      // remember the cover's pixel size so saved commits carry it and timeline cards can
-      // reserve the image box up-front (no decode-time "pop"/enlarge — see commitCard)
       coverImg.addEventListener('load', function () {
         if (!draftPhotoDims && coverImg.naturalWidth && coverImg.naturalHeight) {
           draftPhotoDims = { w: coverImg.naturalWidth, h: coverImg.naturalHeight };
@@ -2343,9 +2449,11 @@
       syncPhotoTools();
     }
     function clearPhoto() {
+      if (draftCover && draftCover.blobId) coverDeletedBlobId = draftCover.blobId;
       draftPhoto = null;
       draftPhotoDims = null;
       draftPhotoTakenAt = null;
+      draftCover = null;
       preview.innerHTML = '';
       preview.appendChild(el('span', { class: 'photo-hint', text: '📷 ' + t('photo') }));
       preview.classList.remove('has-photo');
@@ -2889,10 +2997,12 @@
     // collect + persist. `planned` only matters for NEW commits; editing preserves the
     // commit's existing planned/real state.
     function persistDraftMedia(prevMedia) {
-      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio' && m.kind !== 'video'; });
+      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio' && m.kind !== 'video' && m.kind !== 'photo'; });
       var dels = [];
       if (audioDeletedBlobId) dels.push(Store.deleteBlob(audioDeletedBlobId));
       if (videoDeletedBlobId) dels.push(Store.deleteBlob(videoDeletedBlobId));
+      if (coverDeletedBlobId) dels.push(Store.deleteBlob(coverDeletedBlobId));
+      photoDeletedBlobIds.forEach(function (id) { dels.push(Store.deleteBlob(id)); });
 
       var chain = Promise.all(dels);
 
@@ -2926,6 +3036,38 @@
             else toast('⚠ ' + t('video_save_fail'));
           });
         }
+      });
+
+      // ----- cover photo -----
+      chain = chain.then(function () {
+        if (draftCover && !draftCover._blob && draftCover.blobId) {
+          media.push({ kind: 'photo', cover: true, blobId: draftCover.blobId, thumb: draftCover.thumb,
+            w: draftCover.w, h: draftCover.h, mime: draftCover.mime, size: draftCover.size, name: draftCover.name });
+          return;
+        }
+        if (draftCover && draftCover._blob) {
+          var pid = 'ph_' + Store.uid('p');
+          return Store.putBlob(pid, draftCover._blob).then(function (ok) {
+            if (ok) media.push({ kind: 'photo', cover: true, blobId: pid, thumb: draftCover.thumb,
+              w: draftCover.w, h: draftCover.h, mime: draftCover.mime, size: draftCover.size, name: draftCover.name });
+            else toast('⚠ ' + t('photo_save_fail'));
+          });
+        }
+      });
+
+      // ----- additional photos -----
+      chain = chain.then(function () {
+        return draftPhotos.reduce(function (p, dp) {
+          return p.then(function () {
+            if (!dp._blob && dp.blobId) { media.push({ kind: 'photo', cover: false, blobId: dp.blobId, thumb: dp.thumb, w: dp.w, h: dp.h, mime: dp.mime, size: dp.size, name: dp.name }); return; }
+            if (dp._blob) {
+              var id = 'ph_' + Store.uid('p');
+              return Store.putBlob(id, dp._blob).then(function (ok) {
+                if (ok) media.push({ kind: 'photo', cover: false, blobId: id, thumb: dp.thumb, w: dp.w, h: dp.h, mime: dp.mime, size: dp.size, name: dp.name });
+              });
+            }
+          });
+        }, Promise.resolve());
       });
 
       return chain.then(function () { return media; });
@@ -5175,6 +5317,20 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.17.0', '2026-06-15', '照片进桶：缩略图内联 + 全图进桶 + 同步瘦身',
+      'Photos to bucket: inline thumbs + full images in cloud + smaller sync',
+      ['照片改为「缩略图内联 + 全图进桶」模型：时间线和缩略条用内联小图（~20–50KB）即时渲染，全图存在 IndexedDB + Supabase 桶、按需下载缓存。',
+       '云同步 jsonb 体积大幅下降：不再把整张照片 base64 塞进一行存档，只带轻量 thumb + blobId 引用。',
+       '复用 v1.16 媒体桶管道：照片自动随 syncMediaUp 上传、resolveMediaBlob 按需下载、删除时回收桶对象。',
+       '旧内联照片在后台空闲时逐步迁移（migrateInlinePhotos），期间照常可用；迁移可回退。',
+       '详情页封面先显示 thumb 随即换全图（清晰）；画廊/导出/现实对比使用全分辨率。',
+       '删除回收守卫：共享 blobId（回滚复制）时不会误删仍在使用的原图。'],
+      ['Photos move to "inline thumbnail + full image in bucket" model: timeline/thumbnails use small inline JPEGs (~20–50KB) for instant rendering; full images stored in IndexedDB + Supabase bucket, downloaded on demand and cached.',
+       'Cloud sync jsonb shrinks dramatically: no more base64 photos in the archive row — just lightweight thumb + blobId references.',
+       'Reuses v1.16 media bucket pipeline: photos auto-upload via syncMediaBlob, download via resolveMediaBlob,回收 on delete.',
+       'Legacy inline photos migrate gradually in the background (migrateInlinePhotos), remain usable during migration; reversible.',
+       'Detail cover shows thumb first then swaps to full-res; gallery/export/reality-diff use full resolution.',
+       'Shared-blobId guard: rollbacks that copy blobId references won\'t have their originals deleted prematurely.']],
     ['1.16.0', '2026-06-15', '云端媒体桶：语音/视频跨设备真同步',
       'Cloud media bucket: voice/video cross-device sync',
       ['语音/视频现在通过 Supabase 私有媒体桶跨设备同步：在一台设备录制，同账号登录另一台即可播放（按需下载、本地缓存、第二次秒播）。',
@@ -6439,6 +6595,7 @@
       reconcileCaptureNudge();
       if (pendingDeepLink) { handleNotifyIntent(pendingDeepLink); pendingDeepLink = null; }
       hideSplash(bootStartedAt);
+      migrateInlinePhotos();
       // re-measure as layout + async safe-area insets settle. These all land while the
       // splash still covers the screen (~1.1s), so the topbar/content shift isn't visible.
       syncTopbarHeight();
