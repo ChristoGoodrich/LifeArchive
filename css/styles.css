@@ -886,14 +886,77 @@ textarea.field{resize:vertical}
 .branch-card:not(.slim) .branch-head{padding-right:132px}
 .load-more{width:100%;margin:6px 0 8px}
 
-/* ---- toast ---- */
-.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
-  background:var(--text);color:var(--bg);padding:13px 22px;
-  border-radius:999px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.28s;z-index:50;font-weight:700}
-.toast.show{opacity:.96;transform:translateX(-50%) translateY(0)}
-.toast.with-action{display:flex;align-items:center;gap:10px;pointer-events:auto;padding:10px 12px 10px 18px}
-.toast-action{border:none;border-radius:999px;background:var(--bg);color:var(--text);
-  padding:9px 12px;font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap}
+/* ---- toast · HyperOS 磨砂质感 ---- */
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(14px) scale(.98);
+  display:inline-flex;align-items:center;gap:9px;max-width:min(86vw,420px);
+  padding:12px 18px;border-radius:18px;
+  background:color-mix(in srgb, var(--card) 78%, transparent);
+  -webkit-backdrop-filter:saturate(1.6) blur(22px);backdrop-filter:saturate(1.6) blur(22px);
+  border:1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color:var(--text);font-weight:600;font-size:14px;letter-spacing:.01em;
+  box-shadow:0 12px 34px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.10);
+  opacity:0;pointer-events:none;z-index:50;
+  transition:opacity .26s ease, transform .42s cubic-bezier(.2,.9,.25,1.08)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.toast::before{content:"";width:7px;height:7px;border-radius:50%;flex:0 0 auto;
+  background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent)}
+.toast.t-ok::before{background:#34c759;box-shadow:0 0 0 4px rgba(52,199,89,.22)}
+.toast.t-warn::before{background:#ff9f0a;box-shadow:0 0 0 4px rgba(255,159,10,.22)}
+.toast.t-info::before{background:var(--accent)}
+.toast.with-action{padding:10px 12px 10px 18px;pointer-events:auto}
+.toast-action{border:none;border-radius:999px;
+  background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent);
+  padding:8px 14px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;
+  transition:transform .15s ease}
+.toast-action:active{transform:scale(.94)}
+/* 老 WebView 不支持 backdrop-filter → 不透明兜底，避免糊成一团 */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .toast{background:var(--card);border-color:var(--line)}
+}
+@media (prefers-reduced-motion:reduce){ .toast{transition:opacity .2s} }
+
+/* ---- swipeable fullscreen gallery ---- */
+.gal-mask{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.92);
+  opacity:0;transition:opacity .26s ease;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:pan-y}
+.gal-mask.open{opacity:1}
+.gal-track{display:flex;height:100%;width:100%;will-change:transform}
+.gal-slide{flex:0 0 100%;height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+.gal-img{max-width:100%;max-height:100%;border-radius:10px;user-select:none;-webkit-user-drag:none;
+  transition:transform .3s cubic-bezier(.2,.9,.25,1)}
+.gal-img.zoom{transform:scale(2)}
+.gal-dots{position:absolute;bottom:calc(20px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom,0px)));left:50%;transform:translateX(-50%);display:flex;gap:7px}
+.gal-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.34);transition:.25s}
+.gal-dot.on{background:#fff;width:18px;border-radius:3px}
+.gal-cap{position:absolute;bottom:calc(40px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom,0px)));left:0;right:0;text-align:center;
+  color:rgba(255,255,255,.86);font-size:13px;pointer-events:none;padding:0 24px}
+.gal-head{position:absolute;top:calc(56px + var(--safe-area-inset-top, env(safe-area-inset-top,0px)));left:0;right:0;text-align:center;pointer-events:none;padding:0 24px}
+.gal-title{color:#fff;font-size:18px;font-weight:700}
+.gal-sub{color:rgba(255,255,255,.78);font-size:13px;margin-top:3px}
+.gal-close{position:absolute;top:calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top,0px)));right:14px;z-index:2;
+  width:38px;height:38px;border-radius:50%;border:none;color:#fff;font-size:16px;cursor:pointer;
+  background:rgba(255,255,255,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+
+/* ---- 澎湃 micro-animations (transform/opacity only) ---- */
+.tappable{transition:transform .16s cubic-bezier(.2,.9,.25,1)}
+.tappable:active{transform:scale(.985)}
+@keyframes rgRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.timeline-stream .date-group{animation:rgRise .42s both cubic-bezier(.2,.9,.25,1)}
+.timeline-stream .date-group:nth-child(2){animation-delay:.05s}
+.timeline-stream .date-group:nth-child(3){animation-delay:.10s}
+.timeline-stream .date-group:nth-child(n+4){animation-delay:.14s}
+@keyframes starPop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+.star-btn.starred svg{animation:starPop .42s cubic-bezier(.2,.9,.25,1.1)}
+.resurface-card{position:relative;overflow:hidden}
+.resurface-card::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.10) 50%,transparent 60%);
+  transform:translateX(-120%);transition:transform .9s ease}
+.resurface-card:hover::after{transform:translateX(120%)}
+@media (prefers-reduced-motion:reduce){
+  .timeline-stream .date-group{animation:none}
+  .star-btn.starred svg{animation:none}
+  .tappable:active{transform:none}
+  .resurface-card::after{display:none}
+}
 
 /* ---- settings ---- */
 /* grouped sections: bigger gap BETWEEN groups, tight gap within a group (header + cards) */

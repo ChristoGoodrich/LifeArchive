@@ -489,18 +489,24 @@
   // real (non-planned) commits in a scene, newest first — used by diff / rollback so
   // a not-yet-happened 计划 never shows up as a comparable/rollbackable version.
   function realCommitsForScene(id) { return Store.commitsForScene(id).filter(notPlanned); }
-  function toast(msg) {
+  function toastType(msg, explicit) {
+    if (explicit) return explicit;
+    if (/^⚠|失败|错误|不足|无法|denied|fail/i.test(msg)) return 'warn';
+    if (/^✅|^⭐|已|完成|成功|saved|synced/i.test(msg)) return 'ok';
+    return 'info';
+  }
+  function toast(msg, type) {
     var node = $('#toast');
-    node.classList.remove('with-action');
+    node.className = 'toast t-' + toastType(msg, type);
     node.textContent = msg;
-    node.classList.add('show');
+    requestAnimationFrame(function () { node.classList.add('show'); });
     clearTimeout(node._t);
     node._t = setTimeout(function () { node.classList.remove('show'); }, 2200);
   }
   function toastAction(msg, label, onClick) {
     var node = $('#toast');
     node.innerHTML = '';
-    node.classList.add('with-action');
+    node.className = 'toast with-action t-info';
     node.appendChild(el('span', { text: msg }));
     node.appendChild(el('button', { type: 'button', class: 'toast-action', text: label,
       onclick: function (e) {
@@ -1980,6 +1986,10 @@
       el('h1', { text: t('nav_review') })
     ]));
     if (Store.isEmpty()) { v.appendChild(noticeCard(t('review_empty'))); return; }
+    var albumBtn = el('button', { class: 'btn primary album-cta', style: 'width:100%;margin:2px 0 14px',
+      text: '✨ ' + (L ? '生成回忆图集' : 'AI memory album') });
+    albumBtn.addEventListener('click', function () { openMemoryAlbum({ kind: 'recent', sinceDays: 120, max: 9 }); });
+    v.appendChild(albumBtn);
     var ref = startOfToday();
     function section(title, sub, commits) {
       if (!commits || !commits.length) return;
@@ -2036,6 +2046,8 @@
     if (coverThumb) {
       var detailPhoto = el('img', { class: 'detail-photo', src: coverThumb, alt: c.message || '', decoding: 'async' });
       var dims = commitCoverDims(c); if (dims) { detailPhoto.setAttribute('width', dims.w); detailPhoto.setAttribute('height', dims.h); }
+      detailPhoto.style.cursor = 'zoom-in';
+      detailPhoto.addEventListener('click', function () { openGallery(commitImageEntries(c), 0); });
       card.appendChild(detailPhoto);
       if (cv && cv.blobId) {
         resolveMediaBlob(cv.blobId).then(function (b) {
@@ -2112,22 +2124,15 @@
     if (imgEntries.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '图片' : 'Photos' }));
       var gallery = el('div', { class: 'detail-gallery' });
-      imgEntries.slice(0, 12).forEach(function (entry) {
+      imgEntries.slice(0, 12).forEach(function (entry, idx) {
         var src = entry.thumb || entry.data;
         var imageAttrs = { class: 'detail-image', src: src, alt: entry.name || '', loading: 'lazy', decoding: 'async' };
         if (entry.w && entry.h) { imageAttrs.width = entry.w; imageAttrs.height = entry.h; }
-        var link = el('a', { class: 'detail-image-link', href: src, download: entry.name || 'image.jpg', title: entry.name || '' }, [
+        var link = el('div', { class: 'detail-image-link', title: entry.name || '' }, [
           el('img', imageAttrs)
         ]);
-        if (entry.blobId) {
-          link.addEventListener('click', function (e) {
-            e.preventDefault();
-            resolveMediaBlob(entry.blobId).then(function (b) {
-              if (b) { var u = URL.createObjectURL(b); var a = document.createElement('a'); a.href = u; a.download = entry.name || 'image.jpg'; a.click(); URL.revokeObjectURL(u); }
-              else { toast(t('photo_need_online')); }
-            });
-          });
-        }
+        link.style.cursor = 'zoom-in';
+        link.addEventListener('click', function () { openGallery(imgEntries, idx); });
         gallery.appendChild(link);
       });
       if (imgEntries.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more', text: '+' + (imgEntries.length - 12) }));
@@ -3745,6 +3750,132 @@
     });
   }
   // Show a generated image with save options (works on desktop + long-press on mobile).
+  // Fullscreen swipeable image viewer. entries: [{thumb|data, blobId?, name, ...}].
+  // opts: { captions?:[], title?, subtitle? }. thumb-first, then resolveMediaBlob → full-res.
+  function openGallery(entries, startIndex, opts) {
+    entries = (entries || []).filter(Boolean);
+    if (!entries.length) return;
+    opts = opts || {};
+    var i = Math.max(0, Math.min(startIndex || 0, entries.length - 1));
+    closePopover();
+    var mask = el('div', { class: 'gal-mask' });
+    var track = el('div', { class: 'gal-track' });
+    entries.forEach(function (e) {
+      var img = el('img', { class: 'gal-img', src: e.thumb || e.data || '', alt: e.name || '', draggable: 'false' });
+      if (e.blobId) resolveMediaBlob(e.blobId).then(function (b) { if (b) img.src = URL.createObjectURL(b); });
+      track.appendChild(el('div', { class: 'gal-slide' }, [img]));
+    });
+    var dots = el('div', { class: 'gal-dots' }, entries.map(function (_, k) {
+      return el('span', { class: 'gal-dot' + (k === i ? ' on' : '') });
+    }));
+    if (entries.length < 2) dots.style.display = 'none';
+    var caption = el('div', { class: 'gal-cap' });
+    var header = opts.title ? el('div', { class: 'gal-head' }, [
+      el('div', { class: 'gal-title', text: opts.title }),
+      opts.subtitle ? el('div', { class: 'gal-sub', text: opts.subtitle }) : null
+    ]) : null;
+    var closeB = el('button', { class: 'gal-close', text: '✕', onclick: function () { close(); } });
+    mask.appendChild(closeB);
+    if (header) mask.appendChild(header);
+    mask.appendChild(track);
+    mask.appendChild(dots);
+    mask.appendChild(caption);
+    document.body.appendChild(mask);
+
+    function W() { return mask.clientWidth; }
+    function layout(animate) {
+      track.style.transition = animate ? 'transform .42s cubic-bezier(.2,.9,.25,1.04)' : 'none';
+      track.style.transform = 'translateX(' + (-i * W()) + 'px)';
+      dots.querySelectorAll('.gal-dot').forEach(function (d, k) { d.classList.toggle('on', k === i); });
+      var cap = (opts.captions && opts.captions[i]) || entries[i].name || (entries.length > 1 ? (i + 1) + ' / ' + entries.length : '');
+      caption.textContent = cap;
+    }
+    function go(n) { i = Math.max(0, Math.min(n, entries.length - 1)); layout(true); }
+    function close() { mask.classList.remove('open'); setTimeout(function () { mask.remove(); }, 260); }
+
+    var startX = 0, dx = 0, dragging = false, t0 = 0;
+    function down(x) { dragging = true; startX = x; dx = 0; t0 = Date.now(); track.style.transition = 'none'; }
+    function move(x) {
+      if (!dragging) return; dx = x - startX;
+      var damp = ((i === 0 && dx > 0) || (i === entries.length - 1 && dx < 0)) ? 0.35 : 1;
+      track.style.transform = 'translateX(' + (-i * W() + dx * damp) + 'px)';
+    }
+    function up() {
+      if (!dragging) return; dragging = false;
+      var dt = Date.now() - t0, vx = dx / Math.max(1, dt);
+      if (dx < -W() * 0.22 || vx < -0.5) go(i + 1);
+      else if (dx > W() * 0.22 || vx > 0.5) go(i - 1);
+      else layout(true);
+    }
+    track.addEventListener('touchstart', function (e) { down(e.touches[0].clientX); }, { passive: true });
+    track.addEventListener('touchmove', function (e) { move(e.touches[0].clientX); }, { passive: true });
+    track.addEventListener('touchend', up);
+    track.addEventListener('mousedown', function (e) {
+      e.preventDefault(); down(e.clientX);
+      function mm(ev) { move(ev.clientX); }
+      function mu() { up(); document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); }
+      document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+    });
+    track.querySelectorAll('.gal-slide').forEach(function (s) {
+      s.addEventListener('dblclick', function () { s.firstChild.classList.toggle('zoom'); });
+    });
+    function onKey(e) { if (e.key === 'ArrowRight') go(i + 1); else if (e.key === 'ArrowLeft') go(i - 1); else if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    mask.addEventListener('click', function (e) { if (e.target === mask) close(); });
+    var onResize = function () { layout(false); };
+    window.addEventListener('resize', onResize);
+    var _rm = mask.remove.bind(mask);
+    mask.remove = function () { document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); _rm(); };
+
+    requestAnimationFrame(function () { mask.classList.add('open'); layout(false); });
+  }
+
+  /* ---- AI memory album: curate photos + AI title/narrative, shown in the swipe viewer ---- */
+  function albumCandidates(opts) {
+    opts = opts || {};
+    var all = Store.commits().filter(notPlanned).filter(function (c) {
+      return photoMedia(c).length || (c.files || []).some(isImageFile) || c.photo;
+    });
+    if (opts.kind === 'recent') { var cut = Date.now() - (opts.sinceDays || 120) * 86400000; all = all.filter(function (c) { return c.createdAt >= cut; }); }
+    else if (opts.kind === 'person') all = all.filter(function (c) { return (c.people || []).indexOf(opts.value) >= 0; });
+    else if (opts.kind === 'place') all = all.filter(function (c) { return c.location && c.location.label === opts.value; });
+    else if (opts.kind === 'scene') all = all.filter(function (c) { return c.scene === opts.value; });
+    var picked = [];
+    all.forEach(function (c) {
+      var e = commitImageEntries(c)[0];
+      if (e) picked.push({ e: e, c: c, starred: !!c.starred, at: c.createdAt });
+    });
+    // starred-first to choose the most memorable N, then display in chronological order
+    picked.sort(function (a, b) { return (b.starred ? 1 : 0) - (a.starred ? 1 : 0) || a.at - b.at; });
+    return picked.slice(0, opts.max || 9).sort(function (a, b) { return a.at - b.at; });
+  }
+  function aiAlbum(cands) {
+    var L = lang === 'zh';
+    function heuristic() {
+      var span = spanLabel(cands[0].at, cands[cands.length - 1].at);
+      return { title: (L ? '这段时间 · ' : 'A while · ') + span, subtitle: '',
+        captions: cands.map(function (x) { return x.c.message || ''; }) };
+    }
+    if (!AI.getKey()) return Promise.resolve(heuristic());
+    var content = [{ type: 'text', text: '下面是我相册里按时间排列的若干生活照片缩略图。请为它们生成一本"回忆图集"。严格只返回 JSON，不要解释、不要 markdown：{"title":"温暖的图集标题，12字内","subtitle":"一句副标题/引言，20字内","captions":["每张图一句中文短句，12字内，与图一一对应"]}。captions 数量必须等于图片数量。' }];
+    cands.forEach(function (x) { content.push({ type: 'image_url', image_url: { url: AI._b64(x.e.thumb || x.e.data) } }); });
+    return AI._chat(content).then(function (r) {
+      var caps = Array.isArray(r.captions) ? r.captions : [];
+      return { title: r.title || heuristic().title, subtitle: r.subtitle || '',
+        captions: cands.map(function (x, k) { return caps[k] || x.c.message || ''; }) };
+    }).catch(heuristic);
+  }
+  function openMemoryAlbum(opts) {
+    var L = lang === 'zh';
+    var cands = albumCandidates(opts || { kind: 'recent', sinceDays: 120, max: 9 });
+    if (cands.length < 2) { toast(L ? '照片太少，攒不出图集' : 'Not enough photos yet'); return; }
+    toast('✨ ' + (L ? '正在生成回忆图集…' : 'Building your album…'));
+    aiAlbum(cands).then(function (al) {
+      var entries = cands.map(function (x) { return x.e; });
+      openGallery(entries, 0, { captions: al.captions, title: al.title, subtitle: al.subtitle });
+    });
+  }
+
   function showImageModal(dataUrl, filename) {
     var L = lang === 'zh';
     closePopover();
@@ -5398,6 +5529,18 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.19.0', '2026-06-15', '体验层：滑动大图 + AI 回忆图集 + 澎湃质感',
+      'Experience: swipeable gallery + AI memory album + HyperOS polish',
+      ['Toast 改为磨砂玻璃质感 + 语义色点（成功/警告/同步自动分色）+ 轻回弹进场，更贴合澎湃美学；老 WebView 自动回退不透明底。',
+       '详情图片支持全屏「左右滑动」大图查看：手势跟手 + 惯性翻页 + 边缘回弹 + 圆点指示 + 键盘 ←/→/Esc + 双击放大；缩略图先上屏、全图按需加载。',
+       '新增「✨ 生成回忆图集」（回顾页）：自动挑选一段时间的照片，用 AI 起标题、写引言、配短句，做成可滑动的图集；无 AI Key 或离线时用启发式降级，不卡。',
+       '细腻动画与小巧思：卡片按压回弹、时间线日期组错峰入场、星标爆点、回忆卡光泽；全部尊重「减少动态效果」无障碍设置。',
+       '纯体验层改动，不动数据 / 云 / 桶；跨设备缺全图时查看器用缩略图兜底不崩。'],
+      ['Toast restyled as frosted glass with a semantic color dot (success/warn/sync) and a gentle spring entrance, matching the HyperOS aesthetic; opaque fallback on老 WebViews.',
+       'Detail photos open a fullscreen swipeable viewer: drag-to-follow, inertial paging, edge rebound, dot indicator, ←/→/Esc keys, double-tap zoom; thumbnail first, full image on demand.',
+       'New "AI memory album" in Memories: auto-picks photos over a period and uses AI to write a title, intro, and per-photo captions into a swipeable album; falls back to a heuristic when offline or without an AI key.',
+       'Delicate micro-animations: card press rebound, staggered date-group entrance, star pop, resurface-card sheen; all respect the reduce-motion setting.',
+       'Experience-layer only — no data/cloud/bucket changes; the viewer falls back to thumbnails when the full image is not on this device.']],
     ['1.18.0', '2026-06-15', '存储收尾：捕获真瘦身 + 附件进桶 + 孤儿 GC',
       'Storage finish: real slimming + files to bucket + orphan cleanup',
       ['修复新建/编辑照片仍内联进云存档的问题——封面/多图/附件现在保存即只存引用（media[]），同步体积真正随存档增长而不再变重。',
