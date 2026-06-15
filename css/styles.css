@@ -1260,3 +1260,6 @@ textarea.field{resize:vertical}
   border:1px solid rgba(229,72,77,.25);color:inherit}
 .branch-due-banner:hover{opacity:.85}
 
+/* ---- v1.16: media loading placeholder ---- */
+.media-loading{font-size:13px;opacity:.7;padding:8px 0}
+

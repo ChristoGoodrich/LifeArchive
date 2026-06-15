@@ -59,6 +59,34 @@ create policy "own archive - delete" on public.archives
 打开 App → **⚙ 设置 → 账号与云同步** → 粘贴 **URL** 和 **anon key** → **保存** →
 **注册 / 登录** → 点 **☁ 立即同步**。换台设备用同一账号登录，存档就同步过去了。
 
+## 6.（v1.16+）建媒体桶，让语音/视频跨设备同步
+语音和视频存在 **Supabase Storage 私有桶**里（不占数据库行限额）。在 **SQL Editor** 再跑这段：
+
+```sql
+-- 6) 媒体桶：存语音/视频 Blob（私有；路径前缀 = 用户 id）
+insert into storage.buckets (id, name, public)
+values ('media', 'media', false)
+on conflict (id) do nothing;
+
+-- RLS：只能操作自己 uid/ 前缀下的对象（先删后建，可重复执行）
+drop policy if exists "own media - select" on storage.objects;
+drop policy if exists "own media - insert" on storage.objects;
+drop policy if exists "own media - update" on storage.objects;
+drop policy if exists "own media - delete" on storage.objects;
+
+create policy "own media - select" on storage.objects for select
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "own media - insert" on storage.objects for insert
+  with check (bucket_id = 'media' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "own media - update" on storage.objects for update
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "own media - delete" on storage.objects for delete
+  using (bucket_id = 'media' and (storage.foldername(name))[1] = auth.uid()::text);
+```
+
+> 跑完后，App 同步时会自动把语音/视频上传到桶里；另一台设备登录同一账号，进详情页会自动从桶按需下载。
+> 免费版 Storage 约 1GB；视频较占空间，量大时考虑只在 Wi-Fi 上传或升级。
+
 ---
 
 ### 常见问题

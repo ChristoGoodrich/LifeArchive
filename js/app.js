@@ -155,7 +155,7 @@
       mood: '心情', people: '人物', tags: '标签',
       mood_great: '很棒', mood_good: '不错', mood_meh: '一般', mood_down: '低落', mood_bad: '糟糕',
       people_ph: '和谁？回车添加', tags_ph: '#标签，回车添加',
-      voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除', voice_missing: '语音文件丢失',
+      voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除',       voice_missing: '语音文件丢失', media_fetching: '拉取媒体…', media_upload: '上传媒体', media_uploaded: '媒体已上传',
       voice_unsupported: '此设备不支持录音', voice_denied: '麦克风权限被拒', voice_save_fail: '语音保存失败',
       custom_scene_add: '＋ 自定义主体', custom_scene_emoji: '主体图标（一个 emoji）', custom_scene_name: '主体名字',
       video: '视频', video_add: '加视频', video_delete: '删除', video_processing: '处理中…',
@@ -314,7 +314,7 @@
       mood: 'Mood', people: 'People', tags: 'Tags',
       mood_great: 'Great', mood_good: 'Good', mood_meh: 'Meh', mood_down: 'Down', mood_bad: 'Bad',
       people_ph: 'Who with? Enter to add', tags_ph: '#tag, Enter to add',
-      voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete', voice_missing: 'Voice file missing',
+      voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete',       voice_missing: 'Voice file missing', media_fetching: 'Fetching media…', media_upload: 'Upload media', media_uploaded: 'Media uploaded',
       voice_unsupported: 'Recording not supported here', voice_denied: 'Microphone permission denied', voice_save_fail: 'Voice save failed',
       custom_scene_add: '＋ Custom subject', custom_scene_emoji: 'Icon (one emoji)', custom_scene_name: 'Subject name',
       video: 'Video', video_add: 'Add video', video_delete: 'Delete', video_processing: 'Processing…',
@@ -792,6 +792,21 @@
         return c.from('archives').upsert(
           { user_id: uid, data: blob, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
       }).then(function (r) { if (r.error) throw new Error(r.error.message); return true; });
+    },
+    uploadBlob: function (path, blob) {
+      return this.client().then(function (c) {
+        return c.storage.from('media').upload(path, blob, {
+          upsert: true, contentType: (blob && blob.type) || 'application/octet-stream'
+        });
+      }).then(function (r) { if (r && r.error) throw new Error(r.error.message); return true; });
+    },
+    downloadBlob: function (path) {
+      return this.client().then(function (c) { return c.storage.from('media').download(path); })
+        .then(function (r) { return (r && !r.error && r.data) ? r.data : null; });
+    },
+    removeBlob: function (path) {
+      return this.client().then(function (c) { return c.storage.from('media').remove([path]); })
+        .then(function () { return true; }).catch(function () { return false; });
     }
   };
 
@@ -951,8 +966,14 @@
   }
   function deleteCommitWithCleanup(id) {
     Notify.cancelFor(id, 'recheck');
+    var c = Store.getCommit(id);
+    var blobIds = (c && c.media ? c.media : []).map(function (m) { return m && m.blobId; }).filter(Boolean);
     Store.deleteCommit(id);
     autoSync(false);
+    var u = Cloud.currentUser();
+    if (u) blobIds.forEach(function (bid) {
+      Cloud.removeBlob(u.id + '/' + bid); markUploaded(bid, false);
+    });
   }
   function deleteBranchWithCleanup(id) {
     Notify.cancelFor(id, 'due');
@@ -991,6 +1012,48 @@
              tombstones: tombs };
   }
 
+  function mediaPathFor(blobId) {
+    var u = Cloud.currentUser();
+    return (u && blobId) ? (u.id + '/' + blobId) : null;
+  }
+  function uploadedSet() { return Store.meta().mediaUp || {}; }
+  function markUploaded(blobId, on) {
+    var m = Store.meta().mediaUp || {};
+    if (on === false) delete m[blobId]; else m[blobId] = 1;
+    Store.setMeta({ mediaUp: m });
+  }
+  function resolveMediaBlob(blobId) {
+    return Store.getBlob(blobId).then(function (b) {
+      if (b) return b;
+      var path = mediaPathFor(blobId);
+      if (!path) return null;
+      return Cloud.downloadBlob(path).then(function (db) {
+        if (db) { Store.putBlob(blobId, db); }
+        return db || null;
+      }).catch(function () { return null; });
+    });
+  }
+  function syncMediaUp() {
+    var u = Cloud.currentUser();
+    if (!u) return Promise.resolve();
+    var up = uploadedSet();
+    var ids = [];
+    Store.commits().forEach(function (c) {
+      (c.media || []).forEach(function (m) {
+        if (m && m.blobId && !up[m.blobId] && ids.indexOf(m.blobId) < 0) ids.push(m.blobId);
+      });
+    });
+    return ids.reduce(function (p, blobId) {
+      return p.then(function () {
+        return Store.getBlob(blobId).then(function (b) {
+          if (!b) return;
+          return Cloud.uploadBlob(u.id + '/' + blobId, b)
+            .then(function () { markUploaded(blobId, true); })
+            .catch(function () { /* retry next sync */ });
+        });
+      });
+    }, Promise.resolve());
+  }
   function cloudSync() {
     var local = Store.exportRaw();
     return Cloud.pull().then(function (remote) {
@@ -998,7 +1061,7 @@
       Store.replaceAll(merged);
       return Cloud.push(merged).then(function () {
         Store.setMeta({ lastSyncAt: Date.now() });
-        return merged;
+        return syncMediaUp().catch(function () {}).then(function () { return merged; });
       });
     });
   }
@@ -1965,13 +2028,17 @@
     if (audioM) {
       card.appendChild(el('div', { class: 'detail-section-title', text: '🎙 ' + t('voice') }));
       var player = el('audio', { controls: 'controls', class: 'detail-audio', preload: 'none' });
-      card.appendChild(el('div', { class: 'detail-voice' }, [player,
-        el('span', { class: 'file-size', text: fmtDur(audioM.dur || 0) + ' · ' + fmtBytes(audioM.size || 0) })]));
-      Store.getBlob(audioM.blobId).then(function (b) {
-        if (!b) { player.replaceWith(el('div', { class: 'commit-notes', text: t('voice_missing') })); return; }
+      var audioSlot = el('div', { class: 'detail-voice' }, [
+        el('div', { class: 'media-loading', text: '… ' + t('media_fetching') }),
+        el('span', { class: 'file-size', text: fmtDur(audioM.dur || 0) + ' · ' + fmtBytes(audioM.size || 0) })
+      ]);
+      card.appendChild(audioSlot);
+      resolveMediaBlob(audioM.blobId).then(function (b) {
+        if (!b) { audioSlot.firstChild.replaceWith(el('div', { class: 'commit-notes', text: t('voice_missing') })); return; }
         var url = URL.createObjectURL(b);
         player.src = url;
         player.addEventListener('emptied', function () { URL.revokeObjectURL(url); });
+        audioSlot.firstChild.replaceWith(player);
       });
     }
     var videoM = (c.media || []).filter(function (m) { return m.kind === 'video'; })[0];
@@ -1980,11 +2047,14 @@
       var vp = el('video', { class: 'detail-video', controls: 'controls', preload: 'none', playsinline: 'playsinline' });
       if (videoM.poster) vp.setAttribute('poster', videoM.poster);
       if (videoM.w && videoM.h) { vp.setAttribute('width', videoM.w); vp.setAttribute('height', videoM.h); }
-      card.appendChild(el('div', { class: 'detail-videowrap' }, [vp,
-        el('span', { class: 'file-size', text: fmtDur(videoM.dur || 0) + ' · ' + fmtBytes(videoM.size || 0) })]));
-      Store.getBlob(videoM.blobId).then(function (b) {
+      var videoSlot = el('div', { class: 'detail-videowrap' }, [
+        el('div', { class: 'media-loading', text: '… ' + t('media_fetching') }),
+        el('span', { class: 'file-size', text: fmtDur(videoM.dur || 0) + ' · ' + fmtBytes(videoM.size || 0) })
+      ]);
+      card.appendChild(videoSlot);
+      resolveMediaBlob(videoM.blobId).then(function (b) {
         if (!b) {
-          vp.replaceWith(el('div', { class: 'video-missing' }, [
+          videoSlot.firstChild.replaceWith(el('div', { class: 'video-missing' }, [
             videoM.poster ? el('img', { class: 'detail-image', src: videoM.poster, alt: '' }) : null,
             el('div', { class: 'commit-notes', text: t('video_missing') })]));
           return;
@@ -1992,6 +2062,7 @@
         var url = URL.createObjectURL(b);
         vp.src = url;
         vp.addEventListener('emptied', function () { URL.revokeObjectURL(url); });
+        videoSlot.firstChild.replaceWith(vp);
       });
     }
     function geoMapUrl(loc) {
@@ -5104,6 +5175,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.16.0', '2026-06-15', '云端媒体桶：语音/视频跨设备真同步',
+      'Cloud media bucket: voice/video cross-device sync',
+      ['语音/视频现在通过 Supabase 私有媒体桶跨设备同步：在一台设备录制，同账号登录另一台即可播放（按需下载、本地缓存、第二次秒播）。',
+       '同步时自动上传未上传的媒体 Blob；删除存档会回收云端媒体对象；离线/缺失优雅占位不卡死。',
+       '设置页账号卡新增「上传媒体」按钮，显示待上传数量，可手动触发上传。',
+       '需补跑建桶 SQL（见 SUPABASE-SETUP.md 第 6 步）；不改 store 数据结构 / jsonb 表结构；备份导入路径保留。'],
+      ['Voice/video now sync across devices via a private Supabase Storage bucket: record on one device, play on another (on-demand download, local cache, instant replay after first fetch).',
+       'Sync auto-uploads unuploaded media blobs; deleting a commit回收 cloud objects; offline/missing gracefully degrade.',
+       'Settings account card adds an "Upload media" button showing pending count for manual upload.',
+       'Requires running the bucket-creation SQL (see SUPABASE-SETUP.md step 6); no store/jsonb schema changes; backup import path preserved.']],
     ['1.15.0', '2026-06-15', '导航收敛：底栏只留时间线 · 回顾 · ＋新建',
       'Nav consolidation: timeline · memories · +new',
       ['底部导航收敛为「时间线 · 回顾 ·（＋新建）」三项，把「回顾」从藏在按钮后提升为常驻一级入口，让回看真正有家。',
@@ -5818,6 +5899,18 @@
       });
       var outB = el('button', { class: 'btn ghost tiny', text: L ? '退出登录' : 'Log out' });
       outB.addEventListener('click', function () { Cloud.signOut().then(function () { toast(L ? '已退出' : 'Logged out'); render(); }); });
+      var pend = 0;
+      Store.commits().forEach(function (c) { (c.media || []).forEach(function (m) {
+        if (m && m.blobId && !(Store.meta().mediaUp || {})[m.blobId]) pend++;
+      }); });
+      var mediaBtn = el('button', { class: 'btn ghost tiny',
+        text: '☁ ' + t('media_upload') + (pend ? ' · ' + pend : '') });
+      mediaBtn.addEventListener('click', function () {
+        mediaBtn.disabled = true; var o = mediaBtn.textContent; mediaBtn.textContent = L ? '上传中…' : 'uploading…';
+        syncMediaUp().then(function () { toast('☁ ' + t('media_uploaded')); render(); })
+          .catch(function () { toast('⚠ ' + (L ? '部分媒体上传失败，可重试' : 'Some media failed — retry')); })
+          .then(function () { mediaBtn.disabled = false; mediaBtn.textContent = o; });
+      });
       return settingsCard(null, [
         el('div', { class: 'set-row' }, [
           el('span', { class: 'set-label', text: L ? '已登录' : 'Signed in' }),
@@ -5829,9 +5922,9 @@
             ? fmtDate(Store.meta().lastSyncAt) : t('last_sync_never') })
         ]),
         el('p', { class: 'set-hint', text: L
-          ? '「立即同步」会把本机存档与云端合并，登录其他设备即可共享。'
-          : 'Sync merges this device with the cloud; sign in elsewhere to share.' }),
-        el('div', { class: 'set-actions' }, [syncB, outB, reconf])
+          ? '「立即同步」会把本机存档与云端合并，登录其他设备即可共享。语音/视频通过私有桶跨设备同步。'
+          : 'Sync merges this device with the cloud; sign in elsewhere to share. Voice/video sync via private storage bucket.' }),
+        el('div', { class: 'set-actions' }, [syncB, mediaBtn, outB, reconf])
       ]);
     }
 
