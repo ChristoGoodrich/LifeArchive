@@ -349,10 +349,12 @@
 
     deleteCommit: function (id) {
       var c = this.getCommit(id);
+      cache.commits = cache.commits.filter(function (x) { return x.id !== id; });
       if (c && c.media && idb) {
-        c.media.forEach(function (m) { if (m && m.blobId) idbDelBlob(m.blobId); });
+        var used = {};
+        cache.commits.forEach(function (oc) { (oc.media || []).forEach(function (m) { if (m && m.blobId) used[m.blobId] = 1; }); });
+        c.media.forEach(function (m) { if (m && m.blobId && !used[m.blobId]) idbDelBlob(m.blobId); });
       }
-      cache.commits = cache.commits.filter(function (c) { return c.id !== id; });
       tombstone(id);
       persist();
     },
@@ -442,6 +444,16 @@
     deleteBlob: function (id) {
       if (!idb) return Promise.resolve(true);
       return idbDelBlob(id);
+    },
+    allBlobIds: function () {
+      if (!idb) return Promise.resolve([]);
+      return new Promise(function (resolve) {
+        try {
+          var r = idb.transaction(IDB_BLOBS, 'readonly').objectStore(IDB_BLOBS).getAllKeys();
+          r.onsuccess = function () { resolve(r.result || []); };
+          r.onerror = function () { resolve([]); };
+        } catch (e) { resolve([]); }
+      });
     },
 
     /* ---------- Cloud sync helpers (raw data in/out) ---------- */

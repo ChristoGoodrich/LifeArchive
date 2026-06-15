@@ -5,6 +5,18 @@
 
 ---
 
+## v1.18.0 · 存储收尾：捕获真瘦身 + 附件进桶 + 孤儿 GC — 2026-06-15
+
+- **捕获真瘦身**：修复 v1.17 遗留问题——新建/编辑存档的照片和附件现在保存时**只写 media[] 引用**（thumb + blobId），`photo` 和 `files` 字段置空，jsonb 不再包含内联 base64。
+- **非图片附件进桶**：PDF/文档等非图片文件也纳入 `media[kind:'file']` 管道，通过 Supabase 私有桶跨设备同步，按需下载 + 本地缓存。
+- **详情文件下载**：详情页文件区读 `media[kind:'file']`，点击通过 `resolveMediaBlob` 下载；离线给提示不崩。
+- **清理缓存（孤儿 GC）**：设置页数据卡新增「清理缓存」按钮，扫描 IndexedDB blob 仓中无任何 commit 引用的孤儿 blob，连同桶对象一起回收。
+- **本机回收引用守卫**：`Store.deleteCommit` 改为引用感知——先移除 commit，再检查其他 commit 是否仍引用同一 blobId，避免回滚共享场景误删。
+- **迁移泛化**：`migrateCommitPhotos` 扩展为同时处理非图片附件（`c.files` → `media[kind:'file']`），触发条件改为有任何内联 files 即迁。
+- **不改桶/RLS/表结构**；全程 legacy 兜底；可回退。
+
+> 本次改动集中在 app.js（capture + persist + migration + GC）和 store.js（deleteCommit guard + allBlobIds）。发布后请重点验证：新建带封面+图+PDF 的存档→jsonb 不含内联、编辑再保存不重复内联、详情文件下载、清理缓存回收孤儿、回滚共享 blobId 不误删。
+
 ## v1.17.0 · 照片进桶：缩略图内联 + 全图进桶 + 同步瘦身 — 2026-06-15
 
 - **照片新模型**：照片改为 `media[{kind:'photo'}]`，缩略图（~20–50KB JPEG）内联在 jsonb 里供时间线即时渲染，全图存在 IndexedDB blob 仓 + Supabase 桶，按需下载、本地缓存。

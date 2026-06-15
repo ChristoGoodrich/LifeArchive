@@ -157,6 +157,7 @@
       people_ph: '和谁？回车添加', tags_ph: '#标签，回车添加',
       voice: '语音', voice_record: '录语音', voice_stop: '停止', voice_delete: '删除',       voice_missing: '语音文件丢失',       media_fetching: '拉取媒体…', media_upload: '上传媒体', media_uploaded: '媒体已上传',
       photo_save_fail: '照片保存失败', photo_fetching: '加载原图…', photo_need_online: '原图需联网或在录制设备查看',
+      file_need_online: '文件需联网或在原设备下载',
       voice_unsupported: '此设备不支持录音', voice_denied: '麦克风权限被拒', voice_save_fail: '语音保存失败',
       custom_scene_add: '＋ 自定义主体', custom_scene_emoji: '主体图标（一个 emoji）', custom_scene_name: '主体名字',
       video: '视频', video_add: '加视频', video_delete: '删除', video_processing: '处理中…',
@@ -317,6 +318,7 @@
       people_ph: 'Who with? Enter to add', tags_ph: '#tag, Enter to add',
       voice: 'Voice', voice_record: 'Record', voice_stop: 'Stop', voice_delete: 'Delete',       voice_missing: 'Voice file missing',       media_fetching: 'Fetching media…', media_upload: 'Upload media', media_uploaded: 'Media uploaded',
       photo_save_fail: 'Photo save failed', photo_fetching: 'Loading full image…', photo_need_online: 'Full image needs network or the original device',
+      file_need_online: 'File needs network or the original device',
       voice_unsupported: 'Recording not supported here', voice_denied: 'Microphone permission denied', voice_save_fail: 'Voice save failed',
       custom_scene_add: '＋ Custom subject', custom_scene_emoji: 'Icon (one emoji)', custom_scene_name: 'Subject name',
       video: 'Video', video_add: 'Add video', video_delete: 'Delete', video_processing: 'Processing…',
@@ -1112,17 +1114,27 @@
     }
     if (c.photo && !photoMedia(c).some(function (m) { return m.cover; }))
       jobs.push(addPhoto(c.photo, { w: c.photoW, h: c.photoH }, c.message || 'cover.jpg', true));
-    (c.files || []).filter(isImageFile).forEach(function (f) { jobs.push(addPhoto(f.data, { w: f.w, h: f.h }, f.name, false)); });
+    (c.files || []).forEach(function (f) {
+      if (isImageFile(f)) {
+        jobs.push(addPhoto(f.data, { w: f.w, h: f.h }, f.name, false));
+      } else if (f.data) {
+        jobs.push(dataUrlToBlob(f.data).then(function (blob) {
+          var id = 'fl_' + Store.uid('f');
+          return Store.putBlob(id, blob).then(function (ok) {
+            if (ok) newMedia.push({ kind: 'file', blobId: id, name: f.name, mime: f.type || blob.type, size: f.size || blob.size });
+          });
+        }));
+      }
+    });
     if (!jobs.length) return Promise.resolve(false);
     return Promise.all(jobs).then(function () {
-      var keepFiles = (c.files || []).filter(function (f) { return !isImageFile(f); });
-      Store.updateCommit(c.id, { media: newMedia, photo: null, photoW: null, photoH: null, files: keepFiles });
+      Store.updateCommit(c.id, { media: newMedia, photo: null, photoW: null, photoH: null, files: [] });
       return true;
     });
   }
   function migrateInlinePhotos() {
     var pending = Store.commits().filter(function (c) {
-      return c.photo || (c.files || []).some(isImageFile);
+      return c.photo || (c.files || []).length > 0;
     });
     if (!pending.length) return;
     var i = 0;
@@ -1133,6 +1145,23 @@
       });
     }
     step();
+  }
+  function gcOrphanBlobs() {
+    return Store.allBlobIds().then(function (keys) {
+      if (!keys.length) return 0;
+      var used = {};
+      Store.commits().forEach(function (c) { (c.media || []).forEach(function (m) { if (m && m.blobId) used[m.blobId] = 1; }); });
+      var orphans = keys.filter(function (k) { return !used[k]; });
+      if (!orphans.length) return 0;
+      var u = Cloud.currentUser();
+      return orphans.reduce(function (p, k) {
+        return p.then(function () {
+          markUploaded(k, false);
+          if (u) Cloud.removeBlob(u.id + '/' + k);
+          return Store.deleteBlob(k);
+        });
+      }, Promise.resolve()).then(function () { return orphans.length; });
+    });
   }
   function cloudSync() {
     var local = Store.exportRaw();
@@ -2104,20 +2133,34 @@
       if (imgEntries.length > 12) gallery.appendChild(el('div', { class: 'detail-image-more', text: '+' + (imgEntries.length - 12) }));
       card.appendChild(gallery);
     }
-    var nonImgFiles = (c.files || []).filter(function (f) { return !isImageFile(f); });
-    if (nonImgFiles.length) {
+    var fileMedia = (c.media || []).filter(function (m) { return m.kind === 'file'; });
+    var legacyFiles = (c.files || []).filter(function (f) { return !isImageFile(f); });
+    if (fileMedia.length || legacyFiles.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: L ? '文件' : 'Files' }));
       var fl = el('div', { class: 'detail-files' });
-      nonImgFiles.forEach(function (f) {
+      fileMedia.forEach(function (m) {
         var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
-        fl.appendChild(el('a', { class: 'detail-file', href: f.data, download: f.name }, [
-          ic,
-          el('div', { class: 'file-meta' }, [
-            el('span', { class: 'file-name', text: f.name }),
-            el('span', { class: 'file-size', text: fmtBytes(f.size) })
-          ]),
-          el('span', { class: 'file-dl', text: '⤓' })
-        ]));
+        var row = el('a', { class: 'detail-file', href: '#', download: m.name }, [ic,
+          el('div', { class: 'file-meta' }, [el('span', { class: 'file-name', text: m.name }),
+            el('span', { class: 'file-size', text: fmtBytes(m.size) })]),
+          el('span', { class: 'file-dl', text: '⤓' })]);
+        row.addEventListener('click', function (e) {
+          e.preventDefault();
+          resolveMediaBlob(m.blobId).then(function (b) {
+            if (!b) { toast('⚠ ' + t('file_need_online')); return; }
+            var url = URL.createObjectURL(b);
+            var a = document.createElement('a'); a.href = url; a.download = m.name; document.body.appendChild(a); a.click();
+            a.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+          });
+        });
+        fl.appendChild(row);
+      });
+      legacyFiles.forEach(function (f) {
+        var ic = el('span', { class: 'file-ic' }); ic.innerHTML = UI_ICONS.file;
+        fl.appendChild(el('a', { class: 'detail-file', href: f.data, download: f.name }, [ic,
+          el('div', { class: 'file-meta' }, [el('span', { class: 'file-name', text: f.name }),
+            el('span', { class: 'file-size', text: fmtBytes(f.size) })]),
+          el('span', { class: 'file-dl', text: '⤓' })]));
       });
       card.appendChild(fl);
     }
@@ -2297,6 +2340,25 @@
       var srcVideo = (src.media || []).filter(function (x) { return x.kind === 'video'; })[0];
       if (srcVideo) draftVideo = { blobId: srcVideo.blobId, mime: srcVideo.mime, size: srcVideo.size, dur: srcVideo.dur, w: srcVideo.w, h: srcVideo.h, poster: srcVideo.poster };
       if (src.location) draftLocation = { lat: src.location.lat, lng: src.location.lng, acc: src.location.acc, label: src.location.label || '', at: src.location.at };
+      var srcPhotos = (src.media || []).filter(function (m) { return m.kind === 'photo'; });
+      var cov = srcPhotos.filter(function (m) { return m.cover; })[0] || srcPhotos[0] || null;
+      if (cov) {
+        draftCover = { blobId: cov.blobId, thumb: cov.thumb, w: cov.w, h: cov.h, mime: cov.mime, size: cov.size, name: cov.name };
+        draftPhoto = cov.thumb || null;
+      } else if (src.photo) {
+        draftPhoto = src.photo;
+        draftCover = null;
+      }
+      draftPhotos = srcPhotos.filter(function (m) { return m !== cov; }).map(function (m) {
+        return { blobId: m.blobId, thumb: m.thumb, w: m.w, h: m.h, mime: m.mime, size: m.size, name: m.name };
+      });
+      var srcFiles = (src.media || []).filter(function (m) { return m.kind === 'file'; });
+      draftFiles = srcFiles.map(function (m) { return { blobId: m.blobId, name: m.name, type: m.mime, size: m.size }; })
+        .concat((src.files || []).filter(function (f) { return !isImageFile(f); })
+          .map(function (f) { return { id: Store.uid('f'), name: f.name, type: f.type, size: f.size, data: f.data }; }));
+      (src.files || []).filter(isImageFile).forEach(function (f) {
+        draftPhotos.push({ data: f.data, name: f.name, w: f.w, h: f.h });
+      });
     }
     v.appendChild(el('div', { class: 'view-head' }, [el('h1', {
       text: editing ? (lang === 'zh' ? '编辑存档' : 'Edit commit') : (quick ? t('quick_capture') : t('nav_commit')) })]));
@@ -2486,11 +2548,8 @@
       entries.forEach(function (entry, idx) {
         var dims = (entry.w && entry.h) ? { w: entry.w, h: entry.h } : null;
         if (!draftPhoto || (replaceCover && idx === 0)) { setPhoto(entry.data, dims, entry.takenAt || null); return; }
-        // store each image attachment's pixel size too, so a multi-photo archive whose
-        // cover is later removed still reserves the box for the first image (commitCoverDims)
-        draftFiles.push({ id: Store.uid('f'), name: imageFileName(entry),
-          type: 'image/jpeg', size: entry.size || Math.round((entry.data.length || 0) * 0.75),
-          data: entry.data, w: entry.w || null, h: entry.h || null, takenAt: entry.takenAt || null });
+        draftPhotos.push({ data: entry.data, name: imageFileName(entry),
+          w: entry.w || null, h: entry.h || null, takenAt: entry.takenAt || null });
         extras++;
       });
       if (extras) { renderFilesList(); if (moreDetails) moreDetails.open = true; }
@@ -2692,13 +2751,9 @@
     function addFiles(fileLike) {
       Array.prototype.slice.call(fileLike || []).forEach(function (file) {
         if (file.size > 50 * 1024 * 1024) { toast((lang === 'zh' ? '文件过大（>50MB）：' : 'Too large (>50MB): ') + file.name); return; }
-        var reader = new FileReader();
-        reader.onload = function () {
-          draftFiles.push({ id: Store.uid('f'), name: file.name, type: file.type || '', size: file.size, data: reader.result });
-          renderFilesList();
-          if (moreDetails) moreDetails.open = true;
-        };
-        reader.readAsDataURL(file);
+        draftFiles.push({ id: Store.uid('f'), name: file.name, type: file.type || '', size: file.size, _blob: file });
+        renderFilesList();
+        if (moreDetails) moreDetails.open = true;
       });
     }
     fileAttachInput.addEventListener('change', function () { addFiles(fileAttachInput.files); fileAttachInput.value = ''; });
@@ -2997,7 +3052,7 @@
     // collect + persist. `planned` only matters for NEW commits; editing preserves the
     // commit's existing planned/real state.
     function persistDraftMedia(prevMedia) {
-      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio' && m.kind !== 'video' && m.kind !== 'photo'; });
+      var media = (prevMedia || []).filter(function (m) { return m.kind !== 'audio' && m.kind !== 'video' && m.kind !== 'photo' && m.kind !== 'file'; });
       var dels = [];
       if (audioDeletedBlobId) dels.push(Store.deleteBlob(audioDeletedBlobId));
       if (videoDeletedBlobId) dels.push(Store.deleteBlob(videoDeletedBlobId));
@@ -3055,17 +3110,43 @@
         }
       });
 
-      // ----- additional photos -----
+      // ----- additional photos (blobId ref / _blob new / data legacy) -----
       chain = chain.then(function () {
         return draftPhotos.reduce(function (p, dp) {
           return p.then(function () {
-            if (!dp._blob && dp.blobId) { media.push({ kind: 'photo', cover: false, blobId: dp.blobId, thumb: dp.thumb, w: dp.w, h: dp.h, mime: dp.mime, size: dp.size, name: dp.name }); return; }
-            if (dp._blob) {
-              var id = 'ph_' + Store.uid('p');
-              return Store.putBlob(id, dp._blob).then(function (ok) {
-                if (ok) media.push({ kind: 'photo', cover: false, blobId: id, thumb: dp.thumb, w: dp.w, h: dp.h, mime: dp.mime, size: dp.size, name: dp.name });
-              });
+            if (dp.blobId && !dp._blob && !dp.data) {
+              media.push({ kind: 'photo', cover: false, blobId: dp.blobId, thumb: dp.thumb, w: dp.w, h: dp.h, mime: dp.mime, size: dp.size, name: dp.name });
+              return;
             }
+            var blobP = dp._blob ? Promise.resolve(dp._blob) : dataUrlToBlob(dp.data);
+            return blobP.then(function (blob) {
+              return makeThumb(blob).then(function (tm) {
+                var id = 'ph_' + Store.uid('p');
+                return Store.putBlob(id, blob).then(function (ok) {
+                  if (ok) media.push({ kind: 'photo', cover: false, blobId: id, thumb: dp.thumb || tm.thumb,
+                    w: dp.w || tm.w, h: dp.h || tm.h, mime: blob.type || 'image/jpeg', size: blob.size, name: dp.name || 'image.jpg' });
+                });
+              });
+            });
+          });
+        }, Promise.resolve());
+      });
+
+      // ----- non-image files (blobId ref / _blob new / data legacy) -----
+      chain = chain.then(function () {
+        return draftFiles.reduce(function (p, df) {
+          return p.then(function () {
+            if (df.blobId && !df._blob && !df.data) {
+              media.push({ kind: 'file', blobId: df.blobId, name: df.name, mime: df.type, size: df.size });
+              return;
+            }
+            var blobP = df._blob ? Promise.resolve(df._blob) : dataUrlToBlob(df.data);
+            return blobP.then(function (blob) {
+              var id = 'fl_' + Store.uid('f');
+              return Store.putBlob(id, blob).then(function (ok) {
+                if (ok) media.push({ kind: 'file', blobId: id, name: df.name, mime: df.type || blob.type, size: df.size || blob.size });
+              });
+            });
           });
         }, Promise.resolve());
       });
@@ -3087,12 +3168,12 @@
           scene: selectedScene,
           message: msgInput.value.trim() || '(no message)',
           createdAt: createdAt,
-          photo: draftPhoto,
-          photoW: draftPhoto && draftPhotoDims ? draftPhotoDims.w : null,
-          photoH: draftPhoto && draftPhotoDims ? draftPhotoDims.h : null,
-          photoTakenAt: draftPhoto && draftPhotoTakenAt ? draftPhotoTakenAt : null,
+          photo: null,
+          photoW: null,
+          photoH: null,
+          photoTakenAt: null,
           items: items,
-          files: draftFiles.slice(),
+          files: [],
           notes: notesInput.value.trim(),
           mood: draftMood || null,
           people: peopleInput.get(),
@@ -5317,6 +5398,22 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.18.0', '2026-06-15', '存储收尾：捕获真瘦身 + 附件进桶 + 孤儿 GC',
+      'Storage finish: real slimming + files to bucket + orphan cleanup',
+      ['修复新建/编辑照片仍内联进云存档的问题——封面/多图/附件现在保存即只存引用（media[]），同步体积真正随存档增长而不再变重。',
+       '非图片附件（PDF/文档）也进私有桶，跨设备可下载（按需 resolve + 本地缓存）。',
+       '详情文件区读 media[kind:\'file\']，下载经 resolveMediaBlob；离线给提示不崩。',
+       '新增「清理缓存」按钮，回收无用孤儿 blob（本机 + 桶）。',
+       '删除 commit 时本机 blob 回收改为引用感知——回滚共享 blobId 不误删原图。',
+       '旧数据迁移泛化：非图片附件也一并迁入 media[kind:\'file\']。',
+       '不改桶/RLS/表结构；全程 legacy 兜底；可回退。'],
+      ['Fix: new/edit photos were still inlined into cloud archives — cover/multiple photos/attachments now save only references (media[]) on first save, so sync size truly stays flat as archives grow.',
+       'Non-image attachments (PDF/documents) also go into the private bucket, downloadable cross-device (on-demand resolve + local cache).',
+       'Detail files section reads media[kind:\'file\'], downloads via resolveMediaBlob; offline shows a toast, doesn\'t crash.',
+       'New "Clean up cache" button回收 orphaned blobs (local + bucket).',
+       'Local blob回收 on commit delete is now reference-aware — rollbacks sharing a blobId won\'t have their originals deleted.',
+       'Legacy migration generalized: non-image files also migrate into media[kind:\'file\'].',
+       'No bucket/RLS/schema changes; full legacy fallback; reversible.']],
     ['1.17.0', '2026-06-15', '照片进桶：缩略图内联 + 全图进桶 + 同步瘦身',
       'Photos to bucket: inline thumbs + full images in cloud + smaller sync',
       ['照片改为「缩略图内联 + 全图进桶」模型：时间线和缩略条用内联小图（~20–50KB）即时渲染，全图存在 IndexedDB + Supabase 桶、按需下载缓存。',
@@ -6178,19 +6275,27 @@
     var clrBtn = el('button', { class: 'btn danger-ghost tiny', text: lang === 'zh' ? '清空全部' : 'Clear all' });
     clrBtn.addEventListener('click', clearAll);
     var onIdb = Store.backend() === 'indexeddb';
-    var data = settingsCard(null, [
-      el('div', { class: 'set-row' }, [
-        el('span', { class: 'set-label', text: lang === 'zh' ? '存储用量' : 'Storage used' }),
-        el('span', { class: 'set-value', text: fmtBytes(Store.usage()) + ' · ' + (onIdb ? 'IndexedDB' : (lang === 'zh' ? '本地' : 'localStorage')) })
-      ]),
-      el('p', { class: 'set-hint', text: lang === 'zh'
-        ? (onIdb ? '照片现在存在 IndexedDB（容量随设备可用空间，通常数百 MB～数 GB），不再受旧版约 5MB 限制。'
-                 : '当前回退到本地存储（约 5MB 上限），照片较多时可能存不下。')
-        : (onIdb ? 'Photos are stored in IndexedDB (hundreds of MB to GBs) — no longer capped at the old ~5MB limit.'
-                 : 'Falling back to localStorage (~5MB cap); many photos may not fit.') }),
-      el('div', { class: 'set-actions' }, [expBtn, impBtn, clrBtn]),
-      impInput
-    ]);
+      var gcBtn = el('button', { class: 'btn ghost tiny', text: lang === 'zh' ? '清理缓存' : 'Clean up cache' });
+      gcBtn.addEventListener('click', function () {
+        gcBtn.disabled = true;
+        gcOrphanBlobs().then(function (n) {
+          toast((lang === 'zh' ? '已清理 ' : 'Cleaned ') + n + (lang === 'zh' ? ' 个无用文件' : ' orphaned blobs'));
+          render();
+        }).then(function () { gcBtn.disabled = false; });
+      });
+      var data = settingsCard(null, [
+        el('div', { class: 'set-row' }, [
+          el('span', { class: 'set-label', text: lang === 'zh' ? '存储用量' : 'Storage used' }),
+          el('span', { class: 'set-value', text: fmtBytes(Store.usage()) + ' · ' + (onIdb ? 'IndexedDB' : (lang === 'zh' ? '本地' : 'localStorage')) })
+        ]),
+        el('p', { class: 'set-hint', text: lang === 'zh'
+          ? (onIdb ? '照片现在存在 IndexedDB（容量随设备可用空间，通常数百 MB～数 GB），不再受旧版约 5MB 限制。'
+                   : '当前回退到本地存储（约 5MB 上限），照片较多时可能存不下。')
+          : (onIdb ? 'Photos are stored in IndexedDB (hundreds of MB to GBs) — no longer capped at the old ~5MB limit.'
+                   : 'Falling back to localStorage (~5MB cap); many photos may not fit.') }),
+        el('div', { class: 'set-actions' }, [expBtn, impBtn, clrBtn, gcBtn]),
+        impInput
+      ]);
 
     var appearance = settingsCard(lang === 'zh' ? '外观与语言' : 'Appearance & language', [
       el('div', { class: 'set-row' }, [
