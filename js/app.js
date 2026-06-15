@@ -1031,10 +1031,10 @@
   var pendingDeepLink = null;
   // Bottom-nav routes are real peer tabs. Switching among them replaces the current
   // browser history entry, so Android edge-back does not treat Timeline as their parent.
-  var TAB_ROUTES = ['timeline', 'diff', 'commit', 'rollback', 'branch'];
+  var TAB_ROUTES = ['timeline', 'review', 'commit'];
   function isTabRoute(route) { return TAB_ROUTES.indexOf(route) >= 0; }
   // nav depth drives page animation (tabs fade; subpages push/pop)
-  var ROUTE_DEPTH = { timeline: 0, diff: 0, commit: 0, rollback: 0, branch: 0, 'branch-detail': 1, detail: 1, settings: 1, changelog: 2, stats: 1, review: 1, growth: 1 };
+  var ROUTE_DEPTH = { timeline: 0, review: 0, commit: 0, diff: 1, rollback: 1, branch: 1, 'branch-detail': 2, detail: 1, settings: 1, changelog: 2, stats: 1, growth: 1 };
   var prevDepth = 0;
   // Subpage return stack for hardware/gesture back. Tabs never go here; they are peers.
   var navStack = [];
@@ -1138,7 +1138,8 @@
       commit: s('<circle cx="12" cy="12" r="8"/><path d="M12 8.5v7M8.5 12h7"/>'),
       diff: s('<circle cx="11" cy="11" r="6"/><path d="m20 20-3.6-3.6"/>'),
       rollback: s('<path d="M3.5 12a8.5 8.5 0 1 0 2.8-6.3L3.2 8"/><path d="M3 3.7V8h4.3"/>'),
-      branch: s('<circle cx="6.5" cy="6" r="2"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 8v8"/><path d="M17.5 9.5c0 3.6-2.7 4.5-5.6 5"/>')
+      branch: s('<circle cx="6.5" cy="6" r="2"/><circle cx="6.5" cy="18" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 8v8"/><path d="M17.5 9.5c0 3.6-2.7 4.5-5.6 5"/>'),
+      review: s('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>')
     };
   })();
 
@@ -1243,8 +1244,7 @@
     // Mobile: the pill flattens (display:contents) and CSS re-orders the create
     //         button into the center as a floating "+" FAB.
     var group = el('div', { class: 'nav-group' });
-    [['timeline', t('nav_timeline')], ['diff', t('nav_diff')],
-     ['rollback', t('nav_rollback')], ['branch', t('nav_branch')]
+    [['timeline', t('nav_timeline')], ['review', t('review_open')]
     ].forEach(function (it) { group.appendChild(navButton(it[0], it[1], false)); });
     nav.appendChild(group);
     nav.appendChild(navButton('commit', t('nav_commit'), true));
@@ -1358,9 +1358,7 @@
     }
 
     v.appendChild(el('div', { class: 'view-head' }, [
-      el('h1', { text: t('nav_timeline') }),
-      el('button', { type: 'button', class: 'btn ghost tiny review-entry',
-        text: t('review_open'), onclick: function () { go('review'); } })
+      el('h1', { text: t('nav_timeline') })
     ]));
     (function () {
       var streak = computeStreak();
@@ -1385,6 +1383,13 @@
         text: t('backup_nudge'),
         onclick: function () { go('settings'); }
       }));
+    })();
+    (function () {
+      var bp = branchPendingCount();
+      if (bp <= 0) return;
+      v.appendChild(el('button', { type: 'button', class: 'branch-due-banner',
+        text: (lang === 'zh' ? '🔀 有 ' + bp + ' 个决策待回顾' : '🔀 ' + bp + ' decision' + (bp > 1 ? 's' : '') + ' to review'),
+        onclick: function () { go('branch'); } }));
     })();
     var resurface = resurfaceDismissed ? null : pickResurface(startOfToday());
     if (resurface) {
@@ -1799,10 +1804,7 @@
     tlRerender = null;
     tlRerenderChips = null;
     var L = lang === 'zh';
-    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (L ? '返回' : 'Back') });
-    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
     v.appendChild(el('div', { class: 'view-head review-view-head' }, [
-      back,
       el('h1', { text: t('nav_review') })
     ]));
     if (Store.isEmpty()) { v.appendChild(noticeCard(t('review_empty'))); return; }
@@ -3565,7 +3567,9 @@
   /* ---------------- Reality Diff ---------------- */
   var pendingDiff = null;
   function renderDiff(v) {
-    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_diff') })]));
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (lang === 'zh' ? '返回' : 'Back') });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head' }, [back, el('h1', { text: t('nav_diff') })]));
     var allReal = Store.commits().filter(notPlanned);
     if (allReal.length < 2) { v.appendChild(noticeCard(t('need_two'))); return; }
 
@@ -3979,7 +3983,9 @@
   function rollbackStepKey(s) { return s.kind + '|' + s.text; }
 
   function renderRollback(v) {
-    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_rollback') })]));
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (lang === 'zh' ? '返回' : 'Back') });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head' }, [back, el('h1', { text: t('nav_rollback') })]));
     var commits = Store.commits().filter(notPlanned);
     if (!commits.length) { v.appendChild(noticeCard(t('empty_title'))); return; }
 
@@ -4328,7 +4334,9 @@
   }
 
   function renderBranch(v) {
-    v.appendChild(el('div', { class: 'view-head' }, [el('h1', { text: t('nav_branch') })]));
+    var back = el('button', { class: 'btn ghost tiny', text: '‹ ' + (lang === 'zh' ? '返回' : 'Back') });
+    back.addEventListener('click', function () { if (!goBack()) go('timeline'); });
+    v.appendChild(el('div', { class: 'view-head' }, [back, el('h1', { text: t('nav_branch') })]));
 
     var editing = branchEditingId ? Store.getBranch(branchEditingId) : null;
     v.appendChild(branchForm(editing));
@@ -5096,6 +5104,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.15.0', '2026-06-15', '导航收敛：底栏只留时间线 · 回顾 · ＋新建',
+      'Nav consolidation: timeline · memories · +new',
+      ['底部导航收敛为「时间线 · 回顾 ·（＋新建）」三项，把「回顾」从藏在按钮后提升为常驻一级入口，让回看真正有家。',
+       '现实对比 / 回滚 / 分支决策功能全部保留、一行逻辑不删，只是挪进更顺手的位置：对比/回滚在存档详情页直接发起，分支决策移入设置页（有待决策时带数字徽标）。',
+       '有到期决策时，时间线顶部出现「🔀 有 N 个决策待回顾」横幅提醒，比底栏小红点更显眼。',
+       '纯导航与入口重排，不改任何数据 / 云 / 备份 / 功能逻辑。'],
+      ['Bottom nav consolidates to "Timeline · Memories · (+new)" — elevates "Memories" to a permanent first-level tab so resurfacing has a real home.',
+       'Reality diff / rollback / branch decisions are fully preserved (zero logic deleted), just relocated to more natural entry points: diff/rollback from the archive detail page, branch decisions in Settings (with pending-count badge).',
+       'Overdue decisions now surface as a banner at the top of the timeline ("🔀 N decisions to review"), more visible than the old bottom-nav badge.',
+       'Pure navigation reshuffle — no data / cloud / backup / functional logic changes.']],
     ['1.14.0', '2026-06-15', '内联回忆卡 + 时间线维度透镜',
       'Inline memory cards + timeline dimension lenses',
       ['时间线顶部把「那年今日」从横幅升级为内联回忆卡：直接显示当时封面 + 一句话 +「N 年前的今天」，点卡进当年详情，可✕收起；多条记忆保留「查看全部」入口去回顾页。',
@@ -5851,12 +5869,22 @@
       el('span', { text: lang === 'zh' ? '更新日志' : 'Release notes' }),
       el('span', { class: 'set-menu-chevron', text: '›' })
     ]);
+    var bp = branchPendingCount();
+    var branchLink = el('button', { class: 'set-menu-link',
+      onclick: function () { go('branch'); } }, [
+      el('span', { text: t('nav_branch') }),
+      el('span', { class: 'set-menu-right' }, [
+        bp > 0 ? el('span', { class: 'set-menu-badge', text: bp > 9 ? '9+' : String(bp) }) : null,
+        el('span', { class: 'set-menu-chevron', text: '›' })
+      ])
+    ]);
     var about = settingsCard(null, [
       el('div', { class: 'set-row' }, [
         el('span', { class: 'set-label', text: lang === 'zh' ? '当前版本' : 'Version' }),
         el('span', { class: 'set-value', text: 'v' + (window.APP_VERSION || '?') })
       ]),
       logsBtn,
+      branchLink,
       el('div', { class: 'set-actions' }, [updBtn])
     ]);
 

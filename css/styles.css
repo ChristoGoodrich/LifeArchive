@@ -1249,3 +1249,14 @@ textarea.field{resize:vertical}
 .detail-place-filter{margin-top:6px}
 .commit-place{white-space:nowrap}
 
+/* ---- Part B: settings menu badge + branch due banner ---- */
+.set-menu-right{display:inline-flex;align-items:center;gap:8px}
+.set-menu-badge{min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:#e5484d;color:#fff;font-size:11px;font-weight:700;
+  display:inline-flex;align-items:center;justify-content:center}
+.branch-due-banner{display:block;width:100%;text-align:left;border:none;cursor:pointer;
+  padding:10px 12px;margin:4px 0;border-radius:12px;font-size:13px;font-weight:600;
+  background:linear-gradient(135deg,rgba(229,72,77,.12),rgba(255,159,10,.10));
+  border:1px solid rgba(229,72,77,.25);color:inherit}
+.branch-due-banner:hover{opacity:.85}
+

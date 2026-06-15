@@ -1,3 +1,3 @@
 /* App version, surfaced in Settings + used by the check for updates button.
    Kept in sync with package.json (build-www.mjs regenerates it for Android). */
-window.APP_VERSION = '1.14.0';
+window.APP_VERSION = '1.15.0';
