@@ -163,6 +163,7 @@
       video_big: '视频较大，备份文件会显著变大',
       location: '地点', loc_ph: '在哪？填地点名', loc_use: '取当前位置', loc_locating: '定位中…',
       loc_got: '已记录位置', loc_denied: '定位失败，可手填地点名', loc_unsupported: '此设备不支持定位',
+      lens_clear: '清除筛选', resurface_see_all: '查看全部', resurface_dismiss: '收起',
       saved_value_prefix: '已存档'
     },
     en: {
@@ -321,6 +322,7 @@
       video_big: 'Large video — your backup file will grow a lot',
       location: 'Location', loc_ph: 'Where? Add a place name', loc_use: 'Use current location', loc_locating: 'Locating…',
       loc_got: 'Location saved', loc_denied: 'Location failed — type a place instead', loc_unsupported: 'Location not supported here',
+      lens_clear: 'Clear filter', resurface_see_all: 'See all', resurface_dismiss: 'Dismiss',
       saved_value_prefix: 'Saved'
     }
   };
@@ -1290,6 +1292,10 @@
   var tlScene = null;   // timeline scene filter (null = all scenes)
   var tlStarOnly = false; // when true, show only starred (important) commits
   var tlTag = null;       // timeline tag filter (null = all tags)
+  var tlPerson = null;   // person lens (null = no filter)
+  var tlMood = null;     // mood lens
+  var tlPlace = null;    // place lens (exact location.label match)
+  var resurfaceDismissed = false;  // dismissed inline memory card this session
   var TL_PAGE_SIZE = 24;
   var tlVisible = TL_PAGE_SIZE;
   var tlRerender = null;       // set to the current renderList() so card actions can refresh it
@@ -1380,17 +1386,56 @@
         onclick: function () { go('settings'); }
       }));
     })();
-    var resurface = pickResurface(startOfToday());
+    var resurface = resurfaceDismissed ? null : pickResurface(startOfToday());
     if (resurface) {
       var L = lang === 'zh';
-      var label = resurface.kind === 'year'
-        ? (L ? ('那年今日 · ' + resurface.commits.length + ' 个瞬间')
-             : ('On this day · ' + resurface.commits.length + ' memories'))
+      var lead = resurface.commits.reduce(function (a, b) { return a.createdAt < b.createdAt ? a : b; });
+      var ago = resurface.kind === 'year'
+        ? (L ? (resurface.years + ' 年前的今天') : (resurface.years + (resurface.years > 1 ? ' years' : ' year') + ' ago today'))
         : resurface.kind === 'month'
-          ? (L ? '往月今日 · 翻翻看' : 'This day in earlier months')
-          : (L ? '随机重温 · 翻一张旧存档' : 'Resurface an old memory');
-      v.appendChild(el('button', { type: 'button', class: 'resurface-banner',
-        text: label, onclick: function () { go('review'); } }));
+          ? (L ? '往月的今天' : 'On this day, an earlier month')
+          : (L ? '随机重温' : 'A memory resurfaced');
+      var headline = (resurface.kind === 'year' ? '🎂 ' : resurface.kind === 'month' ? '📅 ' : '🎲 ') + ago;
+
+      var thumb = commitThumbSrc(lead);
+      var coverDims = commitCoverDims(lead);
+      var cover = null;
+      if (thumb) {
+        var rImg = el('img', { class: 'resurface-cover', src: thumb, alt: lead.message || '',
+          loading: 'lazy', decoding: 'async' });
+        if (coverDims) { rImg.setAttribute('width', coverDims.w); rImg.setAttribute('height', coverDims.h); }
+        cover = el('div', { class: 'resurface-cover-wrap' }, [rImg]);
+      }
+
+      var dismiss = el('button', { type: 'button', class: 'resurface-x', 'aria-label': L ? '收起' : 'Dismiss', text: '✕' });
+      dismiss.addEventListener('click', function (e) {
+        e.stopPropagation();
+        resurfaceDismissed = true;
+        if (card.parentNode) card.parentNode.removeChild(card);
+      });
+
+      var metaBits = [sceneTag(Store.sceneById(lead.scene))];
+      if (lead.location && lead.location.label) {
+        metaBits.push(el('span', { class: 'commit-dot', text: '·' }));
+        metaBits.push(el('span', { class: 'resurface-place', text: '📍' + lead.location.label }));
+      }
+
+      var body = el('div', { class: 'resurface-body' }, [
+        el('div', { class: 'resurface-kicker', text: headline }),
+        el('div', { class: 'resurface-msg', text: lead.message || (L ? '(无描述)' : '(no message)') }),
+        el('div', { class: 'resurface-meta' }, metaBits)
+      ]);
+
+      if (resurface.commits.length > 1) {
+        body.appendChild(el('button', { type: 'button', class: 'resurface-more btn ghost tiny',
+          text: (L ? '查看全部 ' : 'See all ') + resurface.commits.length,
+          onclick: function (e) { e.stopPropagation(); go('review'); } }));
+      }
+
+      var card = el('div', { class: 'resurface-card tappable' + (cover ? '' : ' no-cover') },
+        cover ? [cover, body, dismiss] : [body, dismiss]);
+      card.addEventListener('click', function () { pendingDetail = lead.id; go('detail'); });
+      v.appendChild(card);
     }
 
     // ---- search + scene filter (only the list is rebuilt on change, so the
@@ -1438,6 +1483,18 @@
         b.addEventListener('click', function () { tlTag = on ? null : tg; tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
         chipsRow.appendChild(b);
       });
+      function lensPill(kind, label, onClear) {
+        var b = el('button', { type: 'button', class: 'tl-chip tl-lens active' },
+          [el('span', { text: label }), el('span', { class: 'tl-lens-x', text: '✕' })]);
+        b.addEventListener('click', function () { onClear(); tlVisible = TL_PAGE_SIZE; renderChips(); renderList(); });
+        return b;
+      }
+      if (tlPerson) chipsRow.appendChild(lensPill('person', '👥 ' + tlPerson, function () { tlPerson = null; }));
+      if (tlMood) {
+        var _moodMap = { great:'😄', good:'🙂', meh:'😐', down:'😔', bad:'😣' };
+        chipsRow.appendChild(lensPill('mood', (_moodMap[tlMood] || '') + ' ' + t('mood_' + tlMood), function () { tlMood = null; }));
+      }
+      if (tlPlace) chipsRow.appendChild(lensPill('place', '📍 ' + tlPlace, function () { tlPlace = null; }));
     }
     renderChips();
 
@@ -1449,8 +1506,13 @@
     function renderList() {
       listWrap.innerHTML = '';
       var matched = commits.filter(function (c) {
-        return (!tlStarOnly || c.starred) && (tlScene === null || c.scene === tlScene)
-          && (tlTag === null || (c.tags || []).indexOf(tlTag) >= 0) && commitMatches(c, tlQuery);
+        return (!tlStarOnly || c.starred)
+          && (tlScene === null || c.scene === tlScene)
+          && (tlTag === null || (c.tags || []).indexOf(tlTag) >= 0)
+          && (tlPerson === null || (c.people || []).indexOf(tlPerson) >= 0)
+          && (tlMood === null || c.mood === tlMood)
+          && (tlPlace === null || (c.location && c.location.label === tlPlace))
+          && commitMatches(c, tlQuery);
       });
       var plannedList = matched.filter(function (c) { return c.planned; });
       var realList = matched.filter(notPlanned);
@@ -1634,6 +1696,10 @@
     if (c.files && c.files.length) {
       subKids.push(el('span', { class: 'commit-dot', text: '·' }));
       subKids.push(el('span', { class: 'commit-files', text: '📎 ' + c.files.length }));
+    }
+    if (c.location && c.location.label) {
+      subKids.push(el('span', { class: 'commit-dot', text: '·' }));
+      subKids.push(el('span', { class: 'commit-place', text: '📍' + c.location.label }));
     }
 
     var titleRow = el('div', { class: 'commit-title-row' }, [
@@ -1819,14 +1885,21 @@
     }
     if (c.mood) {
       var moodMap = { great:'😄', good:'🙂', meh:'😐', down:'😔', bad:'😣' };
-      card.appendChild(el('div', { class: 'detail-sub detail-mood' }, [
-        el('span', { text: (moodMap[c.mood] || '') + ' ' + t('mood_' + c.mood) })
-      ]));
+      var moodBtn = el('button', { class: 'detail-mood-tap', type: 'button',
+        text: (moodMap[c.mood] || '') + ' ' + t('mood_' + c.mood) });
+      moodBtn.addEventListener('click', function () {
+        tlMood = c.mood; tlScene = null; tlTag = null; go('timeline');
+      });
+      card.appendChild(el('div', { class: 'detail-sub detail-mood' }, [moodBtn]));
     }
     if (c.people && c.people.length) {
       card.appendChild(el('div', { class: 'detail-section-title', text: '👥 ' + t('people') }));
       var pw = el('div', { class: 'chip-row' });
-      c.people.forEach(function (p) { pw.appendChild(el('span', { class: 'chip-tag static', text: p })); });
+      c.people.forEach(function (p) {
+        var b = el('button', { class: 'chip-tag tap', text: p });
+        b.addEventListener('click', function () { tlPerson = p; tlScene = null; tlTag = null; go('timeline'); });
+        pw.appendChild(b);
+      });
       card.appendChild(pw);
     }
     if (c.tags && c.tags.length) {
@@ -1934,6 +2007,12 @@
           rel: 'noopener', text: '🗺 ' + locText }));
       } else {
         card.appendChild(el('div', { class: 'commit-notes', text: '📍 ' + locText }));
+      }
+      if (c.location.label) {
+        var placeBtn = el('button', { class: 'btn ghost tiny detail-place-filter', type: 'button',
+          text: (L ? '🔎 看「' : '🔎 See "') + c.location.label + (L ? '」的全部存档' : '"') });
+        placeBtn.addEventListener('click', function () { tlPlace = c.location.label; tlScene = null; tlTag = null; go('timeline'); });
+        card.appendChild(placeBtn);
       }
     }
     if (c.notes) {
@@ -5017,6 +5096,16 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.14.0', '2026-06-15', '内联回忆卡 + 时间线维度透镜',
+      'Inline memory cards + timeline dimension lenses',
+      ['时间线顶部把「那年今日」从横幅升级为内联回忆卡：直接显示当时封面 + 一句话 +「N 年前的今天」，点卡进当年详情，可✕收起；多条记忆保留「查看全部」入口去回顾页。',
+       '时间线新增人物 / 心情 / 地点透镜：详情页点人物、心情、地点即可跳回时间线按该维筛选，顶部显示可一键清除的当前筛选 pill。',
+       '时间线卡片副行新增 📍 地点小标，存档的地点信息在列表里一目了然。',
+       '纯展示层与筛选状态，不改数据结构 / 云 / 备份 / 权限。'],
+      ['Timeline top upgrades the "On this day" banner to an inline memory card: shows the original cover photo + message + "N years ago today"; tap to open that archive\'s detail; ✕ to dismiss for this session; "See all" preserves the Memories entry.',
+       'Timeline adds person / mood / place dimension lenses: tapping a person chip, mood emoji, or place button on the detail page jumps back to the timeline filtered by that dimension, with a clearable pill at the top.',
+       'Timeline cards now show a 📍 place indicator in the subtitle row when location data is present.',
+       'Pure presentation and filter state — no data-structure / cloud / backup / permission changes.']],
     ['1.13.0', '2026-06-09', '七维收官：视频 + 定位',
       'Seven dimensions complete: video + location',
       ['新增「视频」：表单内可拍/选一段视频（用系统相机），自动抽取封面帧存为内联 poster，视频本体存进 IndexedDB blobs 仓，commit 上挂 media[kind:video] 引用；时间线卡显示封面 + ▶ 角标，详情页可播放。',

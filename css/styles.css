@@ -1221,3 +1221,31 @@ textarea.field{resize:vertical}
 .loc-coord{font-size:13px;opacity:.7}
 .hidden-file{display:none}
 
+/* ---- Part A: inline memory card ---- */
+.resurface-card{position:relative;display:flex;gap:12px;align-items:stretch;
+  margin:10px 0 14px;padding:10px;border-radius:16px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(124,92,255,.14),rgba(80,160,255,.10));
+  border:1px solid rgba(124,92,255,.28)}
+.resurface-card.no-cover{display:block}
+.resurface-cover-wrap{flex:0 0 96px;width:96px;border-radius:12px;overflow:hidden;
+  background:rgba(127,127,127,.12);align-self:center}
+.resurface-cover{width:100%;height:auto;display:block}
+.resurface-body{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px}
+.resurface-kicker{font-size:12px;font-weight:700;letter-spacing:.02em;opacity:.85}
+.resurface-msg{font-size:15px;font-weight:600;line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.resurface-meta{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.75;flex-wrap:wrap}
+.resurface-place{white-space:nowrap}
+.resurface-more{align-self:flex-start;margin-top:2px}
+.resurface-x{position:absolute;top:6px;right:8px;border:none;background:transparent;
+  color:inherit;opacity:.5;font-size:14px;line-height:1;cursor:pointer;padding:4px}
+.resurface-x:hover{opacity:.9}
+
+/* ---- Part B: lens pills + tappable dimensions ---- */
+.tl-chip.tl-lens{gap:6px}
+.tl-lens-x{opacity:.7;font-size:11px}
+.detail-mood-tap,.chip-tag.tap{cursor:pointer}
+.detail-mood-tap{border:none;background:transparent;color:inherit;font:inherit;padding:0}
+.detail-place-filter{margin-top:6px}
+.commit-place{white-space:nowrap}
+
