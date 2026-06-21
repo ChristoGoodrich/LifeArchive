@@ -497,11 +497,15 @@
   }
   function toast(msg, type) {
     var node = $('#toast');
-    node.className = 'toast t-' + toastType(msg, type);
-    node.textContent = msg;
+    var s = String(msg == null ? '' : msg);
+    if (s.length > 220) s = s.slice(0, 220) + '…';      // toasts are glanceable; cap runaway error text
+    node.className = 'toast t-' + toastType(s, type);
+    node.textContent = s;
+    node.scrollTop = 0;
     requestAnimationFrame(function () { node.classList.add('show'); });
     clearTimeout(node._t);
-    node._t = setTimeout(function () { node.classList.remove('show'); }, 2200);
+    var dur = Math.min(6000, 2200 + Math.max(0, s.length - 30) * 45);  // longer text → more reading time
+    node._t = setTimeout(function () { node.classList.remove('show'); }, dur);
   }
   function toastAction(msg, label, onClick) {
     var node = $('#toast');
@@ -5529,6 +5533,14 @@
   }
 
   var RELEASE_NOTES = [
+    ['1.19.1', '2026-06-16', 'Toast 大内容修复 + 字重收敛',
+      'Toast long-content fix + lighter weights',
+      ['修复 toast 在内容较长时的显示问题：长字符串（如报错原文/链接）现在会优雅换行而不再横向溢出；多行时左侧色点对齐到第一行；带按钮的 toast 让文字可收缩、按钮不被挤变形；超长内容加滚动与字数上限，并按长度自动延长显示时间。',
+       '字重收敛：把若干"黑体级"(900) 字重降到 700，更贴近澎湃的精致质感。',
+       '存档标题/描述也加了长串换行保护。'],
+      ['Fix toast rendering with longer content: long unbroken strings (error text, links) now wrap gracefully instead of overflowing; the color dot aligns to the first line on multi-line toasts; action toasts let the message shrink without squashing the button; very long content scrolls and is length-capped, with display time scaling to length.',
+       'Lighter weights: dropped several "black" (900) weights to 700 for a more refined HyperOS feel.',
+       'Long-string wrap protection added to archive titles/messages too.']],
     ['1.19.0', '2026-06-15', '体验层：滑动大图 + AI 回忆图集 + 澎湃质感',
       'Experience: swipeable gallery + AI memory album + HyperOS polish',
       ['Toast 改为磨砂玻璃质感 + 语义色点（成功/警告/同步自动分色）+ 轻回弹进场，更贴合澎湃美学；老 WebView 自动回退不透明底。',
